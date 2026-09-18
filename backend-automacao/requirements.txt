@@ -1,0 +1,7 @@
+Django>=6.1,<6.2
+djangorestframework>=3.16,<4
+django-cors-headers>=4.7,<5
+beautifulsoup4>=4.13,<5
+playwright>=1.51,<2
+pyotp>=2.9,<3
+python-dotenv>=1.1,<2

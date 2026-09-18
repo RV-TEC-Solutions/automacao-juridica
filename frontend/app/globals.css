@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: var(--bg); --color-surface: var(--surface); --color-surface-raised: var(--surface-raised); --color-surface-hover: var(--surface-hover);
+  --color-sidebar: var(--sidebar); --color-sidebar-deep: var(--sidebar-deep); --color-sidebar-active: var(--sidebar-active);
+  --color-text: var(--text); --color-text-soft: var(--text-soft); --color-muted: var(--muted); --color-line: var(--line); --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent); --color-accent-soft: var(--accent-soft); --color-blue: var(--blue); --color-blue-soft: var(--blue-soft);
+  --color-green: var(--green); --color-green-soft: var(--green-soft); --color-yellow: var(--yellow); --color-yellow-soft: var(--yellow-soft);
+  --color-red: var(--red); --color-red-soft: var(--red-soft); --color-topbar: var(--topbar); --color-topbar-solid: var(--topbar-solid);
+  --color-overlay: var(--overlay); --color-primary-bg: var(--primary-bg); --color-primary-hover: var(--primary-hover); --color-primary-text: var(--primary-text);
+}
+
+:root, [data-theme="light"] {
+  --bg:#f5f5f3; --surface:#fff; --surface-raised:#f0f1f2; --surface-hover:#e9eaec; --sidebar:#96553f; --sidebar-deep:#814633; --sidebar-active:rgba(255,236,226,.2);
+  --text:#202124; --text-soft:#50535a; --muted:#757980; --line:#dedfe2; --line-strong:#c7c9ce; --accent:#9d533c; --accent-soft:rgba(157,83,60,.11);
+  --blue:#2867a7; --blue-soft:rgba(40,103,167,.1); --green:#277a50; --green-soft:rgba(39,122,80,.1); --yellow:#946514; --yellow-soft:rgba(148,101,20,.11);
+  --red:#b54840; --red-soft:rgba(181,72,64,.1); --topbar:rgba(255,255,255,.94); --topbar-solid:rgba(255,255,255,.97); --overlay:rgba(20,20,22,.42);
+  --panel-shadow:rgba(40,35,32,.13); --primary-bg:#96553f; --primary-hover:#814633; --primary-text:#fff; color-scheme:light;
+}
+
+[data-theme="dark"] {
+  --bg:#151516; --surface:#1e1e20; --surface-raised:#252528; --surface-hover:#2b2b2f; --sidebar:#96553f; --sidebar-deep:#814633; --sidebar-active:rgba(255,236,226,.17);
+  --text:#f2f2f3; --text-soft:#c7c7ca; --muted:#8e8e93; --line:#343438; --line-strong:#45454a; --accent:#e9aa91; --accent-soft:rgba(233,170,145,.14);
+  --blue:#6ea8fe; --blue-soft:rgba(110,168,254,.15); --green:#6fcf97; --green-soft:rgba(111,207,151,.14); --yellow:#e4b95f; --yellow-soft:rgba(228,185,95,.15);
+  --red:#f1847c; --red-soft:rgba(241,132,124,.14); --topbar:rgba(30,30,32,.94); --topbar-solid:rgba(30,30,32,.97); --overlay:rgba(0,0,0,.58);
+  --panel-shadow:rgba(0,0,0,.34); --primary-bg:#e9aa91; --primary-hover:#f0b9a3; --primary-text:#321b13; color-scheme:dark;
+}
+
+* { box-sizing:border-box; }
+html, body { margin:0; min-height:100%; }
+/*
+ * Escala tipográfica única para toda a interface. Os componentes usam classes
+ * de tamanho em pixels; estas regras preservam a proporção entre elas e tornam
+ * a leitura 15% maior sem alterar o layout ou os espaçamentos.
+ */
+body { font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; font-size:18.4px; }
+
+[class~="text-[10px]"] { font-size:11.5px !important; }
+[class~="text-[11px]"] { font-size:12.65px !important; }
+[class~="text-[12px]"] { font-size:13.8px !important; }
+[class~="text-[13px]"] { font-size:14.95px !important; }
+[class~="text-[14px]"] { font-size:16.1px !important; }
+[class~="text-[15px]"] { font-size:17.25px !important; }
+[class~="text-[16px]"] { font-size:18.4px !important; }
+[class~="text-[17px]"] { font-size:19.55px !important; }
+[class~="text-[18px]"] { font-size:20.7px !important; }
+[class~="text-[19px]"] { font-size:21.85px !important; }
+[class~="text-[20px]"] { font-size:23px !important; }
+[class~="text-[21px]"] { font-size:24.15px !important; }
+[class~="text-[27px]"] { font-size:31.05px !important; }
+[class~="text-[29px]"] { font-size:33.35px !important; }
+[class~="text-[30px]"] { font-size:34.5px !important; }
+[class~="text-[31px]"] { font-size:35.65px !important; }
+[class~="text-[34px]"] { font-size:39.1px !important; }
+[class~="text-[clamp(25px,3vw,34px)]"] { font-size:clamp(28.75px,3.45vw,39.1px) !important; }
+
+@media (max-width:760px) {
+  [class~="max-[760px]:text-[29px]"] { font-size:33.35px !important; }
+  [class~="max-[760px]:text-[30px]"] { font-size:34.5px !important; }
+}
+button, input, select { font:inherit; }
+h1, h2, h3, p { margin-top:0; }
+h1, h2, h3 { letter-spacing:-.02em; }
+
+@keyframes shimmer { to { background-position:-200%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}

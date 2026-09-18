@@ -1,0 +1,78 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from automation.models import AutomationSource
+from automation.services.pje.persistence import salvar_expedientes
+from .models import Expediente, ExpedienteEvent
+
+
+def payload(identifier="100", **overrides):
+    data = {
+        "numero_processo": "0800000-00.2026.8.20.0001", "tribunal": "TJRN",
+        "classe": "Procedimento", "assunto": "Obrigação de fazer",
+        "partes_texto": "PARTE A X PARTE B", "unidade_judiciaria": "1ª Vara",
+        "identificador_pje": identifier, "tipo_pendencia": "ciencia",
+        "acao_pje": "tomar_ciencia", "caixa": "Pendentes de ciência",
+        "destinatario": "Parte A", "tipo_documento": "Intimação",
+        "meio_comunicacao": "Diário eletrônico", "data_expedicao": "2026-08-25T08:00:00",
+        "prazo_texto": "3 dias", "status_prazo_fatal": "calculado",
+        "prazo_fatal": (timezone.now() + timedelta(days=2)).isoformat(), "ciencia_texto": "",
+    }
+    data.update(overrides)
+    return data
+
+
+class PersistenceTests(TestCase):
+    def setUp(self):
+        self.source = AutomationSource.objects.get(code="pje-tjrn")
+
+    def test_new_unchanged_changed_and_resolved_lifecycle(self):
+        original = payload()
+        first = salvar_expedientes([original], source=self.source)
+        self.assertEqual(first["criados"], 1)
+        self.assertEqual(ExpedienteEvent.objects.count(), 1)
+
+        unchanged = salvar_expedientes([original], source=self.source)
+        self.assertEqual(unchanged["atualizados"], 0)
+        self.assertEqual(ExpedienteEvent.objects.count(), 1)
+
+        changed = salvar_expedientes([{**original, "prazo_texto": "5 dias"}], source=self.source)
+        self.assertEqual(changed["atualizados"], 1)
+        self.assertIn("prazo_texto", ExpedienteEvent.objects.first().changes)
+
+        resolved = salvar_expedientes([], source=self.source)
+        self.assertEqual(resolved["resolvidos"], 1)
+        self.assertFalse(Expediente.objects.get().ativo)
+        self.assertEqual(ExpedienteEvent.objects.first().kind, "resolved")
+
+
+class ApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("operador", password="senha-segura")
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.source = AutomationSource.objects.get(code="pje-tjrn")
+        salvar_expedientes([payload()], source=self.source)
+
+    def test_dashboard_and_mark_read(self):
+        dashboard = self.client.get("/api/dashboard/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.data["today"]["unread"], 1)
+        expediente = Expediente.objects.get()
+        response = self.client.post(f"/api/expedientes/{expediente.pk}/read/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(expediente.events.filter(read_at__isnull=True).exists())
+
+    def test_search_filter_and_pagination_contract(self):
+        response = self.client.get("/api/expedientes/?q=PARTE+A&read=unread")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_statistics_validates_period(self):
+        self.assertEqual(self.client.get("/api/statistics/?period=10").status_code, 400)
+        self.assertEqual(self.client.get("/api/statistics/?period=7").status_code, 200)

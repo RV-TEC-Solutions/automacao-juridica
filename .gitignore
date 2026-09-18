@@ -1,0 +1,43 @@
+# Projeto independente nesta mesma pasta
+/brasloger/
+
+# Ambientes, dependências e builds
+.venv/
+venv/
+env/
+ENV/
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+test-results/
+.vercel/
+
+# Python/Django gerado localmente
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.log
+staticfiles/
+media/
+backend-automacao/respostas_expedientes/
+
+# Configurações e credenciais locais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SO e ferramentas
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
