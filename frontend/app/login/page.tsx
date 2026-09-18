@@ -1,43 +1,17 @@
 "use client";
 
+import { ArrowRight, LockKey, ShieldCheck } from "@phosphor-icons/react";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Brand } from "../components/app-shell";
 import { useAuth } from "../providers";
 
 export default function LoginPage() {
-  const { user, loading, login } = useAuth();
-  const router = useRouter();
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
+  const { user, loading, login } = useAuth(); const router = useRouter(); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   useEffect(() => { if (!loading && user) router.replace("/"); }, [loading, user, router]);
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    const form = new FormData(event.currentTarget);
-    try {
-      await login(String(form.get("username")), String(form.get("password")));
-      router.replace("/");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível entrar.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return <main className="grid min-h-screen place-items-center bg-bg p-8 before:fixed before:inset-0 before:pointer-events-none before:bg-[radial-gradient(circle_at_50%_15%,rgba(150,85,63,.17),transparent_38%)] max-[760px]:p-[18px]">
-    <section className="relative z-[1] w-full max-w-[410px] rounded-[9px] border border-line bg-surface p-[30px] shadow-[0_24px_70px_var(--panel-shadow)] max-[760px]:p-6">
-      <div className="mb-[42px] flex items-center gap-2.5"><span className="grid size-[34px] place-items-center rounded-[7px] bg-sidebar text-[11px] font-extrabold text-white">PE</span><strong className="text-[15px]">Painel de Expedientes</strong></div>
-      <div><h1 className="mb-2 text-[27px]">Boas-vindas</h1><p className="mb-[27px] text-[13px] leading-[1.5] text-muted">Acesse sua área de trabalho para acompanhar expedientes e prazos.</p></div>
-      <form className="grid gap-[15px]" onSubmit={submit}>
-        <label className="flex flex-col gap-[7px] text-[11px] font-[650] text-text-soft">Usuário<input className="min-h-[41px] rounded-[5px] border border-line bg-surface-raised px-[11px] py-2.5 text-[13px] text-text outline-0 focus:border-accent focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" name="username" autoComplete="username" required autoFocus placeholder="Digite seu usuário" /></label>
-        <label className="flex flex-col gap-[7px] text-[11px] font-[650] text-text-soft">Senha<input className="min-h-[41px] rounded-[5px] border border-line bg-surface-raised px-[11px] py-2.5 text-[13px] text-text outline-0 focus:border-accent focus:shadow-[0_0_0_2px_var(--color-accent-soft)]" name="password" type="password" autoComplete="current-password" required placeholder="Digite sua senha" /></label>
-        {error && <div className="rounded-[5px] border border-red/[.2] bg-red-soft px-2.5 py-[9px] text-[11px] text-red">{error}</div>}
-        <button className="mt-[3px] min-h-[38px] cursor-pointer rounded-[5px] border border-primary-bg bg-primary-bg px-[15px] py-[9px] font-bold text-primary-text hover:bg-primary-hover disabled:cursor-default disabled:opacity-[.55]" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
-      </form>
-      <small className="mt-6 block text-center text-[10px] text-muted">Ambiente local · seus dados permanecem nesta máquina</small>
-    </section>
-  </main>;
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget); try { await login(String(form.get("username")), String(form.get("password"))); router.replace("/"); } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível entrar."); } finally { setBusy(false); } };
+  return <main className="grid min-h-screen place-items-center overflow-hidden bg-app p-5 before:fixed before:inset-0 before:bg-[radial-gradient(circle_at_15%_20%,color-mix(in_srgb,var(--brand)_18%,transparent),transparent_32%),radial-gradient(circle_at_85%_80%,color-mix(in_srgb,var(--info)_12%,transparent),transparent_30%)]"><div className="relative z-10 grid w-full max-w-[960px] overflow-hidden rounded-[1.5rem] border border-rule bg-panel shadow-[0_24px_80px_var(--shadow)] md:grid-cols-[.9fr_1.1fr]">
+    <section className="hidden flex-col justify-between bg-brand p-10 text-white md:flex"><div><span className="mb-8 grid size-12 place-items-center rounded-2xl bg-white/15 font-[family-name:var(--font-mono)] text-sm font-extrabold">AE</span><p className="mb-3 text-[10px] font-extrabold tracking-[.16em] text-blue-100 uppercase">Painel operacional</p><h1 className="max-w-xs text-4xl font-extrabold leading-[1.08]">Acompanhe o que importa.</h1><p className="mt-5 max-w-sm text-sm leading-6 text-blue-100">Uma visão clara dos expedientes, prazos e coletas do PJe em um único ambiente.</p></div><div className="flex items-center gap-3 border-t border-white/20 pt-6 text-xs text-blue-100"><ShieldCheck size={20} weight="duotone" /><span>Seus dados permanecem nesta máquina.</span></div></section>
+    <section className="p-7 sm:p-10"><Brand /><div className="mt-12"><p className="mb-2 text-[10px] font-extrabold tracking-[.14em] text-brand uppercase">Acesso seguro</p><h2 className="mb-3 text-3xl font-extrabold text-ink">Boas-vindas</h2><p className="mb-8 text-sm leading-6 text-quiet">Entre para visualizar o estado da sua automação.</p></div><form className="grid gap-5" onSubmit={submit}><label className="text-xs font-extrabold text-ink-soft">Usuário<input className="control mt-2 w-full px-3 py-2.5 text-sm" name="username" autoComplete="username" required autoFocus placeholder="Digite seu usuário" /></label><label className="text-xs font-extrabold text-ink-soft">Senha<input className="control mt-2 w-full px-3 py-2.5 text-sm" name="password" type="password" autoComplete="current-password" required placeholder="Digite sua senha" /></label>{error && <div className="rounded-xl border border-danger/25 bg-danger-soft px-3 py-2.5 text-xs font-semibold text-danger">{error}</div>}<button className="button-primary mt-1 cursor-pointer px-4 text-sm" disabled={busy}><LockKey size={17} weight="bold" />{busy ? "Entrando…" : "Entrar"}<ArrowRight size={16} /></button></form><small className="mt-8 block text-center text-[11px] text-quiet">Ambiente local · acesso protegido</small></section>
+  </div></main>;
 }

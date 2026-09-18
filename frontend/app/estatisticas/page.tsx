@@ -1,166 +1,23 @@
 "use client";
 
+import { ChartBar, CheckCircle, ClockCounterClockwise, Sparkle } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-
 import { AppShell } from "../components/app-shell";
+import { BezelCard, Feedback, MetricCard, PageTitle } from "../components/ui";
 import { api } from "../lib/api";
 
-type Stats = {
-  period: number;
-  totals: {
-    current: number;
-    previous: number;
-    change_percent: number | null;
-    new?: number;
-    updated?: number;
-    resolved?: number;
-  };
-  timeline: { day: string; kind: string; total: number }[];
-  pending_distribution: { tipo_pendencia: string; total: number }[];
-  deadline_distribution: { status_prazo_fatal: string; total: number }[];
-};
-
-const kindLabel: Record<string, string> = {
-  new: "Novos",
-  updated: "Alterados",
-  resolved: "Resolvidos",
-  ciencia: "Ciência",
-  resposta: "Resposta",
-  nao_identificada: "Outros",
-  calculado: "Calculado",
-  em_calculo: "Em cálculo",
-  sem_prazo: "Sem prazo",
-};
+type Stats = { period: number; totals: { current: number; previous: number; change_percent: number | null; new?: number; updated?: number; resolved?: number }; timeline: { day: string; kind: string; total: number }[]; pending_distribution: { tipo_pendencia: string; total: number }[]; deadline_distribution: { status_prazo_fatal: string; total: number }[]; };
+const labels: Record<string, string> = { new: "Novos", updated: "Alterados", resolved: "Resolvidos", ciencia: "Ciência", resposta: "Resposta", nao_identificada: "Outros", calculado: "Calculado", em_calculo: "Em cálculo", sem_prazo: "Sem prazo" };
 
 export default function StatisticsPage() {
-  const [period, setPeriod] = useState(7);
-  const [data, setData] = useState<Stats | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    api<Stats>(`statistics/?period=${period}`)
-      .then(setData)
-      .catch((exception) => setError(exception.message));
-  }, [period]);
-
+  const [period, setPeriod] = useState(7); const [data, setData] = useState<Stats | null>(null); const [error, setError] = useState("");
+  useEffect(() => { api<Stats>(`statistics/?period=${period}`).then((value) => { setData(value); setError(""); }).catch((exception) => setError(exception.message)); }, [period]);
   const max = Math.max(1, ...(data?.timeline.map((row) => row.total) ?? [1]));
-
-  return (
-    <AppShell>
-      <div className="mx-auto w-[min(1240px,calc(100%-48px))] py-8 pb-[70px] max-[760px]:w-[calc(100%-28px)] max-[760px]:pt-6 max-[760px]:pb-12">
-        <header className="mb-[26px] flex items-end justify-between gap-6 max-[760px]:mb-[22px] max-[760px]:items-start">
-          <div>
-            <h1 className="mb-[7px] text-[clamp(25px,3vw,34px)] leading-[1.15] font-bold max-[760px]:text-[29px]">Estatísticas</h1>
-          </div>
-          <div className="flex rounded-md border border-line bg-surface p-[3px]">
-            <button className={`cursor-pointer rounded border-0 px-3 py-[7px] text-[12px] ${period === 7 ? "bg-surface-hover text-text" : "bg-transparent text-muted"}`} onClick={() => setPeriod(7)}>
-              7 dias
-            </button>
-            <button className={`cursor-pointer rounded border-0 px-3 py-[7px] text-[12px] ${period === 30 ? "bg-surface-hover text-text" : "bg-transparent text-muted"}`} onClick={() => setPeriod(30)}>
-              30 dias
-            </button>
-          </div>
-        </header>
-
-        {error && <div className="mb-[14px] rounded-[7px] border border-l-[3px] border-line border-l-red bg-surface px-[14px] py-3 text-[12px] text-muted">{error}</div>}
-        {data && (
-          <>
-            <div className="mb-3 grid grid-cols-[1.5fr_repeat(3,1fr)] gap-2.5 max-[1100px]:grid-cols-2 max-[760px]:grid-cols-2">
-              <article className="flex flex-col rounded-[7px] border border-line bg-surface p-[17px] max-[760px]:col-span-2">
-                <span className="text-[11px] font-[650] text-muted">Atividade no período</span>
-                <strong className="mt-3 mb-[3px] text-[31px] leading-none font-[650] tabular-nums">{data.totals.current}</strong>
-                <small className="text-[11px] text-muted">
-                  {data.totals.change_percent === null
-                    ? "Sem período anterior para comparar"
-                    : `${data.totals.change_percent >= 0 ? "↑" : "↓"} ${Math.abs(data.totals.change_percent)}% ante o período anterior`}
-                </small>
-              </article>
-              <article className="flex flex-col rounded-[7px] border border-line bg-surface p-[17px]"><span className="text-[11px] font-[650] text-muted">Novos</span><strong className="mt-3 mb-[3px] text-[31px] leading-none font-[650] tabular-nums">{data.totals.new ?? 0}</strong><small className="text-[11px] text-muted">expedientes descobertos</small>
-              </article>
-              <article className="flex flex-col rounded-[7px] border border-line bg-surface p-[17px]"><span className="text-[11px] font-[650] text-muted">Alterados</span><strong className="mt-3 mb-[3px] text-[31px] leading-none font-[650] tabular-nums">{data.totals.updated ?? 0}</strong><small className="text-[11px] text-muted">mudanças relevantes</small>
-              </article>
-              <article className="flex flex-col rounded-[7px] border border-line bg-surface p-[17px]"><span className="text-[11px] font-[650] text-muted">Resolvidos</span><strong className="mt-3 mb-[3px] text-[31px] leading-none font-[650] tabular-nums">{data.totals.resolved ?? 0}</strong><small className="text-[11px] text-muted">saíram da caixa</small>
-              </article>
-            </div>
-
-            <section className="mb-3 flex h-[330px] flex-col rounded-[7px] border border-line bg-surface p-[17px]">
-              <div className="mb-3 flex items-end justify-between gap-4">
-                <div>
-                  <h2 className="mb-0 text-[18px] font-[650]">Chegadas e mudanças</h2>
-                </div>
-                <div className="flex gap-[15px] text-[10px] text-muted">
-                  <span className="before:mr-[5px] before:inline-block before:size-[6px] before:rounded-[2px] before:bg-green before:content-['']">Novos</span>
-                  <span className="before:mr-[5px] before:inline-block before:size-[6px] before:rounded-[2px] before:bg-blue before:content-['']">Alterados</span>
-                </div>
-              </div>
-              {data.timeline.length ? (
-                <div className="flex h-[215px] items-end gap-[5px] border-b border-line px-2.5 pt-2.5">
-                  {data.timeline.map((row, index) => (
-                    <div
-                      className={`min-w-1 max-w-[23px] flex-1 rounded-t-[3px] bg-green ${row.kind === "updated" ? "bg-blue" : row.kind === "resolved" ? "bg-muted" : ""}`}
-                      key={`${row.day}-${row.kind}-${index}`}
-                      style={{ height: `${Math.max(8, (row.total / max) * 100)}%` }}
-                      title={`${row.day}: ${row.total} ${kindLabel[row.kind]}`}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-[7px] border border-dashed border-line-strong p-7 text-center text-muted">
-                  <h3 className="my-2 text-[15px] text-text">Nenhuma atividade neste período</h3>
-                </div>
-              )}
-            </section>
-
-            <div className="grid grid-cols-2 gap-3 max-[760px]:grid-cols-1">
-              <Distribution
-                title="Pendências ativas"
-                rows={data.pending_distribution.map((row) => ({
-                  label: kindLabel[row.tipo_pendencia] ?? row.tipo_pendencia,
-                  total: row.total,
-                }))}
-              />
-              <Distribution
-                title="Situação dos prazos"
-                rows={data.deadline_distribution.map((row) => ({
-                  label: kindLabel[row.status_prazo_fatal] ?? row.status_prazo_fatal,
-                  total: row.total,
-                }))}
-              />
-            </div>
-          </>
-        )}
-      </div>
-    </AppShell>
-  );
+  return <AppShell><PageTitle eyebrow="Inteligência operacional" title="Estatísticas" description="Entenda o ritmo de chegada e tratamento dos expedientes." actions={<div className="flex rounded-xl border border-rule bg-panel-muted p-1"><button className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-extrabold ${period === 7 ? "bg-brand text-white shadow-sm" : "text-quiet"}`} onClick={() => setPeriod(7)}>7 dias</button><button className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-extrabold ${period === 30 ? "bg-brand text-white shadow-sm" : "text-quiet"}`} onClick={() => setPeriod(30)}>30 dias</button></div>} />
+    {error && <Feedback>{error}</Feedback>}
+    {data && <><div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4"><MetricCard label="Atividade" value={data.totals.current} note={data.totals.change_percent === null ? "sem base anterior" : `${data.totals.change_percent >= 0 ? "↑" : "↓"} ${Math.abs(data.totals.change_percent)}% ante período anterior`} icon={<ChartBar size={18} weight="duotone" />} tone="blue" /><MetricCard label="Novos" value={data.totals.new ?? 0} note="expedientes descobertos" icon={<Sparkle size={18} weight="duotone" />} tone="cyan" /><MetricCard label="Alterados" value={data.totals.updated ?? 0} note="mudanças relevantes" icon={<ClockCounterClockwise size={18} weight="duotone" />} tone="amber" /><MetricCard label="Resolvidos" value={data.totals.resolved ?? 0} note="saíram da caixa" icon={<CheckCircle size={18} weight="duotone" />} tone="green" /></div>
+      <BezelCard className="mb-5" innerClassName="p-5 sm:p-6"><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="mb-1 text-base font-extrabold text-ink">Chegadas e mudanças</h2><p className="mb-0 text-xs text-quiet">Movimentações registradas nos últimos {period} dias.</p></div><div className="flex gap-4 text-[10px] font-extrabold tracking-[.08em] text-quiet uppercase"><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-positive" />Novos</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-brand" />Alterados</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-quiet" />Resolvidos</span></div></div>{data.timeline.length ? <div className="flex h-[240px] items-end gap-1.5 border-b border-rule px-2 pt-4">{data.timeline.map((row, index) => <div className={`min-w-1 flex-1 rounded-t-md ${row.kind === "updated" ? "bg-brand" : row.kind === "resolved" ? "bg-quiet" : "bg-positive"}`} key={`${row.day}-${row.kind}-${index}`} style={{ height: `${Math.max(8, (row.total / max) * 100)}%` }} title={`${row.day}: ${row.total} ${labels[row.kind]}`} />)}</div> : <div className="rounded-xl border border-dashed border-rule px-6 py-12 text-center text-sm text-quiet">Nenhuma atividade neste período.</div>}</BezelCard>
+      <div className="grid gap-4 lg:grid-cols-2"><Distribution title="Pendências ativas" rows={data.pending_distribution.map((row) => ({ label: labels[row.tipo_pendencia] ?? row.tipo_pendencia, total: row.total }))} tone="bg-brand" /><Distribution title="Situação dos prazos" rows={data.deadline_distribution.map((row) => ({ label: labels[row.status_prazo_fatal] ?? row.status_prazo_fatal, total: row.total }))} tone="bg-info" /></div></>}
+  </AppShell>;
 }
-
-function Distribution({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: { label: string; total: number }[];
-}) {
-  const total = rows.reduce((sum, row) => sum + row.total, 0) || 1;
-
-  return (
-    <section className="rounded-[7px] border border-line bg-surface p-[17px]">
-      <h2 className="text-[17px]">{title}</h2>
-      {rows.length ? (
-        rows.map((row) => (
-          <div className="mt-[14px]" key={row.label}>
-            <div className="mb-1.5 flex justify-between text-[12px] text-text-soft">
-              <span>{row.label}</span>
-              <strong>{row.total}</strong>
-            </div>
-            <i className="block h-[5px] overflow-hidden rounded-[3px] bg-surface-raised">
-              <b className="block h-full bg-accent" style={{ width: `${(row.total / total) * 100}%` }} />
-            </i>
-          </div>
-        ))
-      ) : (
-        <p>Nenhum expediente ativo.</p>
-      )}
-    </section>
-  );
-}
+function Distribution({ title, rows, tone }: { title: string; rows: { label: string; total: number }[]; tone: string }) { const total = rows.reduce((sum, row) => sum + row.total, 0) || 1; return <BezelCard innerClassName="p-5"><h2 className="mb-5 text-sm font-extrabold text-ink">{title}</h2>{rows.length ? <div className="space-y-4">{rows.map((row) => <div key={row.label}><div className="mb-2 flex justify-between text-xs"><span className="font-semibold text-ink-soft">{row.label}</span><strong className="font-[family-name:var(--font-mono)] text-ink">{row.total}</strong></div><i className="block h-2 overflow-hidden rounded-full bg-panel-muted"><b className={`block h-full rounded-full ${tone}`} style={{ width: `${(row.total / total) * 100}%` }} /></i></div>)}</div> : <p className="mb-0 text-sm text-quiet">Nenhum expediente ativo.</p>}</BezelCard>; }

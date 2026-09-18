@@ -52,6 +52,7 @@ const item = {
 
 test("login, dashboard and reading a new expediente", async ({ page }) => {
   let authenticated = false;
+  let collectionRequests = 0;
 
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -79,6 +80,10 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
     if (path.endsWith("dashboard/")) {
       return route.fulfill({ json: { visited_at: new Date().toISOString() } });
     }
+    if (path.endsWith("automation/runs/")) {
+      collectionRequests += 1;
+      return route.fulfill({ json: { id: 1, status: "pending" } });
+    }
     if (path.endsWith("/read/")) {
       return route.fulfill({ json: { events_marked: 1 } });
     }
@@ -91,7 +96,17 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Bo(m dia|a tarde|a noite), Victor\./ })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Mudar para tema escuro" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Mudar para tema claro" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.getByTestId("clock-face")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Expedientes", exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Executar coleta" }).click();
+  await expect.poll(() => collectionRequests).toBe(1);
   await page.getByText("0800000-00.2026.8.20.0001").click();
   await expect(page.getByRole("dialog")).toContainText("Obrigação de fazer");
+  await page.getByLabel("Fechar").click();
+  await page.getByRole("link", { name: "Expedientes", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Expedientes" })).toBeVisible();
 });

@@ -8,18 +8,18 @@ export function Badge({
   children: React.ReactNode;
 }) {
   const tones: Record<string, string> = {
-    new: "border-green/[.22] bg-green-soft text-green",
-    unread: "border-green/[.22] bg-green-soft text-green",
-    updated: "border-blue/[.24] bg-blue-soft text-blue",
-    resolved: "text-muted",
-    warning: "border-yellow/[.24] bg-yellow-soft text-yellow",
+    new: "border-positive/25 bg-positive-soft text-positive",
+    unread: "border-positive/25 bg-positive-soft text-positive",
+    updated: "border-brand/25 bg-brand-soft text-brand",
+    resolved: "border-rule bg-panel-muted text-quiet",
+    warning: "border-caution/25 bg-caution-soft text-caution",
   };
-  return <span className={`inline-flex w-max rounded border border-line bg-surface-raised px-1.5 py-0.5 text-[10px] font-[650] tracking-[.02em] text-text-soft ${tones[tone] ?? ""}`}>{children}</span>;
+  return <span className={`inline-flex w-max items-center rounded-full border px-2 py-1 text-[10px] font-extrabold tracking-[.04em] ${tones[tone] ?? "border-rule bg-panel-muted text-ink-soft"}`}>{children}</span>;
 }
 
 export function EventBadges({ item }: { item: Expediente }) {
   return (
-    <div className="mb-0.5 flex flex-wrap gap-[5px]">
+    <div className="flex flex-wrap gap-1.5">
       {item.unread && <Badge tone="unread">Não lido</Badge>}
       <Badge tone={item.latest_event?.kind ?? "neutral"}>
         {item.latest_event?.kind_label ?? (item.ativo ? "Ativo" : "Resolvido")}

@@ -15,7 +15,7 @@ export function Clock() {
     };
   }, []);
 
-  if (!now) return <div className="relative size-11 rounded-full border border-line-strong bg-surface-raised max-[760px]:size-[42px]" />;
+  if (!now) return <div className="relative size-10 rounded-xl border border-rule bg-panel-muted" />;
 
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Fortaleza",
@@ -30,18 +30,18 @@ export function Clock() {
   const second = value("second");
 
   return (
-    <div className="flex items-center gap-[11px] rounded-lg border border-line bg-surface px-[11px] py-2">
-      <div data-testid="clock-face" className="relative size-11 rounded-full border border-line-strong bg-surface-raised before:absolute before:left-1/2 before:h-full before:w-px before:bg-line-strong before:content-[''] after:absolute after:top-1/2 after:h-px after:w-full after:bg-line-strong after:content-[''] max-[760px]:size-[42px]" aria-hidden="true">
-        <i className="absolute z-[2] bottom-1/2 left-[calc(50%-1px)] h-3 w-0.5 origin-bottom rounded-sm bg-text" style={{ transform: `rotate(${hour * 30 + minute / 2}deg)` }} />
-        <i className="absolute z-[2] bottom-1/2 left-[calc(50%-1px)] h-[17px] w-0.5 origin-bottom rounded-sm bg-text" style={{ transform: `rotate(${minute * 6}deg)` }} />
-        <i className="absolute z-[2] bottom-1/2 left-[calc(50%-1px)] h-[18px] w-px origin-bottom rounded-sm bg-accent" style={{ transform: `rotate(${second * 6}deg)` }} />
-        <b className="absolute z-[3] top-[calc(50%-2px)] left-[calc(50%-2px)] size-[5px] rounded-full bg-accent" />
+    <div className="flex items-center gap-3 rounded-xl border border-rule bg-panel px-3 py-2 shadow-sm">
+      <div data-testid="clock-face" className="relative size-10 rounded-full border border-rule bg-panel-muted before:absolute before:left-1/2 before:h-full before:w-px before:bg-rule before:content-[''] after:absolute after:top-1/2 after:h-px after:w-full after:bg-rule after:content-['']" aria-hidden="true">
+        <i className="absolute z-[2] bottom-1/2 left-[calc(50%-1px)] h-3 w-0.5 origin-bottom rounded-sm bg-ink" style={{ transform: `rotate(${hour * 30 + minute / 2}deg)` }} />
+        <i className="absolute z-[2] bottom-1/2 left-[calc(50%-1px)] h-[15px] w-0.5 origin-bottom rounded-sm bg-ink" style={{ transform: `rotate(${minute * 6}deg)` }} />
+        <i className="absolute z-[2] bottom-1/2 left-[calc(50%-1px)] h-[16px] w-px origin-bottom rounded-sm bg-brand" style={{ transform: `rotate(${second * 6}deg)` }} />
+        <b className="absolute z-[3] top-[calc(50%-2px)] left-[calc(50%-2px)] size-[5px] rounded-full bg-brand" />
       </div>
-      <div className="flex flex-col gap-px max-[760px]:hidden">
-        <strong className="text-[19px] leading-[1.1] tabular-nums">
+      <div className="flex flex-col gap-px max-sm:hidden">
+        <strong className="font-[family-name:var(--font-mono)] text-base leading-[1.1] font-bold tabular-nums text-ink">
           {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
         </strong>
-        <small className="text-[10px] font-bold tracking-[.08em] text-muted uppercase">Fortaleza</small>
+        <small className="text-[10px] font-extrabold tracking-[.1em] text-quiet uppercase">Fortaleza</small>
       </div>
     </div>
   );

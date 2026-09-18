@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { api, ensureCsrf } from "./lib/api";
 import type { User } from "./lib/types";
 
-type AuthValue = { user: User | null; loading: boolean; login: (username: string, password: string) => Promise<void>; logout: () => Promise<void>; refresh: () => Promise<void> };
+type AuthValue = { user: User | null; loading: boolean; login: (username: string, password: string) => Promise<void>; logout: () => Promise<void>; refresh: () => Promise<void>; setTheme: (theme: User["theme"]) => Promise<void> };
 const AuthContext = createContext<AuthValue | null>(null);
 
 function applyTheme(theme: User["theme"]) {
@@ -29,6 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(value); applyTheme(value.theme);
   };
   const logout = async () => { await api("auth/logout/", { method: "POST" }); setUser(null); };
+  const setTheme = async (theme: User["theme"]) => {
+    await api("settings/", { method: "PATCH", body: JSON.stringify({ theme }) });
+    setUser((current) => current ? { ...current, theme } : current);
+    applyTheme(theme);
+  };
   useEffect(() => {
     if (!user || user.theme !== "system") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -36,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     media.addEventListener("change", syncTheme);
     return () => media.removeEventListener("change", syncTheme);
   }, [user]);
-  return <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, login, logout, refresh, setTheme }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
