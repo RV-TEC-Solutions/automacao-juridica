@@ -8,24 +8,35 @@ export function Badge({
   children: React.ReactNode;
 }) {
   const tones: Record<string, string> = {
-    new: "border-positive/25 bg-positive-soft text-positive",
-    unread: "border-positive/25 bg-positive-soft text-positive",
-    updated: "border-brand/25 bg-brand-soft text-brand",
-    resolved: "border-rule bg-panel-muted text-quiet",
-    warning: "border-caution/25 bg-caution-soft text-caution",
+    new: "border-positive/30 bg-positive-soft text-positive font-bold",
+    unread: "border-positive/35 bg-positive-soft text-positive font-extrabold",
+    updated: "border-zinc-300 dark:border-zinc-700 bg-panel-muted text-ink font-bold",
+    resolved: "border-rule bg-panel-muted/80 text-quiet font-medium",
+    warning: "border-caution/30 bg-caution-soft text-caution font-bold",
+    danger: "border-danger/30 bg-danger-soft text-danger font-bold",
   };
-  return <span className={`inline-flex w-max items-center rounded-full border px-2 py-1 text-[10px] font-extrabold tracking-[.04em] ${tones[tone] ?? "border-rule bg-panel-muted text-ink-soft"}`}>{children}</span>;
+
+  return (
+    <span
+      className={`inline-flex w-max items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] tracking-tight leading-tight ${
+        tones[tone] ?? "border-rule bg-panel-muted text-ink-soft font-medium"
+      }`}
+    >
+      {tone === "unread" && <span className="size-1.5 rounded-full bg-positive animate-pulse" />}
+      {children}
+    </span>
+  );
 }
 
 export function EventBadges({ item }: { item: Expediente }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       {item.unread && <Badge tone="unread">Não lido</Badge>}
       <Badge tone={item.latest_event?.kind ?? "neutral"}>
         {item.latest_event?.kind_label ?? (item.ativo ? "Ativo" : "Resolvido")}
       </Badge>
       {item.tipo_pendencia_label && (
-        <Badge>{item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
+        <Badge tone="neutral">{item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
       )}
     </div>
   );
