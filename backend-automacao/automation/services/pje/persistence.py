@@ -114,7 +114,7 @@ def salvar_expediente(dado, *, source, run=None, seen_at=None):
     return expediente, created, bool(changes)
 
 
-def salvar_expedientes(dados, *, source, run=None):
+def salvar_expedientes(dados, *, source, run=None, reconcile_missing=True):
     """Persiste uma captura completa e reconcilia itens que deixaram a caixa."""
     criados = atualizados = resolvidos = 0
     seen_at = timezone.now()
@@ -128,19 +128,20 @@ def salvar_expedientes(dados, *, source, run=None):
             criados += int(criado)
             atualizados += int(not criado and alterado)
 
-        ausentes = Expediente.objects.filter(source=source, ativo=True)
-        if identificadores:
-            ausentes = ausentes.exclude(identificador_pje__in=identificadores)
-        for expediente in ausentes.select_for_update():
-            expediente.ativo = False
-            expediente.arquivado_em = seen_at
-            expediente.save(update_fields=("ativo", "arquivado_em", "atualizado_em"))
-            ExpedienteEvent.objects.create(
-                expediente=expediente, run=run,
-                kind=ExpedienteEvent.Kind.RESOLVED,
-                changes={"ativo": {"before": True, "after": False}},
-            )
-            resolvidos += 1
+        if reconcile_missing:
+            ausentes = Expediente.objects.filter(source=source, ativo=True)
+            if identificadores:
+                ausentes = ausentes.exclude(identificador_pje__in=identificadores)
+            for expediente in ausentes.select_for_update():
+                expediente.ativo = False
+                expediente.arquivado_em = seen_at
+                expediente.save(update_fields=("ativo", "arquivado_em", "atualizado_em"))
+                ExpedienteEvent.objects.create(
+                    expediente=expediente, run=run,
+                    kind=ExpedienteEvent.Kind.RESOLVED,
+                    changes={"ativo": {"before": True, "after": False}},
+                )
+                resolvidos += 1
 
     return {
         "criados": criados, "atualizados": atualizados,

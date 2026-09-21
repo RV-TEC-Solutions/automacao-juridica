@@ -145,6 +145,7 @@ def _run_payload(run):
         "id": run.id, "status": run.status, "trigger": run.trigger,
         "created_at": run.criada_em, "started_at": run.iniciada_em,
         "finished_at": run.finalizada_em, "error": run.mensagem_erro,
+        "message": run.mensagem_info,
         "found": run.expedientes_encontrados, "created": run.expedientes_criados,
         "updated": run.expedientes_atualizados, "resolved": run.expedientes_resolvidos,
         "source": run.source.code if run.source else None,

@@ -10,8 +10,10 @@ from django.test import TestCase
 
 from .models import AutomationRun, AutomationSource, UserProfile
 from .queue import enqueue_due_runs, enqueue_run, recover_interrupted_runs
-from .services.pje.browser import obter_url_pje
+from .services.pje.browser import clicar_certificado, entrar_com_pdpj, obter_url_pje
 from .services.pje.runner import executar_coleta
+from .services.pje.sources import PJE_SOURCE_ORDER
+from .services.pje.trt21 import TRT21Collection
 
 
 class QueueTests(TestCase):
@@ -112,6 +114,52 @@ class PJePipelineTests(TestCase):
 
         enqueue.assert_not_called()
 
+    def test_chain_continues_from_second_degree_to_trt21(self):
+        run = AutomationRun.objects.create(source=self.second_degree)
+        trt21 = AutomationSource.objects.get(code="trt21")
+        with (
+            patch("automation.services.pje.runner.abrir_pje", return_value=[]),
+            patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
+            patch("automation.services.pje.runner.enqueue_run") as enqueue,
+        ):
+            executar_coleta(run)
+        enqueue.assert_called_once_with(
+            trt21, trigger=AutomationRun.Trigger.MANUAL,
+            requested_by=None, scheduled_for=None,
+        )
+
+    def test_chain_skips_disabled_sources(self):
+        self.second_degree.enabled = False
+        self.second_degree.save(update_fields=("enabled",))
+        run = AutomationRun.objects.create(source=self.first_degree)
+        trt21 = AutomationSource.objects.get(code="trt21")
+        with (
+            patch("automation.services.pje.runner.abrir_pje", return_value=[]),
+            patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
+            patch("automation.services.pje.runner.enqueue_run") as enqueue,
+        ):
+            executar_coleta(run)
+        enqueue.assert_called_once_with(
+            trt21, trigger=AutomationRun.Trigger.MANUAL,
+            requested_by=None, scheduled_for=None,
+        )
+
+    def test_empty_trt21_collection_is_successful_and_informative(self):
+        trt21 = AutomationSource.objects.get(code="trt21")
+        run = AutomationRun.objects.create(source=trt21)
+        with (
+            patch(
+                "automation.services.pje.runner.abrir_pje",
+                return_value=TRT21Collection([], "Nenhum expediente novo encontrado."),
+            ),
+            patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
+            patch("automation.services.pje.runner.enqueue_run"),
+        ):
+            executar_coleta(run)
+        run.refresh_from_db()
+        self.assertEqual(run.status, AutomationRun.Status.SUCCESS)
+        self.assertEqual(run.mensagem_info, "Nenhum expediente novo encontrado.")
+
 
 class PJeBrowserTests(TestCase):
     def test_resolves_the_url_for_each_supported_source(self):
@@ -127,6 +175,27 @@ class PJeBrowserTests(TestCase):
     def test_rejects_an_unknown_pje_source(self):
         with self.assertRaisesMessage(RuntimeError, "Fonte PJe não suportada"):
             obter_url_pje("pje-inexistente")
+
+    def test_resolves_trt21_urls_and_source_order(self):
+        self.assertEqual(PJE_SOURCE_ORDER, ("pje-tjrn", "pje2g-tjrn", "trt21", "trt21-2g"))
+        self.assertEqual(obter_url_pje("trt21"), "https://pje.trt21.jus.br/primeirograu/login.seam")
+        self.assertEqual(obter_url_pje("trt21-2g"), "https://pje.trt21.jus.br/segundograu/login.seam")
+
+    def test_trt21_uses_its_certificate_control(self):
+        page = Mock()
+        title = page.locator.return_value.get_by_text.return_value
+        title.count.return_value = 1
+        clicar_certificado(page, "trt21")
+        page.locator.assert_called_once_with(".botao-certificado-titulo")
+        title.click.assert_called_once_with()
+
+    def test_trt21_opens_pdpj_by_clicking_its_image(self):
+        page = Mock()
+        image = page.locator.return_value
+        image.count.return_value = 1
+        entrar_com_pdpj(page)
+        image.click.assert_called_once_with()
+        page.locator.assert_any_call(".botao-certificado-titulo")
 
 
 class AuthApiTests(TestCase):

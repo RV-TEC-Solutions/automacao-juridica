@@ -12,12 +12,10 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
-PYTHON_ATSPI = "/usr/bin/python3"
+from .sources import get_source_profile
+from .trt21 import collect_trt21_expedientes
 
-PJE_URLS = {
-    "pje-tjrn": "https://pje1g.tjrn.jus.br/pje/Painel/painel_usuario/advogado.seam",
-    "pje2g-tjrn": "https://pje2g.tjrn.jus.br/pje/Painel/painel_usuario/advogado.seam",
-}
+PYTHON_ATSPI = "/usr/bin/python3"
 
 CREDENCIAIS = Path.home() / ".config/pje-automacao/.env"
 
@@ -144,6 +142,15 @@ def salvar_html_renderizado(pagina, pasta_respostas, indice):
     return arquivo
 
 
+def salvar_diagnostico_trt21(pagina, source_code):
+    """Mantém uma captura local e ignorada pelo Git quando o DOM mudou."""
+    pasta = PASTA_RESPOSTAS / source_code / "diagnostico"
+    pasta.mkdir(parents=True, exist_ok=True)
+    arquivo = pasta / f"falha_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    arquivo.write_text(pagina.content(), encoding="utf-8")
+    return arquivo
+
+
 def coletar_expedientes(pagina, source_code):
     """Clica em cada aba-filha e salva o HTML renderizado."""
     abas_filhas = localizar_abas_filhas(pagina)
@@ -212,10 +219,52 @@ def preencher_pin_pjeoffice_atspi():
         )
 
 def obter_url_pje(source_code):
-    try:
-        return PJE_URLS[source_code]
-    except KeyError:
-        raise RuntimeError(f"Fonte PJe não suportada: {source_code}") from None
+    return get_source_profile(source_code).url
+
+
+def clicar_certificado(pagina, source_code):
+    """Seleciona o controle de certificado da tela de login da fonte."""
+    if get_source_profile(source_code).collector == "trt21":
+        botao = pagina.locator(".botao-certificado-titulo").get_by_text(
+            "Seu certificado digital", exact=True
+        )
+    else:
+        botao = pagina.get_by_text("CERTIFICADO DIGITAL", exact=True)
+    if botao.count() != 1:
+        raise RuntimeError("Botão de certificado digital não encontrado de forma única.")
+    botao.click()
+
+
+def entrar_com_pdpj(pagina):
+    """Abre o SSO PDPJ a partir da tela simples de login do TRT21."""
+    imagem = pagina.locator(
+        "img[alt*='PDPJ' i], img[title*='PDPJ' i], img[src*='pdpj' i]"
+    )
+    if imagem.count() != 1:
+        raise RuntimeError("Imagem do botão 'Entrar com PDPJ' não encontrada de forma única.")
+    imagem.click()
+    pagina.locator(".botao-certificado-titulo").wait_for(
+        state="visible", timeout=15000
+    )
+
+
+def autenticar_pje(pagina, source_code):
+    segredo_totp = os.environ.get("PJE_TOTP_SECRET")
+    if not segredo_totp:
+        raise RuntimeError("PJE_TOTP_SECRET não foi configurado.")
+
+    if get_source_profile(source_code).collector == "trt21":
+        entrar_com_pdpj(pagina)
+    clicar_certificado(pagina, source_code)
+    preencher_pin_pjeoffice_atspi()
+
+    campo_otp = pagina.get_by_label(
+        "Entre no seu aplicativo de autenticação e digite abaixo o código apresentado:",
+        exact=True,
+    )
+    campo_otp.wait_for(state="visible")
+    campo_otp.fill(gerar_codigo_totp(segredo_totp))
+    pagina.get_by_text("Validar", exact=True).click()
 
 
 def abrir_pje(source_code):
@@ -243,41 +292,17 @@ def abrir_pje(source_code):
         print("Aguardando o login por certificado digital.")
         print("O PIN será preenchido na janela do PJeOffice.")
 
-        segredo_totp = os.environ.get("PJE_TOTP_SECRET")
-        if not segredo_totp:
-            raise RuntimeError("PJE_TOTP_SECRET não foi configurado.")
-
-        pagina.get_by_text(
-            "CERTIFICADO DIGITAL",
-            exact=True
-        ).click()
-
-        preencher_pin_pjeoffice_atspi()
-
-        campo_otp = pagina.get_by_label(
-            "Entre no seu aplicativo de autenticação e digite abaixo o código apresentado:",
-            exact=True
-        )
-
-        campo_otp.wait_for(
-            state="visible"
-        )
-
-        codigo_otp = gerar_codigo_totp(
-            segredo_totp
-        )
-
-        campo_otp.fill(codigo_otp)
-
-        pagina.get_by_text(
-            "Validar",
-            exact=True
-        ).click()
+        autenticar_pje(pagina, source_code)
 
         try:
-            pagina.locator(
-                "#divResultadoMenuContexto"
-            ).wait_for(state="visible", timeout=15000)
+            if get_source_profile(source_code).collector == "trt21":
+                pagina.get_by_text("Meus Expedientes", exact=True).wait_for(
+                    state="visible", timeout=15000
+                )
+            else:
+                pagina.locator("#divResultadoMenuContexto").wait_for(
+                    state="visible", timeout=15000
+                )
         except PlaywrightTimeoutError:
             if pagina.get_by_text("Código inválido", exact=True).count():
                 raise RuntimeError(
@@ -289,10 +314,18 @@ def abrir_pje(source_code):
                 f"Login não confirmou. URL atual: {pagina.url}"
             )
 
-        arquivos = coletar_expedientes(pagina, source_code)
-
-        navegador.close()
-        return arquivos
+        try:
+            if get_source_profile(source_code).collector == "trt21":
+                try:
+                    return collect_trt21_expedientes(pagina)
+                except Exception:
+                    # A captura fica somente na área local ignorada pelo Git e
+                    # não é mencionada no erro/API, pois contém dados processuais.
+                    salvar_diagnostico_trt21(pagina, source_code)
+                    raise
+            return coletar_expedientes(pagina, source_code)
+        finally:
+            navegador.close()
 
 if __name__ == "__main__":
     arquivos = abrir_pje("pje-tjrn")

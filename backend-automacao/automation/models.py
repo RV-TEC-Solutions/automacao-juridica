@@ -111,6 +111,10 @@ class AutomationRun(models.Model):
         blank=True,
     )
 
+    mensagem_info = models.TextField(
+        blank=True,
+    )
+
     criada_em = models.DateTimeField(
         auto_now_add=True,
     )

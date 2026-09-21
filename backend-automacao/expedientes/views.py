@@ -99,7 +99,7 @@ def _latest_run_data():
         "started_at": run.iniciada_em, "finished_at": run.finalizada_em,
         "found": run.expedientes_encontrados, "created": run.expedientes_criados,
         "updated": run.expedientes_atualizados, "resolved": run.expedientes_resolvidos,
-        "error": run.mensagem_erro,
+        "error": run.mensagem_erro, "message": run.mensagem_info,
         "source": str(run.source) if run.source else None,
     }
 

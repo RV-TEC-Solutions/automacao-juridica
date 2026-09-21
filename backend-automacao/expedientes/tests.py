@@ -49,6 +49,16 @@ class PersistenceTests(TestCase):
         self.assertFalse(Expediente.objects.get().ativo)
         self.assertEqual(ExpedienteEvent.objects.first().kind, "resolved")
 
+    def test_partial_trt21_capture_never_resolves_absent_expedientes(self):
+        trt21 = AutomationSource.objects.get(code="trt21")
+        original = payload(identifier="trt-1", numero_processo="0000001-00.2026.5.21.0001", tribunal="TRT21")
+        salvar_expedientes([original], source=trt21, reconcile_missing=False)
+
+        result = salvar_expedientes([], source=trt21, reconcile_missing=False)
+
+        self.assertEqual(result["resolvidos"], 0)
+        self.assertTrue(Expediente.objects.get(source=trt21).ativo)
+
 
 class ApiTests(TestCase):
     def setUp(self):

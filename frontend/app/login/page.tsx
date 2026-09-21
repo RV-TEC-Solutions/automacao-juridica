@@ -47,9 +47,6 @@ export default function LoginPage() {
               />
             </div>
 
-            <p className="mb-3 text-[10px] font-extrabold tracking-[.18em] text-zinc-400 uppercase">
-              Plataforma Operacional Jurídica
-            </p>
             <h1 className="max-w-xs text-3xl font-extrabold leading-[1.12] text-zinc-100 tracking-tight">
               Excelência jurídica. Precisão operacional.
             </h1>
@@ -83,11 +80,8 @@ export default function LoginPage() {
             </div>
 
             <div className="mt-10">
-              <p className="mb-1.5 text-[10px] font-extrabold tracking-[.16em] text-quiet uppercase">
-                Acesso Restrito
-              </p>
               <h2 className="text-2xl font-extrabold tracking-tight text-ink">
-                Entrar no painel
+                Acesso ao sistema
               </h2>
               <p className="mt-2 text-xs leading-relaxed text-quiet">
                 Autentique-se com sua conta operacional para acompanhar os expedientes e coletas.
@@ -154,7 +148,7 @@ export default function LoginPage() {
 
           <div className="mt-10 border-t border-rule pt-4 text-center">
             <small className="text-[11px] font-medium text-quiet">
-              Barros, Mariz & Rebouças Advogados · Ambiente local seguro
+              Barros, Mariz & Rebouças Advogados · RYVTEC Soluções e Consultoria
             </small>
           </div>
         </section>

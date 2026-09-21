@@ -35,6 +35,14 @@ class Command(BaseCommand):
             defaults={"system": "PJe", "tribunal": "TJRN", "enabled": True},
         )
         AutomationSource.objects.get_or_create(
+            code="trt21",
+            defaults={"system": "PJe 1º Grau", "tribunal": "TRT21", "enabled": True},
+        )
+        AutomationSource.objects.get_or_create(
+            code="trt21-2g",
+            defaults={"system": "PJe 2º Grau", "tribunal": "TRT21", "enabled": True},
+        )
+        AutomationSource.objects.get_or_create(
             code="pje2g-tjrn",
             defaults={
                 "system": "PJe 2° Grau",

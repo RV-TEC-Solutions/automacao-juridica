@@ -142,7 +142,7 @@ export default function Home() {
             </div>
             <small className="mt-0.5 block text-xs text-quiet font-medium">
               {data?.latest_run
-                ? `Última sincronização ${formatDateTime(data.latest_run.finished_at ?? data.latest_run.started_at)}`
+                ? data.latest_run.message || `Última sincronização ${formatDateTime(data.latest_run.finished_at ?? data.latest_run.started_at)}`
                 : "Dispare uma coleta sob demanda para atualizar os expedientes da banca."}
             </small>
           </div>

@@ -61,6 +61,7 @@ export type Run = {
   updated: number;
   resolved: number;
   error: string;
+  message: string;
   source: string | null;
 };
 
