@@ -1,13 +1,44 @@
-# vai orquestrar browser -> parser -> persistence
+import logging
+
 from django.utils import timezone
 
 from automation.models import AutomationRun, AutomationSource
 from automation.queue import enqueue_run
 
-from .browser import abrir_pje
+from .browser import LegacyCollection, abrir_pje
 from .parser import extrair_expedientes_arquivo
 from .persistence import salvar_expedientes
 from .sources import PJE_SOURCE_ORDER, get_source_profile
+
+logger = logging.getLogger("automation")
+
+
+def _enqueue_next_source(execucao):
+    """Agenda a próxima fonte habilitada sem mascarar a coleta atual."""
+    try:
+        current_index = PJE_SOURCE_ORDER.index(execucao.source.code)
+    except ValueError:
+        return
+
+    for next_code in PJE_SOURCE_ORDER[current_index + 1:]:
+        next_source = AutomationSource.objects.get(code=next_code)
+        if not next_source.enabled:
+            continue
+        try:
+            enqueue_run(
+                next_source,
+                trigger=execucao.trigger,
+                requested_by=execucao.requested_by,
+                scheduled_for=execucao.scheduled_for,
+            )
+        except ValueError:
+            logger.warning(
+                "Não foi possível agendar a próxima coleta. atual=%s proxima=%s",
+                execucao.source.code,
+                next_source.code,
+            )
+        return
+
 
 def executar_coleta(execucao=None):
     if execucao is None:
@@ -25,20 +56,21 @@ def executar_coleta(execucao=None):
         execucao.save(update_fields=("status", "iniciada_em", "mensagem_erro", "mensagem_info"))
 
     try:
-        capture = abrir_pje(source.code)
+        capture = abrir_pje(source.code, source=source)
         profile = get_source_profile(source.code)
         if profile.collector == "trt21":
             dados_unicos = capture.records
             mensagem_info = capture.empty_message
             capturas_html = 0
         else:
+            files = capture.files if isinstance(capture, LegacyCollection) else capture
             expedientes_por_id = {}
-            for arquivo in capture:
+            for arquivo in files:
                 for dado in extrair_expedientes_arquivo(arquivo):
                     expedientes_por_id[dado["identificador_pje"]] = dado
             dados_unicos = list(expedientes_por_id.values())
-            mensagem_info = ""
-            capturas_html = len(capture)
+            mensagem_info = capture.notice_message if isinstance(capture, LegacyCollection) else ""
+            capturas_html = len(files)
 
         resultado = salvar_expedientes(
             dados_unicos, source=source, run=execucao,
@@ -71,20 +103,7 @@ def executar_coleta(execucao=None):
 
         execucao.save()
 
-        try:
-            current_index = PJE_SOURCE_ORDER.index(source.code)
-        except ValueError:
-            current_index = len(PJE_SOURCE_ORDER)
-        for next_code in PJE_SOURCE_ORDER[current_index + 1:]:
-            next_source = AutomationSource.objects.get(code=next_code)
-            if next_source.enabled:
-                enqueue_run(
-                    next_source,
-                    trigger=execucao.trigger,
-                    requested_by=execucao.requested_by,
-                    scheduled_for=execucao.scheduled_for,
-                )
-                break
+        _enqueue_next_source(execucao)
 
         return resultado
 
@@ -99,5 +118,15 @@ def executar_coleta(execucao=None):
         )
 
         execucao.save()
+
+        _enqueue_next_source(execucao)
+
+        logger.exception(
+            "Coleta #%s falhou. fonte=%s erro=%s: %s",
+            execucao.pk,
+            source.code,
+            type(erro).__name__,
+            erro,
+        )
 
         raise

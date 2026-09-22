@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChartBar, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
+import { Bell, ChartBar, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../providers";
 
 const links = [
   ["/", "Visão geral", House],
   ["/expedientes", "Expedientes", FileText],
+  ["/avisos", "Avisos", Bell],
   ["/estatisticas", "Estatísticas", ChartBar],
   ["/configuracoes", "Configurações", GearSix],
 ] as const;

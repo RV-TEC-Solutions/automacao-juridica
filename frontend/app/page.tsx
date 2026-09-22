@@ -121,6 +121,20 @@ export default function Home() {
         </Feedback>
       )}
 
+      {(data?.notices.unread ?? 0) > 0 && (
+        <Link
+          href="/avisos"
+          className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-caution/30 bg-caution-soft px-4 py-3 text-sm no-underline transition-colors hover:border-caution/60"
+        >
+          <span className="flex items-center gap-2 text-ink-soft">
+            <Bell size={18} weight="duotone" className="text-caution" />
+            <strong>{data?.notices.unread} aviso{data?.notices.unread === 1 ? "" : "s"} não lido{data?.notices.unread === 1 ? "" : "s"}</strong>
+            <span className="hidden sm:inline text-xs text-quiet">Comunicados confirmados no PJe e aguardando sua leitura.</span>
+          </span>
+          <span className="text-xs font-extrabold text-ink">Ver avisos →</span>
+        </Link>
+      )}
+
       {/* Collection status & trigger banner */}
       <BezelCard
         className="mb-6"

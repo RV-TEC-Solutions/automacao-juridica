@@ -11,8 +11,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import AutomationRun, AutomationSource, UserProfile
-from .queue import enqueue_run
+from .models import AutomationRun, AutomationSource, Notice, UserProfile
+from .serializers import NoticeSerializer
+from .queue import enqueue_run, first_enabled_source
 
 
 def _profile(user):
@@ -156,12 +157,66 @@ def _run_payload(run):
 @permission_classes([IsAuthenticated])
 def runs(request):
     if request.method == "POST":
-        source = AutomationSource.objects.filter(code=request.data.get("source", "pje-tjrn")).first()
-        if not source:
+        requested_code = request.data.get("source", "pje-tjrn")
+        requested_source = AutomationSource.objects.filter(code=requested_code).first()
+        if not requested_source:
             return Response({"detail": "Fonte não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        source = (
+            requested_source
+            if requested_source.enabled
+            else first_enabled_source(requested_source.code)
+        )
+        if source is None:
+            return Response(
+                {"detail": "Não há fontes habilitadas para coleta."},
+                status=status.HTTP_409_CONFLICT,
+            )
         try:
             run = enqueue_run(source, AutomationRun.Trigger.MANUAL, requested_by=request.user)
         except ValueError as error:
             return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
         return Response(_run_payload(run), status=status.HTTP_202_ACCEPTED)
     return Response([_run_payload(run) for run in AutomationRun.objects.select_related("source")[:20]])
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def notices(request):
+    queryset = Notice.objects.prefetch_related("source_links__source")
+    if request.query_params.get("read") == "unread":
+        queryset = queryset.filter(read_at__isnull=True)
+    try:
+        page = max(int(request.query_params.get("page", 1)), 1)
+    except ValueError:
+        return Response({"detail": "Página inválida."}, status=status.HTTP_400_BAD_REQUEST)
+    page_size = 25
+    start = (page - 1) * page_size
+    total = queryset.count()
+    items = queryset[start:start + page_size]
+    return Response({
+        "count": total,
+        "next": page + 1 if start + page_size < total else None,
+        "previous": page - 1 if page > 1 else None,
+        "results": NoticeSerializer(items, many=True).data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def notice_detail(request, pk):
+    notice = Notice.objects.prefetch_related("source_links__source").filter(pk=pk).first()
+    if not notice:
+        return Response({"detail": "Aviso não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+    return Response(NoticeSerializer(notice).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_notice_read(request, pk):
+    notice = Notice.objects.filter(pk=pk).first()
+    if not notice:
+        return Response({"detail": "Aviso não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+    if notice.read_at is None:
+        notice.read_at = timezone.now()
+        notice.save(update_fields=("read_at", "updated_at"))
+    return Response(NoticeSerializer(Notice.objects.prefetch_related("source_links__source").get(pk=pk)).data)

@@ -14,6 +14,49 @@ class AutomationSource(models.Model):
         return f"{self.system} / {self.tribunal}"
 
 
+class Notice(models.Model):
+    """Comunicado canônico exibido pelo Quadro de Avisos do PJe."""
+
+    fingerprint = models.CharField(max_length=64, unique=True)
+    title = models.CharField(max_length=500)
+    included_by = models.CharField(max_length=255, blank=True)
+    included_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateField(null=True, blank=True)
+    raw_html = models.TextField()
+    content_html = models.TextField()
+    content_text = models.TextField()
+    links = models.JSONField(default=list, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-published_at", "-created_at")
+
+    def __str__(self):
+        return self.title
+
+
+class NoticeSource(models.Model):
+    """Rastreia a descoberta e a confirmação externa de um aviso por fonte."""
+
+    notice = models.ForeignKey(
+        Notice, on_delete=models.CASCADE, related_name="source_links"
+    )
+    source = models.ForeignKey(
+        AutomationSource, on_delete=models.PROTECT, related_name="notice_links"
+    )
+    collected_at = models.DateTimeField(auto_now=True)
+    pje_confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("notice", "source"), name="unique_notice_per_source"
+            )
+        ]
+
+
 class UserProfile(models.Model):
     class Theme(models.TextChoices):
         LIGHT = "light", "Claro"

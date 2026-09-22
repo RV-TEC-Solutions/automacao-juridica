@@ -1,10 +1,13 @@
 """Navegação e leitura do painel Angular do PJe TRT21."""
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+logger = logging.getLogger("automation")
 
 
 PROCESS_NUMBER = re.compile(r"\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
@@ -106,6 +109,13 @@ def _normalise_header(value):
     return re.sub(r"\s+", " ", value).strip().lower()
 
 
+def _page_url(page):
+    try:
+        return page.url
+    except Exception:
+        return "<indisponível>"
+
+
 def _columns_for_row(page, row):
     headers = page.locator("table thead th")
     cells = row.locator("td")
@@ -120,6 +130,16 @@ def _columns_for_row(page, row):
 
 def collect_trt21_expedientes(page):
     """Lê apenas a página de resultados exibida pelo painel TRT21."""
+    expedientes_card = page.get_by_role(
+        "group", name="Meus Expedientes", exact=True
+    )
+    if (
+        expedientes_card.count() == 1
+        and expedientes_card.locator("mat-card.painel-item-sem-processo").count() == 1
+    ):
+        logger.info("TRT21 não possui expedientes novos. url=%s", _page_url(page))
+        return TRT21Collection([], "Nenhum expediente novo encontrado.")
+
     page.get_by_text("Meus Expedientes", exact=True).click()
     page.wait_for_url("**/pendentes-manifestacao", timeout=15000)
     page.wait_for_timeout(500)
@@ -129,7 +149,8 @@ def collect_trt21_expedientes(page):
         return TRT21Collection([], "Nenhum expediente novo encontrado.")
 
     records = []
-    for index in range(table_rows.count()):
+    total_rows = table_rows.count()
+    for index in range(total_rows):
         row = table_rows.nth(index)
         detail = row.get_by_role(
             "button", name=re.compile(r"^Detalhar Expediente, processo")
@@ -138,16 +159,53 @@ def collect_trt21_expedientes(page):
             raise RuntimeError("Botão 'Detalhar Expediente' não encontrado de forma única.")
         detail.click()
         modal = page.get_by_role("dialog")
+        close_selector = ".container-botao-fechar > a[role='button']"
+        close = modal.locator(close_selector)
+        close_is_ready = False
         try:
             modal.wait_for(state="visible", timeout=10000)
+            try:
+                close.wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeoutError:
+                close_count = close.count()
+                logger.error(
+                    "TRT21 não carregou o controle para fechar detalhes. "
+                    "linha=%s/%s seletor=%s encontrados=%s url=%s",
+                    index + 1,
+                    total_rows,
+                    close_selector,
+                    close_count,
+                    _page_url(page),
+                )
+                raise RuntimeError("Os detalhes do expediente TRT21 não ficaram prontos.") from None
+            close_count = close.count()
+            if close_count != 1:
+                logger.error(
+                    "TRT21 não encontrou um controle único para fechar detalhes. "
+                    "linha=%s/%s seletor=%s encontrados=%s url=%s",
+                    index + 1,
+                    total_rows,
+                    close_selector,
+                    close_count,
+                    _page_url(page),
+                )
+                raise RuntimeError("Não foi possível fechar os detalhes do expediente TRT21.")
+            close_is_ready = True
             records.append(_row_record(row, modal, _columns_for_row(page, row)))
         finally:
-            close = modal.locator("a.btn-fechar-link[role='button']")
-            if close.count() != 1:
-                raise RuntimeError("Não foi possível fechar os detalhes do expediente TRT21.")
-            close.click()
-            try:
-                modal.wait_for(state="hidden", timeout=5000)
-            except PlaywrightTimeoutError:
-                raise RuntimeError("Os detalhes do expediente TRT21 não fecharam.") from None
+            if close_is_ready:
+                close.click()
+                try:
+                    modal.wait_for(state="hidden", timeout=5000)
+                except PlaywrightTimeoutError:
+                    logger.error(
+                        "TRT21 não fechou os detalhes do expediente no tempo esperado. "
+                        "linha=%s/%s seletor=%s encontrados=%s url=%s",
+                        index + 1,
+                        total_rows,
+                        close_selector,
+                        close_count,
+                        _page_url(page),
+                    )
+                    raise RuntimeError("Os detalhes do expediente TRT21 não fecharam.") from None
     return TRT21Collection(records)

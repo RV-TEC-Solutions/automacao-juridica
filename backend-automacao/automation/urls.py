@@ -2,7 +2,7 @@ from django.urls import path
 
 from .views import (
     change_password, csrf, login_view, logout_view, me, runs,
-    settings_view, source_detail, sources,
+    settings_view, source_detail, sources, notices, notice_detail, mark_notice_read,
 )
 
 urlpatterns = [
@@ -11,4 +11,7 @@ urlpatterns = [
     path("auth/password/", change_password), path("settings/", settings_view),
     path("sources/", sources), path("sources/<slug:code>/", source_detail),
     path("automation/runs/", runs),
+    path("notices/", notices),
+    path("notices/<int:pk>/", notice_detail),
+    path("notices/<int:pk>/read/", mark_notice_read),
 ]

@@ -65,6 +65,29 @@ export type Run = {
   source: string | null;
 };
 
+export type Notice = {
+  id: number;
+  title: string;
+  included_by: string;
+  included_at: string | null;
+  published_at: string | null;
+  content_html: string;
+  content_text: string;
+  links: string[];
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+  unread: boolean;
+  sources: { code: string; system: string; tribunal: string; pje_confirmed_at: string | null }[];
+};
+
+export type NoticePage = {
+  count: number;
+  next: number | null;
+  previous: number | null;
+  results: Notice[];
+};
+
 export type Dashboard = {
   display_name: string;
   today: {
@@ -82,4 +105,5 @@ export type Dashboard = {
   };
   latest_run: Run | null;
   recent: Expediente[];
+  notices: { unread: number; recent: Notice[] };
 };

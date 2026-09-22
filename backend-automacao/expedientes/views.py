@@ -13,6 +13,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from automation.models import AutomationRun, UserProfile
+from automation.models import Notice
+from automation.serializers import NoticeSerializer
 from .models import Expediente, ExpedienteEvent
 from .serializers import EventSerializer, ExpedienteSerializer
 
@@ -123,6 +125,7 @@ def dashboard(request):
     events_today = ExpedienteEvent.objects.filter(created_at__gte=today_start)
     active = Expediente.objects.filter(ativo=True)
     unread = Expediente.objects.filter(events__read_at__isnull=True).distinct().count()
+    unread_notices = Notice.objects.filter(read_at__isnull=True).count()
     urgent = active.filter(status_prazo_fatal="calculado", prazo_fatal__lte=now + timedelta(hours=72)).count()
     calculating = active.filter(status_prazo_fatal="em_calculo").count()
     since = profile.last_dashboard_visit
@@ -136,6 +139,12 @@ def dashboard(request):
             "new": events_today.filter(kind="new").values("expediente_id").distinct().count(),
             "updated": events_today.filter(kind="updated").values("expediente_id").distinct().count(),
             "unread": unread, "urgent": urgent, "calculating": calculating,
+        },
+        "notices": {
+            "unread": unread_notices,
+            "recent": NoticeSerializer(
+                Notice.objects.prefetch_related("source_links__source")[:4], many=True
+            ).data,
         },
         "since_last_visit": {
             "since": since,
