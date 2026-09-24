@@ -5,15 +5,30 @@ export function BezelCard({
   children,
   className = "",
   innerClassName = "",
+  onClick,
+  selected = false,
+  ariaLabel,
 }: {
   children: ReactNode;
   className?: string;
   innerClassName?: string;
+  onClick?: () => void;
+  selected?: boolean;
+  ariaLabel?: string;
 }) {
+  const classes = `bezel-card ${onClick ? "cursor-pointer text-left" : ""} ${selected ? "outline-2 outline-offset-2 outline-black" : ""} ${className}`;
+  const content = <div className={`bezel-inner ${innerClassName}`}>{children}</div>;
+
+  if (onClick) {
+    return (
+      <button type="button" className={classes} onClick={onClick} aria-pressed={selected} aria-label={ariaLabel}>
+        {content}
+      </button>
+    );
+  }
+
   return (
-    <section className={`bezel-card ${className}`}>
-      <div className={`bezel-inner ${innerClassName}`}>{children}</div>
-    </section>
+    <section className={classes}>{content}</section>
   );
 }
 
@@ -32,37 +47,54 @@ export function MetricCard({
   note,
   icon,
   tone = "blue",
+  children,
+  className = "",
+  innerClassName = "",
+  onClick,
+  selected,
 }: {
   label: string;
   value: string | number;
   note: string;
   icon: ReactNode;
   tone?: keyof typeof tones;
+  children?: ReactNode;
+  className?: string;
+  innerClassName?: string;
+  onClick?: () => void;
+  selected?: boolean;
 }) {
   return (
     <BezelCard
-      className="group transition-all duration-200 hover:-translate-y-0.5"
-      innerClassName="flex min-h-[148px] flex-col p-4 sm:p-5"
+      className={`group transition-all duration-200 hover:-translate-y-0.5 ${className}`}
+      innerClassName={`flex min-h-[148px] flex-col p-4 sm:p-5 ${innerClassName}`}
+      onClick={onClick}
+      selected={selected}
+      ariaLabel={label ? `Filtrar expedientes: ${label}` : undefined}
     >
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[10px] font-extrabold tracking-[.14em] text-quiet uppercase">
-          {label}
-        </span>
-        <span className={`grid size-9 place-items-center rounded-xl border shadow-xs transition-transform group-hover:scale-105 ${tones[tone]}`}>
-          {icon}
-        </span>
-      </div>
-      <div className="mt-auto pt-4">
-        <strong
-          className="block truncate font-[family-name:var(--font-mono)] text-2xl font-extrabold tracking-[-.05em] tabular-nums text-ink sm:text-[28px]"
-          title={String(value)}
-        >
-          {value}
-        </strong>
-        <small className="mt-1 block text-xs font-medium text-quiet leading-tight">
-          {note}
-        </small>
-      </div>
+      {children ?? (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-[10px] font-extrabold tracking-[.14em] text-quiet uppercase">
+              {label}
+            </span>
+            <span className={`grid size-9 place-items-center rounded-xl border shadow-xs transition-transform group-hover:scale-105 ${tones[tone]}`}>
+              {icon}
+            </span>
+          </div>
+          <div className="mt-auto pt-4">
+            <strong
+              className="block truncate font-[family-name:var(--font-mono)] text-2xl font-extrabold tracking-[-.05em] tabular-nums text-ink sm:text-[28px]"
+              title={String(value)}
+            >
+              {value}
+            </strong>
+            <small className="mt-1 block text-xs font-medium text-quiet leading-tight">
+              {note}
+            </small>
+          </div>
+        </>
+      )}
     </BezelCard>
   );
 }

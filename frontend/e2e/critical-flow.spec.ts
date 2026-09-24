@@ -53,6 +53,7 @@ const item = {
 test("login, dashboard and reading a new expediente", async ({ page }) => {
   let authenticated = false;
   let collectionRequests = 0;
+  let activeDashboardRequests = 0;
 
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -67,15 +68,36 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
       return route.fulfill({ json: user });
     }
     if (path.endsWith("dashboard/") && route.request().method() === "GET") {
+      const latestRun = collectionRequests === 0 ? null : {
+        id: 1,
+        status: ++activeDashboardRequests === 1 ? "pending" : "success",
+        trigger: "manual",
+        started_at: "2026-08-25T08:00:00Z",
+        finished_at: activeDashboardRequests === 1 ? null : "2026-08-25T08:01:00Z",
+        found: 1,
+        created: 1,
+        updated: 0,
+        resolved: 0,
+        error: "",
+        message: "",
+        source: "PJe / TJRN",
+      };
       return route.fulfill({
         json: {
           display_name: "Victor",
           today: { new: 1, updated: 0, unread: 1, urgent: 0, calculating: 0 },
           since_last_visit: { since: null, new: 1, updated: 0, resolved: 0 },
-          latest_run: null,
+          latest_run: latestRun,
           recent: [item],
+          notices: { unread: 0, recent: [] },
         },
       });
+    }
+    if (path.endsWith("expedientes/")) {
+      return route.fulfill({ json: { count: 1, next: null, previous: null, results: [item] } });
+    }
+    if (path.endsWith("history/")) {
+      return route.fulfill({ json: { period_start: "2026-08-27", period_end: "2026-09-25", count: 1, page: 1, page_size: 50, days: [{ date: "2026-09-25", new_count: 1, items: [{ event: item.latest_event, expediente: item }] }] } });
     }
     if (path.endsWith("dashboard/")) {
       return route.fulfill({ json: { visited_at: new Date().toISOString() } });
@@ -104,9 +126,13 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Expedientes", exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Executar coleta" }).click();
   await expect.poll(() => collectionRequests).toBe(1);
+  await expect(page.getByText("Coleta concluída com êxito")).toBeVisible();
   await page.getByText("0800000-00.2026.8.20.0001").click();
   await expect(page.getByRole("dialog")).toContainText("Obrigação de fazer");
   await page.getByLabel("Fechar").click();
   await page.getByRole("link", { name: "Expedientes", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Expedientes" })).toBeVisible();
+  await page.getByRole("link", { name: "Histórico", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Histórico" })).toBeVisible();
+  await expect(page.getByText("PJe · TJRN").first()).toBeVisible();
 });
