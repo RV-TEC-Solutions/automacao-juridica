@@ -86,3 +86,32 @@ class ApiTests(TestCase):
     def test_statistics_validates_period(self):
         self.assertEqual(self.client.get("/api/statistics/?period=10").status_code, 400)
         self.assertEqual(self.client.get("/api/statistics/?period=7").status_code, 200)
+
+    def test_next_week_deadline_filter_matches_dashboard_metric(self):
+        dashboard = self.client.get("/api/dashboard/")
+        response = self.client.get("/api/expedientes/?deadline=next_week")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], dashboard.data["today"]["next_week"])
+        self.assertEqual(response.data["count"], 1)
+    def test_history_returns_paginated_new_events(self):
+        local_tz = ZoneInfo("America/Fortaleza")
+        today = timezone.localdate(timezone=local_tz)
+        expediente = Expediente.objects.get()
+        created = expediente.events.get(kind=ExpedienteEvent.Kind.NEW)
+        created.created_at = datetime.combine(today - timedelta(days=2), datetime.min.time(), tzinfo=local_tz) + timedelta(hours=9)
+        created.save(update_fields=("created_at",))
+        updated = ExpedienteEvent.objects.create(expediente=expediente, kind=ExpedienteEvent.Kind.UPDATED)
+        updated.created_at = datetime.combine(today - timedelta(days=1), datetime.min.time(), tzinfo=local_tz) + timedelta(hours=9)
+        updated.save(update_fields=("created_at",))
+
+        response = self.client.get("/api/history/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["page"], 1)
+        self.assertEqual(response.data["page_size"], 50)
+        self.assertEqual(len(response.data["days"]), 1)
+        self.assertEqual(response.data["days"][0]["date"], (today - timedelta(days=2)).isoformat())
+        self.assertEqual(response.data["days"][0]["new_count"], 1)
+        self.assertEqual(response.data["days"][0]["items"][0]["event"]["kind"], "new")

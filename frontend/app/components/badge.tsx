@@ -28,7 +28,7 @@ export function Badge({
   );
 }
 
-export function EventBadges({ item }: { item: Expediente }) {
+export function EventBadges({ item, showSource = false }: { item: Expediente; showSource?: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {item.unread && <Badge tone="unread">Não lido</Badge>}
@@ -38,6 +38,7 @@ export function EventBadges({ item }: { item: Expediente }) {
       {item.tipo_pendencia_label && (
         <Badge tone="neutral">{item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
       )}
+      {showSource && item.source && <Badge tone="neutral"><span className="whitespace-nowrap">{item.source.system} · {item.source.tribunal}</span></Badge>}
     </div>
   );
 }

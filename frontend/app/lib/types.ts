@@ -95,6 +95,7 @@ export type Dashboard = {
     updated: number;
     unread: number;
     urgent: number;
+    next_week: number;
     calculating: number;
   };
   since_last_visit: {
@@ -106,4 +107,22 @@ export type Dashboard = {
   latest_run: Run | null;
   recent: Expediente[];
   notices: { unread: number; recent: Notice[] };
+};
+
+export type ExpedientePage = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Expediente[];
+};
+
+export type HistoryItem = { event: Event; expediente: Expediente };
+export type HistoryDay = { date: string; new_count: number; items: HistoryItem[] };
+export type History = {
+  period_start: string;
+  period_end: string;
+  count: number;
+  page: number;
+  page_size: number;
+  days: HistoryDay[];
 };

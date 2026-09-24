@@ -10,9 +10,11 @@ import { BezelCard } from "./ui";
 export function ExpedienteList({
   items,
   onSelect,
+  showSourceBadge = false,
 }: {
   items: Expediente[];
   onSelect: (item: Expediente) => void;
+  showSourceBadge?: boolean;
 }) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
@@ -64,7 +66,7 @@ export function ExpedienteList({
           >
             {/* Main process information */}
             <div className="min-w-0 pr-2">
-              <EventBadges item={item} />
+              <EventBadges item={item} showSource={showSourceBadge} />
               <div className="mt-2.5 flex items-center gap-2">
                 <strong className="block truncate font-[family-name:var(--font-mono)] text-sm font-extrabold tracking-tight text-ink sm:text-[15px]">
                   {item.processo.numero}

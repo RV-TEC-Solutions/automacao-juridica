@@ -20,15 +20,24 @@ from .serializers import EventSerializer, ExpedienteSerializer
 
 
 LOCAL_TZ = ZoneInfo("America/Fortaleza")
+HISTORY_PAGE_SIZE = 50
 
 
 def _base_queryset():
     return Expediente.objects.select_related("processo", "source").prefetch_related("events")
 
 
+def _next_week_end(now):
+    local_now = timezone.localtime(now, LOCAL_TZ)
+    days_until_next_monday = 7 - local_now.weekday()
+    next_week_sunday = local_now.date() + timedelta(days=days_until_next_monday + 6)
+    return datetime.combine(next_week_sunday + timedelta(days=1), datetime.min.time(), tzinfo=LOCAL_TZ)
+
+
 class ExpedientePagination(PageNumberPagination):
     page_size = 25
-    page_size_query_param = None
+    page_size_query_param = "page_size"
+    max_page_size = 50
 
 
 class ExpedienteViewSet(ReadOnlyModelViewSet):
@@ -55,6 +64,8 @@ class ExpedienteViewSet(ReadOnlyModelViewSet):
             queryset = queryset.filter(tipo_pendencia=pending)
         if read := params.get("read"):
             queryset = queryset.filter(has_unread=(read == "unread"))
+        if event_kind := params.get("event_kind"):
+            queryset = queryset.filter(events__kind=event_kind)
         if date_from := params.get("date_from"):
             queryset = queryset.filter(events__created_at__date__gte=date_from)
         if date_to := params.get("date_to"):
@@ -69,6 +80,13 @@ class ExpedienteViewSet(ReadOnlyModelViewSet):
             queryset = queryset.filter(ativo=True, status_prazo_fatal="calculado", prazo_fatal__lt=now)
         elif deadline == "future":
             queryset = queryset.filter(ativo=True, prazo_fatal__gt=urgent_limit)
+        elif deadline == "next_week":
+            queryset = queryset.filter(
+                ativo=True,
+                status_prazo_fatal="calculado",
+                prazo_fatal__gte=now,
+                prazo_fatal__lt=_next_week_end(now),
+            )
         elif deadline == "calculating":
             queryset = queryset.filter(ativo=True, status_prazo_fatal="em_calculo")
         elif deadline == "none":
@@ -90,6 +108,49 @@ def mark_read(request, pk):
     read_at = timezone.now()
     count = expediente.events.filter(read_at__isnull=True).update(read_at=read_at)
     return Response({"read_at": read_at, "events_marked": count})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def history(request):
+    """Paginated new expedientes grouped by local collection date."""
+    local_today = timezone.localdate(timezone=LOCAL_TZ)
+    dates = [local_today - timedelta(days=offset) for offset in range(30)]
+    window_start = datetime.combine(dates[-1], datetime.min.time(), tzinfo=LOCAL_TZ)
+    window_end = datetime.combine(local_today + timedelta(days=1), datetime.min.time(), tzinfo=LOCAL_TZ)
+    events = (
+        ExpedienteEvent.objects.filter(kind=ExpedienteEvent.Kind.NEW, created_at__gte=window_start, created_at__lt=window_end)
+        .select_related("expediente__processo", "expediente__source")
+        .prefetch_related("expediente__events")
+        .order_by("-created_at", "-id")
+    )
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        return Response({"detail": "Página inválida."}, status=status.HTTP_400_BAD_REQUEST)
+
+    total = events.count()
+    start = (page - 1) * HISTORY_PAGE_SIZE
+    page_events = list(events[start:start + HISTORY_PAGE_SIZE])
+    counts_by_date = {
+        row["day"]: row["total"]
+        for row in events.order_by().annotate(day=TruncDate("created_at", tzinfo=LOCAL_TZ)).values("day").annotate(total=Count("id"))
+    }
+
+    by_date = {}
+    for event in page_events:
+        day = timezone.localtime(event.created_at, LOCAL_TZ).date()
+        by_date.setdefault(day, []).append({
+            "event": EventSerializer(event).data,
+            "expediente": ExpedienteSerializer(event.expediente).data,
+        })
+    return Response({
+        "period_start": dates[-1].isoformat(), "period_end": local_today.isoformat(),
+        "count": total,
+        "page": page,
+        "page_size": HISTORY_PAGE_SIZE,
+        "days": [{"date": day.isoformat(), "new_count": counts_by_date[day], "items": items} for day, items in by_date.items()],
+    })
 
 
 def _latest_run_data():
@@ -127,6 +188,9 @@ def dashboard(request):
     unread = Expediente.objects.filter(events__read_at__isnull=True).distinct().count()
     unread_notices = Notice.objects.filter(read_at__isnull=True).count()
     urgent = active.filter(status_prazo_fatal="calculado", prazo_fatal__lte=now + timedelta(hours=72)).count()
+    next_week = active.filter(
+        status_prazo_fatal="calculado", prazo_fatal__gte=now, prazo_fatal__lt=_next_week_end(now)
+    ).count()
     calculating = active.filter(status_prazo_fatal="em_calculo").count()
     since = profile.last_dashboard_visit
     since_events = ExpedienteEvent.objects.filter(created_at__gt=since) if since else ExpedienteEvent.objects.all()
@@ -138,7 +202,7 @@ def dashboard(request):
         "today": {
             "new": events_today.filter(kind="new").values("expediente_id").distinct().count(),
             "updated": events_today.filter(kind="updated").values("expediente_id").distinct().count(),
-            "unread": unread, "urgent": urgent, "calculating": calculating,
+            "unread": unread, "urgent": urgent, "calculating": calculating, "next_week": next_week,
         },
         "notices": {
             "unread": unread_notices,

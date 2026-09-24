@@ -14,4 +14,10 @@ describe("EventBadges", () => {
     expect(screen.getByText("Alterado")).toBeInTheDocument();
     expect(screen.getByText("resposta")).toBeInTheDocument();
   });
+
+  it("shows the source when requested by a historical list", () => {
+    const item = { unread: false, ativo: true, tipo_pendencia_label: "", latest_event: { kind: "new", kind_label: "Novo" }, source: { code: "trt21", system: "PJe 1º Grau", tribunal: "TRT21" } } as Expediente;
+    render(<EventBadges item={item} showSource />);
+    expect(screen.getByText("PJe 1º Grau · TRT21")).toBeInTheDocument();
+  });
 });
