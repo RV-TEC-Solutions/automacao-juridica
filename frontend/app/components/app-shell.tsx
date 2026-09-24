@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, ChartBar, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { Bell, ChartBar, ClockCounterClockwise, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../providers";
+import { api } from "../lib/api";
+import type { NoticePage } from "../lib/types";
 
 const links = [
   ["/", "Visão geral", House],
   ["/expedientes", "Expedientes", FileText],
+  ["/historico", "Histórico", ClockCounterClockwise],
   ["/avisos", "Avisos", Bell],
   ["/estatisticas", "Estatísticas", ChartBar],
   ["/configuracoes", "Configurações", GearSix],
@@ -64,10 +67,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [switchingTheme, setSwitchingTheme] = useState(false);
+  const [unreadNotices, setUnreadNotices] = useState(0);
+
+  const loadUnreadNotices = useCallback(async () => {
+    try {
+      const notices = await api<NoticePage>("notices/?read=unread");
+      setUnreadNotices(notices.count);
+    } catch {
+      // A falha ao buscar a contagem não deve impedir a navegação do usuário.
+    }
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    queueMicrotask(() => { void loadUnreadNotices(); });
+    window.addEventListener("notices:changed", loadUnreadNotices);
+    return () => window.removeEventListener("notices:changed", loadUnreadNotices);
+  }, [user, loadUnreadNotices]);
 
   if (loading || !user) {
     return (
@@ -84,6 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-app text-ink">
+      <span role="status" aria-atomic="true" className="sr-only">{unreadNotices === 0 ? "Nenhum aviso não lido" : unreadNotices === 1 ? "1 aviso não lido" : `${unreadNotices} avisos não lidos`}</span>
       <header className="sticky top-0 z-40 border-b border-rule bg-[var(--shell)] backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Brand />
@@ -91,18 +112,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="hidden items-center rounded-xl border border-rule bg-panel-muted/80 p-1 shadow-sm lg:flex" aria-label="Navegação principal">
             {links.map(([href, label, Icon]) => {
               const active = pathname === href;
+              const isNotices = href === "/avisos";
+              const unreadLabel = unreadNotices === 1 ? "1 aviso não lido" : `${unreadNotices} avisos não lidos`;
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold no-underline transition-all ${
+                  aria-label={isNotices && unreadNotices > 0 ? `${label}, ${unreadLabel}` : label}
+                  className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold no-underline transition-all ${
                     active
                       ? "bg-brand text-brand-fg shadow-sm"
                       : "text-quiet hover:bg-panel hover:text-ink"
                   }`}
                 >
-                  <Icon size={16} weight={active ? "fill" : "regular"} />
+                  <Icon size={16} weight={active || (isNotices && unreadNotices > 0) ? "fill" : "regular"} className={isNotices && unreadNotices > 0 ? "notice-bell text-caution" : undefined} />
                   {label}
+                  {isNotices && unreadNotices > 0 && (
+                    <span aria-hidden="true" className="absolute -bottom-2 -right-2 grid size-6 place-items-center rounded-full border border-caution/25 bg-caution-soft text-[11px] font-extrabold leading-none text-caution shadow-sm">
+                      {unreadNotices}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -158,16 +187,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="flex gap-1.5 overflow-x-auto border-t border-rule px-4 py-2 lg:hidden" aria-label="Navegação principal móvel">
           {links.map(([href, label, Icon]) => {
             const active = pathname === href;
+            const isNotices = href === "/avisos";
+            const unreadLabel = unreadNotices === 1 ? "1 aviso não lido" : `${unreadNotices} avisos não lidos`;
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold no-underline transition-colors ${
+                aria-label={isNotices && unreadNotices > 0 ? `${label}, ${unreadLabel}` : label}
+                className={`relative flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold no-underline transition-colors ${
                   active ? "bg-brand text-brand-fg" : "bg-panel-muted/80 text-quiet"
                 }`}
               >
-                <Icon size={15} weight={active ? "fill" : "regular"} />
+                <Icon size={15} weight={active || (isNotices && unreadNotices > 0) ? "fill" : "regular"} className={isNotices && unreadNotices > 0 ? "notice-bell text-caution" : undefined} />
                 {label}
+                {isNotices && unreadNotices > 0 && (
+                  <span aria-hidden="true" className="absolute -bottom-2 -right-2 grid size-6 place-items-center rounded-full border border-caution/25 bg-caution-soft text-[11px] font-extrabold leading-none text-caution shadow-sm">
+                    {unreadNotices}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -30,6 +30,7 @@ export default function NoticesPage() {
     try {
       const updated = await api<Notice>(`notices/${notice.id}/read/`, { method: "POST" });
       setData((current) => current ? { ...current, results: current.results.map((item) => item.id === updated.id ? updated : item) } : current);
+      window.dispatchEvent(new Event("notices:changed"));
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Não foi possível atualizar o aviso.");
     } finally {

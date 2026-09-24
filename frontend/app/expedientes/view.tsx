@@ -164,6 +164,7 @@ export function ExpedientesClient() {
                   <option value="urgent">Urgentes</option>
                   <option value="overdue">Vencidos</option>
                   <option value="future">Futuros</option>
+                  <option value="next_week">Até o fim da próxima semana</option>
                   <option value="calculating">Em cálculo</option>
                   <option value="none">Sem prazo</option>
                   <option value="resolved">Resolvidos</option>

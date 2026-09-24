@@ -210,6 +210,20 @@ h1, h2, h3 { letter-spacing: -.03em; }
   transform: scale(0.98);
 }
 
+@keyframes notice-bell {
+  0%, 72%, 100% { transform: rotate(0); }
+  76% { transform: rotate(-14deg); }
+  80% { transform: rotate(12deg); }
+  84% { transform: rotate(-10deg); }
+  88% { transform: rotate(7deg); }
+  92% { transform: rotate(-3deg); }
+}
+
+.notice-bell {
+  transform-origin: top center;
+  animation: notice-bell 1.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;
