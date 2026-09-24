@@ -65,7 +65,7 @@ export function HistoricoClient() {
       const totalLabel = `${day.new_count} expediente${day.new_count === 1 ? "" : "s"}`;
       return <section key={day.date} aria-labelledby={`history-day-${day.date}`}>
         <header className="mb-3 flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl border border-rule bg-panel-muted text-quiet"><CalendarBlank size={18} weight="duotone" aria-hidden="true" /></span><h2 id={`history-day-${day.date}`} className="text-sm font-extrabold tracking-tight text-ink sm:text-base">{formatDay(day.date)} <span className="font-medium text-quiet">({totalLabel})</span></h2></header>
-        {items.length ? <ExpedienteList items={items} onSelect={setSelected} showSourceBadge /> : <BezelCard innerClassName="flex items-center gap-3 px-5 py-4 text-xs font-semibold text-quiet"><FolderSimple size={19} weight="duotone" className="shrink-0" />Nenhum expediente novo coletado neste dia.</BezelCard>}
+        {items.length ? <ExpedienteList items={items} onSelect={setSelected} /> : <BezelCard innerClassName="flex items-center gap-3 px-5 py-4 text-xs font-semibold text-quiet"><FolderSimple size={19} weight="duotone" className="shrink-0" />Nenhum expediente novo coletado neste dia.</BezelCard>}
       </section>;
     })}
     {data.count === 0 && <BezelCard innerClassName="flex items-center gap-3 px-5 py-4 text-xs font-semibold text-quiet"><FolderSimple size={19} weight="duotone" className="shrink-0" />Nenhum expediente novo coletado nos últimos 30 dias.</BezelCard>}

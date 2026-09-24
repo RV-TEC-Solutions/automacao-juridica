@@ -13,6 +13,12 @@ from .sources import PJE_SOURCE_ORDER, get_source_profile
 logger = logging.getLogger("automation")
 
 
+def _was_cancelled(execucao):
+    """Atualiza o estado local para respeitar uma interrupção feita pela interface."""
+    execucao.refresh_from_db(fields=("status",))
+    return execucao.status == AutomationRun.Status.CANCELLED
+
+
 def _enqueue_next_source(execucao):
     """Agenda a próxima fonte habilitada sem mascarar a coleta atual."""
     try:
@@ -57,6 +63,8 @@ def executar_coleta(execucao=None):
 
     try:
         capture = abrir_pje(source.code, source=source)
+        if _was_cancelled(execucao):
+            return None
         profile = get_source_profile(source.code)
         if profile.collector == "trt21":
             dados_unicos = capture.records
@@ -76,6 +84,8 @@ def executar_coleta(execucao=None):
             dados_unicos, source=source, run=execucao,
             reconcile_missing=profile.reconcile_missing,
         )
+        if _was_cancelled(execucao):
+            return None
         execucao.status = (
             AutomationRun.Status.SUCCESS
         )
@@ -108,6 +118,8 @@ def executar_coleta(execucao=None):
         return resultado
 
     except Exception as erro:
+        if _was_cancelled(execucao):
+            return None
         execucao.status = (
             AutomationRun.Status.FAILED
         )

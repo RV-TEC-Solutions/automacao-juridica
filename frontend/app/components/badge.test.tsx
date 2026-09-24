@@ -15,9 +15,11 @@ describe("EventBadges", () => {
     expect(screen.getByText("resposta")).toBeInTheDocument();
   });
 
-  it("shows the source when requested by a historical list", () => {
+  it("always shows a distinct, labelled badge for the source", () => {
     const item = { unread: false, ativo: true, tipo_pendencia_label: "", latest_event: { kind: "new", kind_label: "Novo" }, source: { code: "trt21", system: "PJe 1º Grau", tribunal: "TRT21" } } as Expediente;
-    render(<EventBadges item={item} showSource />);
-    expect(screen.getByText("PJe 1º Grau · TRT21")).toBeInTheDocument();
+    render(<EventBadges item={item} />);
+    const badge = screen.getByText("PJe 1º Grau · TRT21");
+    expect(badge).toBeInTheDocument();
+    expect(badge.parentElement).toHaveClass("source-badge-trt21-1g");
   });
 });

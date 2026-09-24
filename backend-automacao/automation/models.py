@@ -89,6 +89,7 @@ class AutomationRun(models.Model):
         RUNNING = "running", "Executando"
         SUCCESS = "success", "Sucesso"
         FAILED = "failed", "Erro"
+        CANCELLED = "cancelled", "Interrompida"
 
     class Trigger(models.TextChoices):
         SCHEDULED = "scheduled", "Agendada"

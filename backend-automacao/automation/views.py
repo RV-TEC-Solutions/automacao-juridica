@@ -179,6 +179,24 @@ def runs(request):
     return Response([_run_payload(run) for run in AutomationRun.objects.select_related("source")[:20]])
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cancel_run(request, pk):
+    """Interrompe uma coleta pendente ou sinaliza a interrupção da coleta em curso."""
+    run = AutomationRun.objects.filter(pk=pk).first()
+    if not run:
+        return Response({"detail": "Coleta não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+    if run.status not in {AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING}:
+        return Response({"detail": "Esta coleta já foi finalizada."}, status=status.HTTP_409_CONFLICT)
+
+    run.status = AutomationRun.Status.CANCELLED
+    run.mensagem_info = "Coleta interrompida pelo usuário."
+    run.finalizada_em = timezone.now()
+    run.save(update_fields=("status", "mensagem_info", "finalizada_em"))
+    return Response(_run_payload(run))
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def notices(request):

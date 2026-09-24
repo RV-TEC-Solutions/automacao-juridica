@@ -50,6 +50,18 @@ class PersistenceTests(TestCase):
         self.assertFalse(Expediente.objects.get().ativo)
         self.assertEqual(ExpedienteEvent.objects.first().kind, "resolved")
 
+    def test_repeated_collection_never_duplicates_an_expediente(self):
+        original = payload()
+
+        first = salvar_expedientes([original], source=self.source)
+        repeated = salvar_expedientes([original, original], source=self.source)
+
+        self.assertEqual(first["criados"], 1)
+        self.assertEqual(repeated["criados"], 0)
+        self.assertEqual(repeated["atualizados"], 0)
+        self.assertEqual(Expediente.objects.filter(source=self.source).count(), 1)
+        self.assertEqual(ExpedienteEvent.objects.filter(kind=ExpedienteEvent.Kind.NEW).count(), 1)
+
     def test_partial_trt21_capture_never_resolves_absent_expedientes(self):
         trt21 = AutomationSource.objects.get(code="trt21")
         original = payload(identifier="trt-1", numero_processo="0000001-00.2026.5.21.0001", tribunal="TRT21")

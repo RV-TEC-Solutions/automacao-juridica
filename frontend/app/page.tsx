@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Play, Sparkle, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Play, Sparkle, Stop, WarningCircle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "./components/app-shell";
 import { Clock } from "./components/clock";
@@ -45,6 +45,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [running, setRunning] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
   const [listPage, setListPage] = useState(1);
   const [expedientes, setExpedientes] = useState<ExpedientePage | null>(null);
@@ -105,6 +106,21 @@ export default function Home() {
     }
   };
 
+  const cancel = async () => {
+    const runId = data?.latest_run?.id;
+    if (!runId) return;
+
+    setCancelling(true);
+    try {
+      await api(`automation/runs/${runId}/cancel/`, { method: "POST" });
+      await load();
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Não foi possível interromper a coleta.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const runStatus = data?.latest_run?.status;
   const collectionInProgress = ["pending", "running"].includes(runStatus ?? "");
 
@@ -123,6 +139,8 @@ export default function Home() {
     ? "Coleta concluída com êxito"
     : runStatus === "failed"
     ? "Coleta requer atenção"
+    : runStatus === "cancelled"
+    ? "Coleta interrompida"
     : runStatus === "running"
     ? "Coleta em andamento no PJe"
     : "Coleta aguardando execução";
@@ -280,14 +298,26 @@ export default function Home() {
             </div>
           </div>
 
-          <button
-            className="button-primary shrink-0 cursor-pointer whitespace-nowrap px-4.5 py-6 text-xs sm:text-sm font-bold shadow-xs sm:self-stretch"
-            onClick={run}
-            disabled={running || collectionInProgress}
-          >
-            <Play size={15} weight="fill" />
-            {running ? "Solicitando coleta…" : "Executar coleta"}
-          </button>
+          <div className="flex shrink-0 gap-2 sm:self-stretch">
+            {collectionInProgress && (
+              <button
+                className="button-secondary cursor-pointer whitespace-nowrap border-danger/30 bg-danger-soft px-4 py-3 text-xs font-bold text-danger hover:border-danger/50 sm:px-4.5 sm:py-6 sm:text-sm"
+                onClick={cancel}
+                disabled={cancelling}
+              >
+                <Stop size={15} weight="fill" />
+                {cancelling ? "Interrompendo…" : "Interromper coleta"}
+              </button>
+            )}
+            <button
+              className="button-primary cursor-pointer whitespace-nowrap px-4.5 py-3 text-xs font-bold shadow-xs sm:py-6 sm:text-sm"
+              onClick={run}
+              disabled={running || collectionInProgress}
+            >
+              <Play size={15} weight="fill" />
+              {running ? "Solicitando coleta…" : "Executar coleta"}
+            </button>
+          </div>
         </MetricCard>
       </div>
 

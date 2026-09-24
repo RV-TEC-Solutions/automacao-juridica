@@ -10,11 +10,9 @@ import { BezelCard } from "./ui";
 export function ExpedienteList({
   items,
   onSelect,
-  showSourceBadge = false,
 }: {
   items: Expediente[];
   onSelect: (item: Expediente) => void;
-  showSourceBadge?: boolean;
 }) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
@@ -66,7 +64,7 @@ export function ExpedienteList({
           >
             {/* Main process information */}
             <div className="min-w-0 pr-2">
-              <EventBadges item={item} showSource={showSourceBadge} />
+              <EventBadges item={item} />
               <div className="mt-2.5 flex items-center gap-2">
                 <strong className="block truncate font-[family-name:var(--font-mono)] text-sm font-extrabold tracking-tight text-ink sm:text-[15px]">
                   {item.processo.numero}
@@ -105,9 +103,6 @@ export function ExpedienteList({
                 <strong className="mt-0.5 block font-[family-name:var(--font-mono)] text-xs font-bold text-ink-soft">
                   {formatDateTime(item.prazo_fatal)}
                 </strong>
-                <small className="mt-0.5 block truncate text-[11px] text-quiet font-medium">
-                  {item.source ? `${item.source.system} · ${item.source.tribunal}` : "Fonte não informada"}
-                </small>
               </div>
             </div>
 

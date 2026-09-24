@@ -1,5 +1,13 @@
 import type { Expediente } from "../lib/types";
 
+const sourceBadgeClasses: Record<string, string> = {
+  "pje-tjrn": "source-badge-tjrn-1g", "pje2g-tjrn": "source-badge-tjrn-2g",
+  trt21: "source-badge-trt21-1g", "trt21-2g": "source-badge-trt21-2g",
+  "trf5-2g-tru": "source-badge-trf5-tru", "varas-justica-comum": "source-badge-trf5-varas",
+  "jef-5-regiao": "source-badge-trf5-jef", "trs-5-regiao": "source-badge-trf5-trs",
+  "tru-5-regiao": "source-badge-trf5-tru-alt",
+};
+
 export function Badge({
   tone = "neutral",
   children,
@@ -28,7 +36,12 @@ export function Badge({
   );
 }
 
-export function EventBadges({ item, showSource = false }: { item: Expediente; showSource?: boolean }) {
+export function SourceBadge({ source }: { source: NonNullable<Expediente["source"]> }) {
+  const sourceClass = sourceBadgeClasses[source.code] ?? "source-badge-default";
+  return <span className={`source-badge ${sourceClass}`}><span aria-hidden="true" className="source-badge-dot" /><span className="whitespace-nowrap">{source.system} · {source.tribunal}</span></span>;
+}
+
+export function EventBadges({ item }: { item: Expediente }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {item.unread && <Badge tone="unread">Não lido</Badge>}
@@ -38,7 +51,7 @@ export function EventBadges({ item, showSource = false }: { item: Expediente; sh
       {item.tipo_pendencia_label && (
         <Badge tone="neutral">{item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
       )}
-      {showSource && item.source && <Badge tone="neutral"><span className="whitespace-nowrap">{item.source.system} · {item.source.tribunal}</span></Badge>}
+      {item.source && <SourceBadge source={item.source} />}
     </div>
   );
 }

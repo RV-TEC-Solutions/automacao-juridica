@@ -92,6 +92,34 @@ class QueueTests(TestCase):
         next_run = enqueue_run(self.source, AutomationRun.Trigger.MANUAL)
         self.assertEqual(next_run.status, AutomationRun.Status.PENDING)
 
+    def test_authenticated_user_can_cancel_an_active_run(self):
+        user = get_user_model().objects.create_user("operator", password="senha-segura")
+        self.client.force_login(user)
+        run = AutomationRun.objects.create(
+            source=self.source,
+            status=AutomationRun.Status.RUNNING,
+        )
+
+        response = self.client.post(f"/api/automation/runs/{run.pk}/cancel/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], AutomationRun.Status.CANCELLED)
+        run.refresh_from_db()
+        self.assertEqual(run.mensagem_info, "Coleta interrompida pelo usuário.")
+        self.assertIsNotNone(run.finalizada_em)
+
+    def test_cannot_cancel_a_completed_run(self):
+        user = get_user_model().objects.create_user("operator", password="senha-segura")
+        self.client.force_login(user)
+        run = AutomationRun.objects.create(
+            source=self.source,
+            status=AutomationRun.Status.SUCCESS,
+        )
+
+        response = self.client.post(f"/api/automation/runs/{run.pk}/cancel/")
+
+        self.assertEqual(response.status_code, 409)
+
 
 class PJePipelineTests(TestCase):
     def setUp(self):

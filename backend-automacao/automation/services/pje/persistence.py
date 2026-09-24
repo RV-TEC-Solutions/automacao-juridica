@@ -54,6 +54,7 @@ def _registrar_mudanca(changes, prefixo, campo, anterior, atual):
 
 def salvar_expediente(dado, *, source, run=None, seen_at=None):
     seen_at = seen_at or timezone.now()
+    identificador_pje = str(dado["identificador_pje"])
     processo, _ = Processo.objects.get_or_create(
         numero=dado["numero_processo"],
         defaults={"tribunal": dado.get("tribunal", source.tribunal)},
@@ -68,18 +69,17 @@ def salvar_expediente(dado, *, source, run=None, seen_at=None):
         campos = tuple(key.removeprefix("processo.") for key in process_changed)
         processo.save(update_fields=campos + ("atualizado_em",))
 
-    expediente = Expediente.objects.filter(
+    # A restrição unique_expediente_per_source é a garantia definitiva contra
+    # duplicação. get_or_create também trata a corrida entre duas coletas que
+    # consultaram o mesmo expediente antes de qualquer uma gravá-lo.
+    expediente, created = Expediente.objects.get_or_create(
         source=source,
-        identificador_pje=dado["identificador_pje"],
-    ).first()
-    created = expediente is None
-    if created:
-        expediente = Expediente(
-            identificador_pje=dado["identificador_pje"],
-            processo=processo,
-            source=source,
-            status_prazo_fatal=dado["status_prazo_fatal"],
-        )
+        identificador_pje=identificador_pje,
+        defaults={
+            "processo": processo,
+            "status_prazo_fatal": dado["status_prazo_fatal"],
+        },
+    )
 
     changes = dict(process_changed)
     if not created and expediente.processo_id != processo.id:
