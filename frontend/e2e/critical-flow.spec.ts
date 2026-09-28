@@ -98,7 +98,7 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
       return route.fulfill({
         json: {
           display_name: "Victor",
-          today: { new: 1, updated: 0, unread: 1, urgent: 0, calculating: 0 },
+          today: { new: 1, updated: 0, resolved: 0, discardable: 1, unread: 1, urgent: 0, calculating: 0 },
           since_last_visit: { since: null, new: 1, updated: 0, resolved: 0 },
           latest_run: latestRun,
           collection_pipeline: collectionPipeline,
@@ -109,6 +109,9 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
     }
     if (path.endsWith("expedientes/")) {
       return route.fulfill({ json: { count: 1, next: null, previous: null, results: [item] } });
+    }
+    if (path.endsWith("automation/history/")) {
+      return route.fulfill({ json: { period_start: "2026-08-27", period_end: "2026-09-25", days: [{ date: "2026-09-25", runs: [{ id: 1, cycle_id: "cycle-1", status: "success", status_label: "Sucesso", trigger: "manual", trigger_label: "Manual", created_at: "2026-09-25T08:00:00Z", started_at: "2026-09-25T08:00:00Z", finished_at: "2026-09-25T08:01:00Z", duration_seconds: 60, found: 1, created: 1, updated: 0, resolved: 0, error: "", message: "", source: { code: "pje-tjrn", system: "PJe", tribunal: "TJRN" } }] }] } });
     }
     if (path.endsWith("history/")) {
       return route.fulfill({ json: { period_start: "2026-08-27", period_end: "2026-09-25", count: 1, page: 1, page_size: 50, days: [{ date: "2026-09-25", new_count: 1, items: [{ event: item.latest_event, expediente: item }] }] } });
@@ -155,4 +158,6 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
   await page.getByRole("link", { name: "Histórico", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Histórico" })).toBeVisible();
   await expect(page.getByText("PJe · TJRN").first()).toBeVisible();
+  await page.getByRole("tab", { name: "Orquestração de coletas" }).click();
+  await expect(page.getByText("Manual").first()).toBeVisible();
 });

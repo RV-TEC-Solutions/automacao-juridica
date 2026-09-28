@@ -1,7 +1,8 @@
 import {
-  ArrowClockwise, CheckCircle, Clock, MinusCircle, Play, Prohibit,
+  ArrowClockwise, ChartBar, CheckCircle, Clock, MinusCircle, Play, Prohibit, Trash,
   SpinnerGap, Stop, XCircle,
 } from "@phosphor-icons/react";
+import Link from "next/link";
 import { Fragment } from "react";
 import { formatDateTime } from "../lib/api";
 import type { CollectionPipeline as Pipeline, PipelineStep, PipelineStepStatus } from "../lib/types";
@@ -37,9 +38,9 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
         <button
           type="button"
           className="grid size-7 shrink-0 place-items-center rounded-md border border-rule bg-panel text-quiet transition hover:border-quiet hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:pointer-events-none disabled:opacity-35"
-          aria-label={`Reexecutar a partir de ${step.label}`}
+          aria-label={`Reexecutar somente ${step.label}`}
           aria-describedby={errorId}
-          title={canRerun ? `Reexecutar a partir de ${step.label}` : "Disponível após o fim da coleta"}
+          title={canRerun ? `Reexecutar somente ${step.label}` : "Disponível após o fim da coleta"}
           disabled={!canRerun}
           onClick={() => onRerun(step.code)}
         >
@@ -52,15 +53,19 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
 }
 
 export function CollectionPipeline({
-  pipeline, refreshing, starting, cancelling, onRefresh, onRun, onCancel, onRerun,
+  pipeline, refreshing, starting, cancelling, discarding, canDiscard,
+  onRefresh, onRun, onCancel, onDiscard, onRerun,
 }: {
   pipeline: Pipeline;
   refreshing: boolean;
   starting: boolean;
   cancelling: boolean;
+  discarding: boolean;
+  canDiscard: boolean;
   onRefresh: () => void;
   onRun: () => void;
   onCancel: () => void;
+  onDiscard: (trigger: HTMLButtonElement) => void;
   onRerun: (code: string) => void;
 }) {
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
@@ -80,8 +85,14 @@ export function CollectionPipeline({
           <p className="mb-0 truncate text-[11px] font-medium text-quiet" title={announcement}>{announcement}</p>
         </div>
         <div className="flex shrink-0 gap-1.5">
+          <Link href="/historico?tab=orquestracao" className="button-secondary grid size-9 min-h-0 place-items-center p-0 text-quiet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink" aria-label="Ver relatório de coletas" title="Ver relatório de coletas">
+            <ChartBar size={15} weight="duotone" />
+          </Link>
           <button type="button" className="button-secondary size-9 min-h-0 p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink" onClick={onRefresh} disabled={refreshing} aria-label="Atualizar status da coleta" title="Atualizar status da coleta">
             <ArrowClockwise size={15} weight="bold" className={refreshing ? "animate-spin motion-reduce:animate-none" : ""} />
+          </button>
+          <button type="button" className="button-secondary size-9 min-h-0 border-danger/30 bg-danger-soft p-0 text-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger" onClick={(event) => onDiscard(event.currentTarget)} disabled={!canDiscard || discarding} aria-label="Descartar coleta do dia" title={canDiscard ? "Descartar coleta do dia" : "Disponível quando houver dados coletados e nenhuma coleta ativa"}>
+            <Trash size={15} weight="fill" className={discarding ? "animate-pulse" : ""} />
           </button>
           {pipeline.active ? (
             <button type="button" className="button-secondary size-9 min-h-0 border-danger/30 bg-danger-soft p-0 text-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger" onClick={onCancel} disabled={cancelling} aria-label="Interromper coleta" title="Interromper coleta">

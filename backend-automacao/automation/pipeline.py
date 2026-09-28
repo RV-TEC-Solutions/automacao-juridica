@@ -24,17 +24,17 @@ LABELS = {
 }
 
 
-def collection_pipeline_payload():
-    latest = AutomationRun.objects.select_related("source").first()
-    sources = {
-        source.code: source
-        for source in AutomationSource.objects.filter(code__in=PJE_SOURCE_ORDER)
-    }
-    cycle_runs = list(
+def _runs_for_cycle(latest):
+    if latest is None:
+        return []
+    return list(
         AutomationRun.objects.select_related("source")
-        .filter(cycle_id=latest.cycle_id)
+        .filter(cycle_id=latest.cycle_id, descartada_em__isnull=True)
         .order_by("criada_em", "id")
-    ) if latest else []
+    )
+
+
+def _steps_for_cycle(sources, cycle_runs):
     runs_by_source = {run.source.code: run for run in cycle_runs if run.source}
     active = any(
         run.status in (AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING)
@@ -43,17 +43,6 @@ def collection_pipeline_payload():
     start_index = min(
         (PJE_SOURCE_ORDER.index(code) for code in runs_by_source), default=0
     )
-
-    if not cycle_runs:
-        cycle_status = "idle"
-    elif active:
-        cycle_status = "running"
-    elif any(run.status == AutomationRun.Status.CANCELLED for run in cycle_runs):
-        cycle_status = "cancelled"
-    elif any(run.status == AutomationRun.Status.FAILED for run in cycle_runs):
-        cycle_status = "failed"
-    else:
-        cycle_status = "success"
 
     steps = []
     for index, code in enumerate(PJE_SOURCE_ORDER):
@@ -76,21 +65,98 @@ def collection_pipeline_payload():
             "error": run.mensagem_erro if run else "",
             "message": run.mensagem_info if run else "",
         })
+    return steps
+
+
+def _replace_step_with_run(steps_by_code, run, sources):
+    if (
+        run.source is None
+        or run.source.code not in steps_by_code
+        or not sources.get(run.source.code, run.source).enabled
+    ):
+        return
+    steps_by_code[run.source.code].update({
+        "status": run.status,
+        "run_id": run.id,
+        "error": run.mensagem_erro,
+        "message": run.mensagem_info,
+    })
+
+
+def _cycle_status(cycle_runs, active):
+    if not cycle_runs:
+        return "idle"
+    if active:
+        return "running"
+    if any(run.status == AutomationRun.Status.CANCELLED for run in cycle_runs):
+        return "cancelled"
+    if any(run.status == AutomationRun.Status.FAILED for run in cycle_runs):
+        return "failed"
+    return "success"
+
+
+def collection_pipeline_payload():
+    latest_record = AutomationRun.objects.select_related("source").first()
+    latest = (
+        None
+        if latest_record and latest_record.descartada_em is not None
+        else latest_record
+    )
+    sources = {
+        source.code: source
+        for source in AutomationSource.objects.filter(code__in=PJE_SOURCE_ORDER)
+    }
+    cycle_runs = _runs_for_cycle(latest)
+    active = any(
+        run.status in (AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING)
+        for run in cycle_runs
+    )
+
+    if latest and latest.trigger == AutomationRun.Trigger.RERUN:
+        previous_cycle = (
+            AutomationRun.objects.select_related("source")
+            .filter(descartada_em__isnull=True)
+            .exclude(trigger=AutomationRun.Trigger.RERUN)
+            .filter(criada_em__lt=latest.criada_em)
+            .first()
+        )
+        steps = _steps_for_cycle(sources, _runs_for_cycle(previous_cycle))
+        reruns = AutomationRun.objects.select_related("source").filter(
+            trigger=AutomationRun.Trigger.RERUN,
+            descartada_em__isnull=True,
+        )
+        if previous_cycle:
+            reruns = reruns.filter(criada_em__gt=previous_cycle.criada_em)
+        steps_by_code = {step["code"]: step for step in steps}
+        for rerun in reruns.order_by("criada_em", "id"):
+            _replace_step_with_run(steps_by_code, rerun, sources)
+    else:
+        steps = _steps_for_cycle(sources, cycle_runs)
 
     completed = sum(step["status"] == AutomationRun.Status.SUCCESS for step in steps)
     relevant = sum(step["status"] != "disabled" for step in steps)
-    timestamps = AutomationRun.objects.filter(cycle_id=latest.cycle_id).aggregate(
+    timestamps = AutomationRun.objects.filter(
+        cycle_id=latest.cycle_id,
+        descartada_em__isnull=True,
+    ).aggregate(
         started_at=Min("iniciada_em"), finished_at=Max("finalizada_em")
     ) if latest else {"started_at": None, "finished_at": None}
-    current = next(
-        (step for step in steps if step["status"] in ("running", "pending")), None
-    )
+    if latest and latest.trigger == AutomationRun.Trigger.RERUN:
+        active_run = next(
+            (run for run in cycle_runs if run.status in ("running", "pending")), None
+        )
+        current_code = active_run.source.code if active_run and active_run.source else None
+    else:
+        current = next(
+            (step for step in steps if step["status"] in ("running", "pending")), None
+        )
+        current_code = current["code"] if current else None
     return {
         "cycle_id": str(latest.cycle_id) if latest else None,
-        "status": cycle_status, "active": active,
+        "status": _cycle_status(cycle_runs, active), "active": active,
         "completed": completed, "total": relevant,
         "started_at": timestamps["started_at"],
         "finished_at": None if active else timestamps["finished_at"],
-        "current_step": current["code"] if current else None,
+        "current_step": current_code,
         "steps": steps,
     }

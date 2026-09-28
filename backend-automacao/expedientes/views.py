@@ -185,6 +185,7 @@ def dashboard(request):
     local_now = now.astimezone(LOCAL_TZ)
     today_start = datetime.combine(local_now.date(), datetime.min.time(), tzinfo=LOCAL_TZ)
     events_today = ExpedienteEvent.objects.filter(created_at__gte=today_start)
+    reversible_events_today = events_today.filter(run__isnull=False)
     active = Expediente.objects.filter(ativo=True)
     unread = Expediente.objects.filter(events__read_at__isnull=True).distinct().count()
     unread_notices = Notice.objects.filter(read_at__isnull=True).count()
@@ -203,6 +204,8 @@ def dashboard(request):
         "today": {
             "new": events_today.filter(kind="new").values("expediente_id").distinct().count(),
             "updated": events_today.filter(kind="updated").values("expediente_id").distinct().count(),
+            "resolved": events_today.filter(kind="resolved").values("expediente_id").distinct().count(),
+            "discardable": reversible_events_today.count(),
             "unread": unread, "urgent": urgent, "calculating": calculating, "next_week": next_week,
         },
         "notices": {

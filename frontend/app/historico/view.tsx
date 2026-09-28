@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "../components/app-shell";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
+import { CollectionHistoryPanel } from "../components/collection-history";
 import { BezelCard, Feedback, LoadingRows, PageTitle } from "../components/ui";
 import { api } from "../lib/api";
 import type { Expediente, History } from "../lib/types";
@@ -26,14 +27,16 @@ export function HistoricoClient() {
   const [data, setData] = useState<History | null>(null);
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [error, setError] = useState("");
+  const tab = search.get("tab") === "orquestracao" ? "orquestracao" : "expedientes";
   const page = Math.max(1, Number(search.get("page") ?? 1) || 1);
   const load = useCallback(async () => {
     try { setData(await api<History>("history/?page=" + page)); setError(""); }
     catch (exception) { setError(exception instanceof Error ? exception.message : "Falha ao carregar o histórico."); }
   }, [page]);
   useEffect(() => {
+    if (tab !== "expedientes") return;
     queueMicrotask(() => { void load(); });
-  }, [load]);
+  }, [load, tab]);
 
   const markRead = () => {
     if (!selected) return;
@@ -56,8 +59,22 @@ export function HistoricoClient() {
     router.replace("/historico?" + params);
   };
 
+  const selectTab = (nextTab: "expedientes" | "orquestracao") => {
+    const params = new URLSearchParams(search);
+    if (nextTab === "expedientes") params.delete("tab");
+    else params.set("tab", nextTab);
+    params.delete("page");
+    const query = params.toString();
+    router.replace(`/historico${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
   return <AppShell>
-    <PageTitle eyebrow="Auditoria de coletas" title="Histórico" description="Expedientes inéditos identificados nas coletas dos últimos 30 dias, organizados pela data da coleta em páginas de até 50 itens." />
+    <PageTitle eyebrow="Auditoria de coletas" title="Histórico" description="Consulte os expedientes identificados e a orquestração das fontes nos últimos 30 dias." />
+    <div className="mb-6 inline-flex rounded-xl border border-rule bg-panel-muted/70 p-1" role="tablist" aria-label="Tipo de histórico">
+      <button id="history-tab-expedientes" type="button" role="tab" aria-selected={tab === "expedientes"} aria-controls="history-panel-expedientes" onClick={() => selectTab("expedientes")} className={`rounded-lg px-3.5 py-2 text-xs font-bold transition-colors ${tab === "expedientes" ? "bg-brand text-brand-fg shadow-sm" : "text-quiet hover:bg-panel hover:text-ink"}`}>Expedientes</button>
+      <button id="history-tab-orquestracao" type="button" role="tab" aria-selected={tab === "orquestracao"} aria-controls="history-panel-orquestracao" onClick={() => selectTab("orquestracao")} className={`rounded-lg px-3.5 py-2 text-xs font-bold transition-colors ${tab === "orquestracao" ? "bg-brand text-brand-fg shadow-sm" : "text-quiet hover:bg-panel hover:text-ink"}`}>Orquestração de coletas</button>
+    </div>
+    {tab === "orquestracao" ? <section id="history-panel-orquestracao" role="tabpanel" aria-labelledby="history-tab-orquestracao"><CollectionHistoryPanel /></section> : <section id="history-panel-expedientes" role="tabpanel" aria-labelledby="history-tab-expedientes">
     {error && <Feedback action={<button className="button-secondary cursor-pointer px-3.5 py-1.5 text-xs font-bold" onClick={load}>Tentar novamente</button>}>{error}</Feedback>}
     {!data && !error && <LoadingRows />}
     {data && <div className="space-y-7">{data.days.map((day) => {
@@ -76,5 +93,6 @@ export function HistoricoClient() {
     </nav>}
     </div>}
     <ExpedienteDrawer item={selected} onClose={() => setSelected(null)} onRead={markRead} />
+    </section>}
   </AppShell>;
 }

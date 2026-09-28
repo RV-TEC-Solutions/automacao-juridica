@@ -21,6 +21,9 @@ def _was_cancelled(execucao):
 
 def _enqueue_next_source(execucao):
     """Agenda a próxima fonte habilitada sem mascarar a coleta atual."""
+    if execucao.trigger == AutomationRun.Trigger.RERUN:
+        return
+
     try:
         current_index = PJE_SOURCE_ORDER.index(execucao.source.code)
     except ValueError:

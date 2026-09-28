@@ -118,6 +118,8 @@ export type Dashboard = {
   today: {
     new: number;
     updated: number;
+    resolved: number;
+    discardable: number;
     unread: number;
     urgent: number;
     next_week: number;
@@ -151,4 +153,30 @@ export type History = {
   page: number;
   page_size: number;
   days: HistoryDay[];
+};
+
+export type CollectionRun = {
+  id: number;
+  cycle_id: string;
+  status: PipelineStepStatus;
+  status_label: string;
+  trigger: string;
+  trigger_label: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  found: number;
+  created: number;
+  updated: number;
+  resolved: number;
+  error: string;
+  message: string;
+  source: { code: string; system: string; tribunal: string } | null;
+};
+
+export type CollectionHistory = {
+  period_start: string;
+  period_end: string;
+  days: { date: string; runs: CollectionRun[] }[];
 };

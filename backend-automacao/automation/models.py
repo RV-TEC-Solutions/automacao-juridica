@@ -95,6 +95,7 @@ class AutomationRun(models.Model):
     class Trigger(models.TextChoices):
         SCHEDULED = "scheduled", "Agendada"
         MANUAL = "manual", "Manual"
+        RERUN = "rerun", "Reexecução de fonte"
         CATCH_UP = "catch_up", "Recuperação"
 
     source = models.ForeignKey(
@@ -135,6 +136,8 @@ class AutomationRun(models.Model):
         null=True,
         blank=True,
     )
+
+    descartada_em = models.DateTimeField(null=True, blank=True, db_index=True)
 
     expedientes_encontrados = models.PositiveIntegerField(
         default=0,

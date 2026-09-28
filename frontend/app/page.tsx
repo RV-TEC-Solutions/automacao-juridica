@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "./components/app-shell";
 import { Clock } from "./components/clock";
 import { CollectionPipeline } from "./components/collection-pipeline";
+import { DiscardCollectionDialog } from "./components/discard-collection-dialog";
 import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
 import { Feedback, LoadingRows, MetricCard, PageTitle } from "./components/ui";
@@ -48,6 +49,10 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [discardTrigger, setDiscardTrigger] = useState<HTMLButtonElement | null>(null);
+  const [success, setSuccess] = useState("");
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
   const [listPage, setListPage] = useState(1);
   const [expedientes, setExpedientes] = useState<ExpedientePage | null>(null);
@@ -93,12 +98,12 @@ export default function Home() {
     });
   }, [load]);
 
-  const run = async (source = "pje-tjrn") => {
+  const run = async (source = "pje-tjrn", rerun = false) => {
     setRunning(true);
     try {
       await api("automation/runs/", {
         method: "POST",
-        body: JSON.stringify({ source }),
+        body: JSON.stringify({ source, ...(rerun ? { rerun: true } : {}) }),
       });
       await load();
     } catch (exception) {
@@ -123,9 +128,39 @@ export default function Home() {
     }
   };
 
+  const closeDiscardDialog = () => {
+    setDiscardDialogOpen(false);
+    window.requestAnimationFrame(() => discardTrigger?.focus());
+  };
+
+  const discardToday = async () => {
+    let discarded = false;
+    setDiscarding(true);
+    try {
+      const result = await api<{ deleted_expedientes: number; reverted_updates: number; reactivated_expedientes: number }>("automation/collections/today/discard/", { method: "POST" });
+      setSuccess(`${result.deleted_expedientes} expediente${result.deleted_expedientes === 1 ? "" : "s"} excluído${result.deleted_expedientes === 1 ? "" : "s"}, ${result.reverted_updates} alteração${result.reverted_updates === 1 ? "" : "ões"} revertida${result.reverted_updates === 1 ? "" : "s"} e ${result.reactivated_expedientes} expediente${result.reactivated_expedientes === 1 ? "" : "s"} reativado${result.reactivated_expedientes === 1 ? "" : "s"}. Pipeline e histórico do dia limpos.`);
+      setError("");
+      setDiscardDialogOpen(false);
+      discarded = true;
+      await Promise.all([load(), loadExpedientes()]);
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Não foi possível descartar a coleta do dia.");
+    } finally {
+      setDiscarding(false);
+      if (discarded) window.requestAnimationFrame(() => discardTrigger?.focus());
+    }
+  };
+
   const pipeline = data?.collection_pipeline;
   const runStatus = data?.latest_run?.status;
   const collectionInProgress = pipeline?.active ?? ["pending", "running"].includes(runStatus ?? "");
+  const canDiscard = Boolean(
+    data
+    && !collectionInProgress
+    && !running
+    && !discarding
+    && data.today.discardable > 0
+  );
 
   useEffect(() => {
     if (!collectionInProgress) return;
@@ -165,6 +200,7 @@ export default function Home() {
           {error}
         </Feedback>
       )}
+      {success && <Feedback tone="success">{success}</Feedback>}
 
       <div className="mb-8 grid min-w-0 gap-x-6 gap-y-3 xl:grid-cols-2 xl:grid-rows-[auto_1fr]">
         <section className="contents">
@@ -187,8 +223,9 @@ export default function Home() {
         {pipeline && (
           <div className="order-1 min-w-0 xl:order-none xl:col-start-2 xl:row-start-2">
             <CollectionPipeline pipeline={pipeline} refreshing={refreshing} starting={running} cancelling={cancelling}
+              discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
-              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onRerun={(source) => { void run(source); }} />
+              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setSuccess(""); setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
           </div>
         )}
       </div>
@@ -234,6 +271,7 @@ export default function Home() {
           loadExpedientes();
         }}
       />
+      <DiscardCollectionDialog open={discardDialogOpen} busy={discarding} onClose={closeDiscardDialog} onConfirm={() => { void discardToday(); }} />
     </AppShell>
   );
 }

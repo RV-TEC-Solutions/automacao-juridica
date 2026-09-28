@@ -22,12 +22,12 @@ function pipeline(active = true): Pipeline {
 }
 
 const handlers = () => ({
-  onRefresh: vi.fn(), onRun: vi.fn(), onCancel: vi.fn(), onRerun: vi.fn(),
+  onRefresh: vi.fn(), onRun: vi.fn(), onCancel: vi.fn(), onDiscard: vi.fn(), onRerun: vi.fn(),
 });
 
 describe("CollectionPipeline", () => {
   it("renders groups and steps in API order with labelled states", () => {
-    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} {...handlers()} />);
+    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
     const region = screen.getByTestId("pipeline-scroll-region");
     expect(within(region).getAllByRole("heading", { level: 4 }).map((item) => item.textContent)).toEqual(["TJRN", "Justiça Eleitoral", "TRT21", "TRF5"]);
     expect(within(region).getAllByRole("listitem").map((item) => item.textContent)).toEqual(expect.arrayContaining([
@@ -38,19 +38,23 @@ describe("CollectionPipeline", () => {
   });
 
   it("disables every rerun while the cycle is active and preserves cancel", () => {
-    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} {...handlers()} />);
-    screen.getAllByRole("button", { name: /Reexecutar a partir/ }).forEach((button) => expect(button).toBeDisabled());
+    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
+    screen.getAllByRole("button", { name: /Reexecutar somente/ }).forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Descartar coleta do dia" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Interromper coleta" })).toBeEnabled();
   });
 
   it("enables valid actions after completion and calls rerun with the source", () => {
     const callbacks = handlers();
-    render(<CollectionPipeline pipeline={pipeline(false)} refreshing={false} starting={false} cancelling={false} {...callbacks} />);
-    const reruns = screen.getAllByRole("button", { name: /Reexecutar a partir/ });
+    render(<CollectionPipeline pipeline={pipeline(false)} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={true} {...callbacks} />);
+    const reruns = screen.getAllByRole("button", { name: /Reexecutar somente/ });
     expect(reruns[0]).toBeEnabled();
     expect(reruns[5]).toBeDisabled();
     fireEvent.click(reruns[0]);
     expect(callbacks.onRerun).toHaveBeenCalledWith("step-0");
+    expect(screen.getByRole("link", { name: "Ver relatório de coletas" })).toHaveAttribute("href", "/historico?tab=orquestracao");
+    fireEvent.click(screen.getByRole("button", { name: "Descartar coleta do dia" }));
+    expect(callbacks.onDiscard).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Executar coleta" })).toBeEnabled();
   });
 });

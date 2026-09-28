@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import importlib.util
 import sys
 from pathlib import Path
@@ -14,6 +14,8 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+from expedientes.models import Expediente, ExpedienteEvent, Processo
 
 from .models import AutomationRun, AutomationSource, Notice, NoticeSource, UserProfile
 from .queue import enqueue_due_runs, enqueue_run, recover_interrupted_runs
@@ -174,6 +176,24 @@ class PJePipelineTests(TestCase):
             scheduled_for=None,
             cycle_id=run.cycle_id,
         )
+
+    def test_rerun_does_not_enqueue_the_next_source(self):
+        run = AutomationRun.objects.create(
+            source=self.first_degree,
+            trigger=AutomationRun.Trigger.RERUN,
+        )
+
+        with (
+            patch("automation.services.pje.runner.abrir_pje", return_value=[]),
+            patch(
+                "automation.services.pje.runner.salvar_expedientes",
+                return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0},
+            ),
+            patch("automation.services.pje.runner.enqueue_run") as enqueue,
+        ):
+            executar_coleta(run)
+
+        enqueue.assert_not_called()
 
     def test_chain_continues_when_a_source_fails(self):
         run = AutomationRun.objects.create(source=self.first_degree)
@@ -389,6 +409,180 @@ class AutomationRunApiTests(TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.data["source"], "tre-rn-1g")
         self.assertTrue(response.data["cycle_id"])
+
+    def test_rerun_enqueues_only_the_requested_source(self):
+        source = AutomationSource.objects.get(code="pje2g-tjrn")
+
+        response = self.client.post(
+            "/api/automation/runs/",
+            {"source": source.code, "rerun": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 202)
+        run = AutomationRun.objects.get(pk=response.data["id"])
+        self.assertEqual(run.source, source)
+        self.assertEqual(run.trigger, AutomationRun.Trigger.RERUN)
+
+    def test_rerun_rejects_a_disabled_source_instead_of_running_another(self):
+        source = AutomationSource.objects.get(code="pje2g-tjrn")
+        source.enabled = False
+        source.save(update_fields=("enabled",))
+
+        response = self.client.post(
+            "/api/automation/runs/",
+            {"source": source.code, "rerun": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(AutomationRun.objects.exists())
+
+
+class CollectionAuditApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("operator")
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.source = AutomationSource.objects.get(code="pje-tjrn")
+        self.previous_run = AutomationRun.objects.create(
+            source=self.source,
+            status=AutomationRun.Status.SUCCESS,
+            iniciada_em=timezone.now() - timedelta(days=1),
+            finalizada_em=timezone.now() - timedelta(days=1) + timedelta(minutes=1),
+        )
+        self.run = AutomationRun.objects.create(
+            source=self.source,
+            status=AutomationRun.Status.SUCCESS,
+            iniciada_em=timezone.now() - timedelta(minutes=5),
+            finalizada_em=timezone.now() - timedelta(minutes=3),
+            expedientes_encontrados=3,
+            expedientes_criados=1,
+            expedientes_atualizados=2,
+            expedientes_resolvidos=1,
+        )
+
+    def expediente(self, identifier, *, active=True, prazo="3 dias", subject="Assunto anterior"):
+        process = Processo.objects.create(
+            numero=f"0800000-00.2026.8.20.{identifier:04d}",
+            tribunal="TJRN",
+            assunto=subject,
+        )
+        return Expediente.objects.create(
+            processo=process,
+            source=self.source,
+            identificador_pje=str(identifier),
+            status_prazo_fatal="calculado",
+            prazo_texto=prazo,
+            ativo=active,
+            arquivado_em=None if active else timezone.now(),
+        )
+
+    def test_discard_reverses_today_and_keeps_execution_audit(self):
+        unrelated_orphan = Processo.objects.create(numero="0800000-00.2026.8.20.9999")
+        updated = self.expediente(1, prazo="5 dias", subject="Assunto atual")
+        ExpedienteEvent.objects.create(
+            expediente=updated, run=self.previous_run,
+            kind=ExpedienteEvent.Kind.NEW,
+        ).created_at = timezone.now() - timedelta(days=1)
+        ExpedienteEvent.objects.filter(expediente=updated, run=self.previous_run).update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+        first_update = ExpedienteEvent.objects.create(
+            expediente=updated, run=self.run,
+            kind=ExpedienteEvent.Kind.UPDATED,
+            changes={"prazo_texto": {"before": "3 dias", "after": "4 dias"}},
+        )
+        second_update = ExpedienteEvent.objects.create(
+            expediente=updated, run=self.run,
+            kind=ExpedienteEvent.Kind.UPDATED,
+            changes={
+                "prazo_texto": {"before": "4 dias", "after": "5 dias"},
+                "processo.assunto": {"before": "Assunto anterior", "after": "Assunto atual"},
+            },
+        )
+        resolved = self.expediente(2, active=False)
+        resolution = ExpedienteEvent.objects.create(
+            expediente=resolved, run=self.run,
+            kind=ExpedienteEvent.Kind.RESOLVED,
+            changes={"ativo": {"before": True, "after": False}},
+        )
+        new = self.expediente(3)
+        created = ExpedienteEvent.objects.create(
+            expediente=new, run=self.run, kind=ExpedienteEvent.Kind.NEW,
+        )
+
+        response = self.client.post("/api/automation/collections/today/discard/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["deleted_expedientes"], 1)
+        self.assertEqual(response.data["reverted_updates"], 2)
+        self.assertEqual(response.data["reactivated_expedientes"], 1)
+        updated.refresh_from_db()
+        updated.processo.refresh_from_db()
+        resolved.refresh_from_db()
+        self.assertEqual(updated.prazo_texto, "3 dias")
+        self.assertEqual(updated.processo.assunto, "Assunto anterior")
+        self.assertTrue(resolved.ativo)
+        self.assertIsNone(resolved.arquivado_em)
+        self.assertFalse(Expediente.objects.filter(pk=new.pk).exists())
+        self.assertTrue(Processo.objects.filter(pk=unrelated_orphan.pk).exists())
+        self.assertTrue(AutomationRun.objects.filter(pk=self.run.pk).exists())
+        self.run.refresh_from_db()
+        self.assertIsNotNone(self.run.descartada_em)
+        self.assertEqual(response.data["cleared_runs"], 1)
+        self.assertEqual(collection_pipeline_payload()["status"], "idle")
+        history = self.client.get("/api/automation/history/")
+        history_ids = [
+            run["id"] for day in history.data["days"] for run in day["runs"]
+        ]
+        self.assertNotIn(self.run.id, history_ids)
+        self.assertIn(self.previous_run.id, history_ids)
+        self.assertTrue(ExpedienteEvent.objects.filter(expediente=updated, run=self.previous_run).exists())
+        self.assertFalse(ExpedienteEvent.objects.filter(pk__in=[first_update.pk, second_update.pk, resolution.pk, created.pk]).exists())
+
+        repeated = self.client.post("/api/automation/collections/today/discard/")
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.data["deleted_expedientes"], 0)
+        self.assertEqual(repeated.data["cleared_runs"], 0)
+
+    def test_discard_rejects_when_a_collection_is_active(self):
+        AutomationRun.objects.create(source=AutomationSource.objects.get(code="pje2g-tjrn"))
+
+        response = self.client.post("/api/automation/collections/today/discard/")
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_collection_history_groups_runs_and_exposes_error_details(self):
+        failed = AutomationRun.objects.create(
+            source=AutomationSource.objects.get(code="pje2g-tjrn"),
+            trigger=AutomationRun.Trigger.RERUN,
+            status=AutomationRun.Status.FAILED,
+            iniciada_em=timezone.now() - timedelta(minutes=2),
+            finalizada_em=timezone.now() - timedelta(minutes=1),
+            mensagem_erro="Falha de autenticação",
+        )
+
+        response = self.client.get("/api/automation/history/")
+
+        self.assertEqual(response.status_code, 200)
+        today = timezone.localdate(timezone=ZoneInfo("America/Fortaleza")).isoformat()
+        day = next(item for item in response.data["days"] if item["date"] == today)
+        payload = next(item for item in day["runs"] if item["id"] == failed.id)
+        self.assertEqual(payload["source"]["code"], "pje2g-tjrn")
+        self.assertEqual(payload["trigger"], AutomationRun.Trigger.RERUN)
+        self.assertEqual(payload["status"], AutomationRun.Status.FAILED)
+        self.assertEqual(payload["error"], "Falha de autenticação")
+        self.assertEqual(payload["duration_seconds"], 60)
+
+        expired = AutomationRun.objects.create(source=self.source, status=AutomationRun.Status.SUCCESS)
+        AutomationRun.objects.filter(pk=expired.pk).update(
+            criada_em=timezone.now() - timedelta(days=31),
+            iniciada_em=timezone.now() - timedelta(days=31),
+        )
+        refreshed = self.client.get("/api/automation/history/")
+        run_ids = [run["id"] for day in refreshed.data["days"] for run in day["runs"]]
+        self.assertNotIn(expired.id, run_ids)
 
 
 class PJeBrowserTests(TestCase):
@@ -1390,3 +1584,31 @@ class CollectionPipelinePayloadTests(TestCase):
         self.assertEqual(payload["steps"][0]["status"], "skipped")
         self.assertEqual(payload["steps"][1]["status"], "cancelled")
         self.assertEqual(payload["steps"][2]["status"], "skipped")
+
+    def test_rerun_replaces_only_the_requested_source_state(self):
+        previous = AutomationRun.objects.create(
+            source=self.first,
+            status=AutomationRun.Status.SUCCESS,
+            finalizada_em=timezone.now(),
+        )
+        AutomationRun.objects.create(
+            source=self.second,
+            status=AutomationRun.Status.FAILED,
+            mensagem_erro="Falha anterior",
+            finalizada_em=timezone.now(),
+            cycle_id=previous.cycle_id,
+        )
+        rerun = AutomationRun.objects.create(
+            source=self.first,
+            trigger=AutomationRun.Trigger.RERUN,
+            status=AutomationRun.Status.RUNNING,
+            iniciada_em=timezone.now(),
+        )
+
+        payload = collection_pipeline_payload()
+
+        self.assertEqual(payload["cycle_id"], str(rerun.cycle_id))
+        self.assertEqual(payload["steps"][0]["status"], "running")
+        self.assertEqual(payload["steps"][0]["run_id"], rerun.id)
+        self.assertEqual(payload["steps"][1]["status"], "failed")
+        self.assertEqual(payload["steps"][1]["error"], "Falha anterior")
