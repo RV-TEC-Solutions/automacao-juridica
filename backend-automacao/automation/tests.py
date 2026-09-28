@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -21,15 +21,29 @@ from .services.pje.browser import (
     clicar_certificado,
     entrar_com_pdpj,
     abrir_link_trf5_pje,
+    abrir_link_tre_rn_1g_pje,
+    abrir_link_tre_rn_2g_pje,
+    abrir_link_tse_3g_pje,
+    fechar_aviso_certificado_proximo_de_expirar,
+    aguardar_e_fechar_aviso_certificado_proximo_de_expirar,
+    coletar_expedientes,
+    localizar_arvore_pendencias,
+    esperar_destino_pos_login,
     obter_url_pje,
     salvar_diagnostico_pje,
     tratar_quadro_avisos,
     tratar_quadro_avisos_trt21,
 )
 from .services.pje.runner import executar_coleta
-from .services.pje.sources import PJE_SOURCE_ORDER, TRF5_PORTAL_URL, get_source_profile
+from .services.pje.sources import (
+    PJE_SOURCE_ORDER,
+    TSE_PORTAL_URL,
+    TRE_RN_PORTAL_URL,
+    TRF5_PORTAL_URL,
+    get_source_profile,
+)
 from .services.pje.trt21 import TRT21Collection, collect_trt21_expedientes
-from .services.pje.notices import parse_notice_card, persist_notices
+from .services.pje.notices import mark_confirmed, parse_notice_card, persist_notices
 
 
 class QueueTests(TestCase):
@@ -71,7 +85,7 @@ class QueueTests(TestCase):
 
         runs = enqueue_due_runs(now)
 
-        self.assertEqual([run.source.code for run in runs], ["trt21"])
+        self.assertEqual([run.source.code for run in runs], ["tre-rn-1g"])
 
     def test_recovers_a_run_left_running_by_an_interrupted_worker(self):
         run = AutomationRun.objects.create(
@@ -198,8 +212,59 @@ class PJePipelineTests(TestCase):
         self.assertIn(f"Coleta #{run.pk} falhou", logs.output[0])
         self.assertIn("fonte=pje-tjrn", logs.output[0])
 
-    def test_chain_continues_from_second_degree_to_trt21(self):
+    def test_chain_continues_from_second_degree_to_tre_rn(self):
         run = AutomationRun.objects.create(source=self.second_degree)
+        tre_rn = AutomationSource.objects.get(code="tre-rn-1g")
+        with (
+            patch("automation.services.pje.runner.abrir_pje", return_value=[]),
+            patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
+            patch("automation.services.pje.runner.enqueue_run") as enqueue,
+        ):
+            executar_coleta(run)
+        enqueue.assert_called_once_with(
+            tre_rn,
+            trigger=AutomationRun.Trigger.MANUAL,
+            requested_by=None,
+            scheduled_for=None,
+        )
+
+    def test_chain_continues_from_tre_rn_first_to_second_degree(self):
+        tre_rn = AutomationSource.objects.get(code="tre-rn-1g")
+        run = AutomationRun.objects.create(source=tre_rn)
+        tre_rn_2g = AutomationSource.objects.get(code="tre-rn-2g")
+        with (
+            patch("automation.services.pje.runner.abrir_pje", return_value=[]),
+            patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
+            patch("automation.services.pje.runner.enqueue_run") as enqueue,
+        ):
+            executar_coleta(run)
+        enqueue.assert_called_once_with(
+            tre_rn_2g,
+            trigger=AutomationRun.Trigger.MANUAL,
+            requested_by=None,
+            scheduled_for=None,
+        )
+
+    def test_chain_continues_from_tre_rn_second_degree_to_tse(self):
+        tre_rn_2g = AutomationSource.objects.get(code="tre-rn-2g")
+        run = AutomationRun.objects.create(source=tre_rn_2g)
+        tse = AutomationSource.objects.get(code="tse-3g")
+        with (
+            patch("automation.services.pje.runner.abrir_pje", return_value=[]),
+            patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
+            patch("automation.services.pje.runner.enqueue_run") as enqueue,
+        ):
+            executar_coleta(run)
+        enqueue.assert_called_once_with(
+            tse,
+            trigger=AutomationRun.Trigger.MANUAL,
+            requested_by=None,
+            scheduled_for=None,
+        )
+
+    def test_chain_continues_from_tse_to_trt21(self):
+        tse = AutomationSource.objects.get(code="tse-3g")
+        run = AutomationRun.objects.create(source=tse)
         trt21 = AutomationSource.objects.get(code="trt21")
         with (
             patch("automation.services.pje.runner.abrir_pje", return_value=[]),
@@ -208,15 +273,17 @@ class PJePipelineTests(TestCase):
         ):
             executar_coleta(run)
         enqueue.assert_called_once_with(
-            trt21, trigger=AutomationRun.Trigger.MANUAL,
-            requested_by=None, scheduled_for=None,
+            trt21,
+            trigger=AutomationRun.Trigger.MANUAL,
+            requested_by=None,
+            scheduled_for=None,
         )
 
     def test_chain_skips_disabled_sources(self):
         self.second_degree.enabled = False
         self.second_degree.save(update_fields=("enabled",))
         run = AutomationRun.objects.create(source=self.first_degree)
-        trt21 = AutomationSource.objects.get(code="trt21")
+        tre_rn = AutomationSource.objects.get(code="tre-rn-1g")
         with (
             patch("automation.services.pje.runner.abrir_pje", return_value=[]),
             patch("automation.services.pje.runner.salvar_expedientes", return_value={"criados": 0, "atualizados": 0, "resolvidos": 0, "total": 0}),
@@ -224,7 +291,7 @@ class PJePipelineTests(TestCase):
         ):
             executar_coleta(run)
         enqueue.assert_called_once_with(
-            trt21, trigger=AutomationRun.Trigger.MANUAL,
+            tre_rn, trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None, scheduled_for=None,
         )
 
@@ -257,6 +324,38 @@ class AutomationRunApiTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
+    def test_sources_include_the_enabled_tre_rn_first_degree_profile(self):
+        response = self.client.get("/api/sources/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            {
+                "code": "tre-rn-1g",
+                "system": "PJe 1º Grau",
+                "tribunal": "TRE-RN",
+                "enabled": True,
+            },
+            response.data,
+        )
+        self.assertIn(
+            {
+                "code": "tse-3g",
+                "system": "PJe 3º Grau",
+                "tribunal": "TSE",
+                "enabled": True,
+            },
+            response.data,
+        )
+        self.assertIn(
+            {
+                "code": "tre-rn-2g",
+                "system": "PJe 2º Grau",
+                "tribunal": "TRE-RN",
+                "enabled": True,
+            },
+            response.data,
+        )
+
     def test_manual_run_starts_at_first_enabled_source_when_requested_source_is_disabled(self):
         first_degree = AutomationSource.objects.get(code="pje-tjrn")
         first_degree.enabled = False
@@ -270,7 +369,7 @@ class AutomationRunApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 202)
-        self.assertEqual(response.data["source"], "trt21")
+        self.assertEqual(response.data["source"], "tre-rn-1g")
 
 
 class PJeBrowserTests(TestCase):
@@ -292,7 +391,7 @@ class PJeBrowserTests(TestCase):
             "automation.services.pje.browser._run_database_call",
             side_effect=[[Mock(pje_confirmed_at=None)], None],
         ):
-            message = tratar_quadro_avisos(page, Mock())
+            message = tratar_quadro_avisos(page, SimpleNamespace(code="pje-tjrn"))
 
         self.assertEqual(message, "1 aviso(s) do PJe armazenado(s) e confirmado(s).")
         button.click.assert_called_once_with()
@@ -324,7 +423,7 @@ class PJeBrowserTests(TestCase):
             raise SynchronousOnlyOperation("ORM executado no loop do Playwright")
 
         async def collect_notices():
-            return tratar_quadro_avisos(page, Mock())
+            return tratar_quadro_avisos(page, SimpleNamespace(code="pje-tjrn"))
 
         with (
             patch(
@@ -340,7 +439,7 @@ class PJeBrowserTests(TestCase):
         self.assertEqual(mark_confirmed.call_count, 2)
         self.assertEqual(page.wait_for_function.call_count, 2)
         page.wait_for_function.assert_any_call(
-            "previous => document.querySelectorAll('#avisosPannel_body > div').length < previous",
+            """previous => document.querySelectorAll("#avisosPannel_body > div").length < previous""",
             arg=2,
             timeout=10000,
         )
@@ -411,6 +510,435 @@ class PJeBrowserTests(TestCase):
             abrir_link_trf5_pje(page, get_source_profile("trf5-2g-tru"))
 
         link.click.assert_not_called()
+
+    def test_tre_rn_first_degree_starts_from_the_stable_portal(self):
+        profile = get_source_profile("tre-rn-1g")
+
+        self.assertEqual(profile.url, TRE_RN_PORTAL_URL)
+        self.assertEqual(profile.portal_flow, "tre-rn-1g")
+        self.assertEqual(profile.portal_destination_host, "pje1g-rn.tse.jus.br")
+        self.assertEqual(profile.notice_board_strategy, "tre-rn")
+        self.assertEqual(profile.collector, "tjrn")
+        self.assertTrue(profile.reconcile_missing)
+        self.assertNotIn("state=", profile.url)
+
+    def test_tre_rn_portal_opens_the_pje_zonas_link(self):
+        page = Mock()
+        first_degree_link = Mock()
+        first_degree_link.count.return_value = 1
+        pje_zonas_link = Mock()
+        pje_zonas_link.count.return_value = 1
+        pje_zonas_link.get_attribute.return_value = (
+            "https://pje1g-rn.tse.jus.br/pje/login.seam?state=dinamico"
+        )
+        page.get_by_role.side_effect = [first_degree_link, pje_zonas_link]
+
+        abrir_link_tre_rn_1g_pje(page, get_source_profile("tre-rn-1g"))
+
+        page.get_by_role.assert_has_calls([
+            call("link", name="PJe - 1º Grau", exact=True),
+            call("link", name="Clique aqui para acessar o PJE-Zonas", exact=True),
+        ])
+        first_degree_link.click.assert_called_once_with()
+        pje_zonas_link.evaluate.assert_called_once_with(
+            "element => element.removeAttribute('target')"
+        )
+        pje_zonas_link.click.assert_called_once_with()
+        self.assertEqual(page.wait_for_load_state.call_count, 2)
+
+    def test_tre_rn_second_degree_starts_from_the_stable_portal(self):
+        profile = get_source_profile("tre-rn-2g")
+
+        self.assertEqual(profile.url, TRE_RN_PORTAL_URL)
+        self.assertEqual(profile.portal_flow, "tre-rn-2g")
+        self.assertEqual(profile.portal_destination_host, "pje.tre-rn.jus.br")
+        self.assertEqual(profile.notice_board_strategy, "tre-rn")
+        self.assertEqual(profile.collector, "tjrn")
+        self.assertTrue(profile.reconcile_missing)
+        self.assertNotIn("state=", profile.url)
+
+    def test_tre_rn_second_degree_portal_opens_the_system_link(self):
+        page = Mock()
+        second_degree_link = Mock()
+        second_degree_link.count.return_value = 1
+        system_link = Mock()
+        system_link.count.return_value = 1
+        system_link.get_attribute.return_value = (
+            "https://pje.tre-rn.jus.br/pje/login.seam?state=dinamico"
+        )
+        page.get_by_role.side_effect = [second_degree_link, system_link]
+
+        abrir_link_tre_rn_2g_pje(page, get_source_profile("tre-rn-2g"))
+
+        page.get_by_role.assert_has_calls([
+            call("link", name="PJe - 2º Grau", exact=True),
+            call("link", name="Acesso ao sistema", exact=True),
+        ])
+        second_degree_link.click.assert_called_once_with()
+        system_link.evaluate.assert_called_once_with(
+            "element => element.removeAttribute('target')"
+        )
+        system_link.click.assert_called_once_with()
+        self.assertEqual(page.wait_for_load_state.call_count, 2)
+
+    def test_tre_rn_portal_rejects_a_link_outside_the_expected_host(self):
+        page = Mock()
+        first_degree_link = Mock()
+        first_degree_link.count.return_value = 1
+        pje_zonas_link = Mock()
+        pje_zonas_link.count.return_value = 1
+        pje_zonas_link.get_attribute.return_value = "https://example.invalid/pje/login.seam"
+        page.get_by_role.side_effect = [first_degree_link, pje_zonas_link]
+
+        with self.assertRaisesMessage(RuntimeError, "não corresponde ao destino esperado"):
+            abrir_link_tre_rn_1g_pje(page, get_source_profile("tre-rn-1g"))
+
+        pje_zonas_link.click.assert_not_called()
+
+    def test_tse_third_degree_starts_from_the_stable_portal(self):
+        profile = get_source_profile("tse-3g")
+
+        self.assertEqual(profile.url, TSE_PORTAL_URL)
+        self.assertEqual(profile.portal_flow, "tse-3g")
+        self.assertEqual(profile.portal_destination_host, "pje.tse.jus.br")
+        self.assertEqual(profile.certificate_button_selector, "#kc-pje-office")
+        self.assertEqual(profile.notice_board_strategy, "legacy")
+        self.assertEqual(profile.collector, "tjrn")
+        self.assertTrue(profile.reconcile_missing)
+        self.assertNotIn("state=", profile.url)
+
+    def test_tse_portal_opens_the_third_degree_link(self):
+        page = Mock()
+        third_degree_section = Mock()
+        third_degree_section.count.return_value = 1
+        third_degree_section.is_visible.return_value = False
+        third_degree_trigger = Mock()
+        third_degree_trigger.count.return_value = 1
+        tse_link = Mock()
+        tse_link.count.return_value = 1
+        tse_link.get_attribute.return_value = "https://pje.tse.jus.br/pje/login.seam"
+        page.locator.side_effect = [third_degree_section, third_degree_trigger]
+        third_degree_section.get_by_role.return_value = tse_link
+
+        abrir_link_tse_3g_pje(page, get_source_profile("tse-3g"))
+
+        self.assertEqual(
+            page.locator.call_args_list,
+            [
+                call("#collapse-pje-3o-grau"),
+                call('[aria-controls="collapse-pje-3o-grau"]'),
+            ],
+        )
+        third_degree_trigger.click.assert_called_once_with()
+        third_degree_section.wait_for.assert_called_once_with(
+            state="visible", timeout=15000
+        )
+        third_degree_section.get_by_role.assert_called_once_with(
+            "link", name="Tribunal Superior Eleitoral", exact=True
+        )
+        tse_link.wait_for.assert_called_once_with(state="visible", timeout=15000)
+        tse_link.evaluate.assert_called_once_with(
+            "element => element.removeAttribute('target')"
+        )
+        tse_link.click.assert_called_once_with()
+        page.wait_for_load_state.assert_called_once_with(
+            "domcontentloaded", timeout=15000
+        )
+
+    def test_tse_portal_rejects_a_link_outside_the_expected_host(self):
+        page = Mock()
+        third_degree_section = Mock()
+        third_degree_section.count.return_value = 1
+        third_degree_section.is_visible.return_value = True
+        third_degree_trigger = Mock()
+        third_degree_trigger.count.return_value = 1
+        tse_link = Mock()
+        tse_link.count.return_value = 1
+        tse_link.get_attribute.return_value = "https://example.invalid/pje/login.seam"
+        page.locator.side_effect = [third_degree_section, third_degree_trigger]
+        third_degree_section.get_by_role.return_value = tse_link
+
+        with self.assertRaisesMessage(RuntimeError, "não corresponde ao destino esperado"):
+            abrir_link_tse_3g_pje(page, get_source_profile("tse-3g"))
+
+        third_degree_trigger.click.assert_not_called()
+        tse_link.click.assert_not_called()
+
+    def test_closes_the_certificate_expiry_warning_before_collecting(self):
+        page = Mock()
+        title = Mock()
+        title.count.return_value = 1
+        dialog = Mock()
+        dialog.count.return_value = 1
+        close = Mock()
+        close.count.return_value = 1
+        page.locator.return_value.count.return_value = 0
+        page.get_by_text.return_value = title
+        title.locator.return_value = dialog
+        dialog.locator.return_value = close
+
+        self.assertTrue(fechar_aviso_certificado_proximo_de_expirar(page))
+
+        close.click.assert_called_once_with()
+        dialog.wait_for.assert_called_once_with(state="hidden", timeout=10000)
+
+    def test_closes_the_richfaces_certificate_expiry_warning_by_its_stable_id(self):
+        page = Mock()
+        dialog = Mock()
+        dialog.count.return_value = 1
+        dialog.is_visible.return_value = False
+        close = Mock()
+        close.count.return_value = 1
+        close.is_visible.return_value = True
+        page.locator.return_value = dialog
+        dialog.locator.return_value = close
+
+        self.assertTrue(fechar_aviso_certificado_proximo_de_expirar(page))
+
+        page.locator.assert_called_once_with(
+            "#popupAlertaCertificadoProximoDeExpirarContainer"
+        )
+        dialog.locator.assert_called_once_with("span.btn-fechar")
+        close.click.assert_called_once_with()
+        close.wait_for.assert_called_once_with(state="hidden", timeout=10000)
+        page.get_by_text.assert_not_called()
+
+    def test_closes_the_certificate_popup_before_processing_tre_rn_notices(self):
+        page = Mock()
+        source = SimpleNamespace(code="tre-rn-1g")
+        board = Mock()
+        board.count.return_value = 1
+        page.locator.side_effect = lambda selector: (
+            board if selector == "#avisosPannel" else Mock()
+        )
+        calls = Mock()
+
+        with (
+            patch(
+                "automation.services.pje.browser.fechar_aviso_certificado_proximo_de_expirar",
+                side_effect=[True, False],
+            ) as close_popup,
+            patch(
+                "automation.services.pje.browser.tratar_quadro_avisos",
+                return_value="aviso tratado",
+            ) as treat_notices,
+        ):
+            calls.attach_mock(close_popup, "close_popup")
+            calls.attach_mock(treat_notices, "treat_notices")
+            message = esperar_destino_pos_login(page, source)
+
+        self.assertEqual(message, "aviso tratado")
+        self.assertEqual(
+            calls.mock_calls,
+            [
+                call.close_popup(page),
+                call.close_popup(page),
+                call.treat_notices(page, source),
+            ],
+        )
+
+
+    def test_tre_rn_notice_board_scrolls_then_opens_the_panel_without_touching_notices(self):
+        page = Mock()
+        source = SimpleNamespace(code="tre-rn-1g")
+        panel = Mock()
+        panel.count.return_value = 1
+        panel_destination = Mock()
+        page.locator.side_effect = lambda selector: {
+            "input[type=submit][value=\"Painel do usuário\"]": panel,
+            "#divResultadoMenuContexto": panel_destination,
+        }.get(selector, Mock())
+
+        with patch(
+            "automation.services.pje.browser.aguardar_e_fechar_aviso_certificado_proximo_de_expirar",
+            return_value=True,
+        ) as close_late_popup:
+            message = tratar_quadro_avisos(page, source)
+
+        self.assertEqual(
+            message, "Avisos institucionais TRE-RN ignorados; Painel do usuário aberto."
+        )
+        page.evaluate.assert_called_once_with("window.scrollTo(0, document.body.scrollHeight)")
+        panel.scroll_into_view_if_needed.assert_called_once_with()
+        panel.click.assert_called_once_with()
+        panel_destination.wait_for.assert_called_once_with(state="visible", timeout=15000)
+        close_late_popup.assert_called_once_with(page)
+        page.get_by_text.assert_not_called()
+
+    def test_tre_rn_notice_board_reports_a_missing_panel_button(self):
+        page = Mock()
+        source = SimpleNamespace(code="tre-rn-2g")
+        page.locator.return_value.count.return_value = 0
+
+        with self.assertRaisesMessage(
+            RuntimeError, "Botão Painel do usuário TRE-RN não encontrado de forma única."
+        ):
+            tratar_quadro_avisos(page, source)
+
+    def test_waits_for_and_closes_a_late_certificate_popup(self):
+        page = Mock()
+        close = Mock()
+        page.locator.return_value = close
+
+        with patch(
+            "automation.services.pje.browser.fechar_aviso_certificado_proximo_de_expirar",
+            return_value=True,
+        ) as close_popup:
+            self.assertTrue(aguardar_e_fechar_aviso_certificado_proximo_de_expirar(page))
+
+        page.locator.assert_called_once_with(
+            "#popupAlertaCertificadoProximoDeExpirarContainer span.btn-fechar"
+        )
+        close.wait_for.assert_called_once_with(state="visible", timeout=5000)
+        close_popup.assert_called_once_with(page)
+
+    def test_closes_a_late_popup_before_opening_the_pendencies_tree(self):
+        page = Mock()
+        panel = Mock()
+        menu = Mock()
+        aba = Mock()
+        linha_n1 = Mock()
+        linha_n2 = Mock()
+        tree = Mock()
+        for locator in (panel, menu, aba, linha_n1, linha_n2, tree):
+            locator.count.return_value = 1
+        page.locator.return_value = panel
+        panel.locator.return_value = menu
+        menu.locator.return_value.get_by_text.return_value.locator.return_value = aba
+        aba.locator.return_value = linha_n1
+        linha_n1.locator.return_value = linha_n2
+        linha_n2.locator.return_value = tree
+        calls = Mock()
+
+        with patch(
+            "automation.services.pje.browser.fechar_aviso_certificado_proximo_de_expirar",
+            return_value=True,
+        ) as close_popup:
+            calls.attach_mock(close_popup, "close_popup")
+            calls.attach_mock(aba.click, "open_tree")
+            localizar_arvore_pendencias(page)
+
+        self.assertEqual(
+            calls.mock_calls,
+            [call.close_popup(page), call.open_tree(timeout=1000)],
+        )
+
+    def test_retries_the_pendencies_tree_click_when_the_certificate_popup_appears_late(self):
+        page = Mock()
+        panel = Mock()
+        menu = Mock()
+        aba = Mock()
+        linha_n1 = Mock()
+        linha_n2 = Mock()
+        tree = Mock()
+        for locator in (panel, menu, aba, linha_n1, linha_n2, tree):
+            locator.count.return_value = 1
+        page.locator.return_value = panel
+        panel.locator.return_value = menu
+        menu.locator.return_value.get_by_text.return_value.locator.return_value = aba
+        aba.locator.return_value = linha_n1
+        linha_n1.locator.return_value = linha_n2
+        linha_n2.locator.return_value = tree
+        aba.click.side_effect = [PlaywrightTimeoutError("alerta bloqueou o clique"), None]
+        calls = Mock()
+
+        with patch(
+            "automation.services.pje.browser.fechar_aviso_certificado_proximo_de_expirar",
+            side_effect=[False, True],
+        ) as close_popup:
+            calls.attach_mock(close_popup, "close_popup")
+            calls.attach_mock(aba.click, "open_tree")
+            localizar_arvore_pendencias(page)
+
+        self.assertEqual(
+            calls.mock_calls,
+            [
+                call.close_popup(page),
+                call.open_tree(timeout=1000),
+                call.close_popup(page),
+                call.open_tree(),
+            ],
+        )
+
+    def test_closes_a_late_popup_before_each_pendencies_child_click(self):
+        page = Mock()
+        child_tabs = Mock()
+        first_tab = Mock()
+        second_tab = Mock()
+        child_tabs.count.return_value = 2
+        child_tabs.nth.side_effect = [first_tab, second_tab]
+
+        with (
+            patch(
+                "automation.services.pje.browser.localizar_abas_filhas",
+                return_value=child_tabs,
+            ),
+            patch(
+                "automation.services.pje.browser.clicar_apos_dispensar_aviso_certificado"
+            ) as click_after_closing,
+            patch("automation.services.pje.browser.esperar_view_expedientes"),
+            patch(
+                "automation.services.pje.browser.salvar_html_renderizado",
+                side_effect=[Path("first.html"), Path("second.html")],
+            ),
+        ):
+            files = coletar_expedientes(page, "tre-rn-2g")
+
+        self.assertEqual(files, [Path("first.html"), Path("second.html")])
+        self.assertEqual(
+            click_after_closing.call_args_list,
+            [call(page, first_tab), call(page, second_tab)],
+        )
+        first_tab.click.assert_not_called()
+        second_tab.click.assert_not_called()
+
+    def test_zero_pendencies_without_a_link_produces_an_empty_collection(self):
+        page = Mock()
+        panel = Mock()
+        menu = Mock()
+        containers = Mock()
+        label = Mock()
+        link = Mock()
+        empty_item = Mock()
+        counter = Mock()
+        panel.count.return_value = 1
+        menu.count.return_value = 1
+        label.count.return_value = 1
+        link.count.return_value = 0
+        empty_item.count.return_value = 1
+        counter.count.return_value = 1
+        counter.inner_text.return_value = "0"
+        page.locator.return_value = panel
+        panel.locator.return_value = menu
+        menu.locator.return_value = containers
+        containers.get_by_text.return_value = label
+        label.locator.side_effect = [link, empty_item]
+        empty_item.locator.return_value = counter
+
+        self.assertEqual(coletar_expedientes(page, "tse-3g"), [])
+
+        containers.get_by_text.assert_called_once_with(
+            "Pendentes de ciência ou de resposta", exact=True
+        )
+        label.locator.assert_has_calls([
+            call("xpath=ancestor::a[1]"),
+            call(
+                "xpath=ancestor::div["
+                "contains(concat(' ', normalize-space(@class), ' '), "
+                "' itemSemLink ')][1]"
+            ),
+        ])
+        empty_item.locator.assert_called_once_with("span.pull-right")
+
+    def test_ignores_absent_certificate_expiry_warning(self):
+        page = Mock()
+        page.locator.return_value.count.return_value = 0
+        page.get_by_text.return_value.count.return_value = 0
+
+        self.assertFalse(fechar_aviso_certificado_proximo_de_expirar(page))
+        page.get_by_text.assert_called_once_with(
+            "Certificado próximo de expirar", exact=True
+        )
 
     def test_trt21_zero_expedientes_finishes_without_clicking_the_disabled_card(self):
         page = Mock()
@@ -492,9 +1020,12 @@ class PJeBrowserTests(TestCase):
 
     def test_resolves_trt21_urls_and_source_order(self):
         self.assertEqual(PJE_SOURCE_ORDER, (
-            "pje-tjrn", "pje2g-tjrn", "trt21", "trt21-2g", "trf5-2g-tru",
+            "pje-tjrn", "pje2g-tjrn", "tre-rn-1g", "tre-rn-2g", "tse-3g", "trt21", "trt21-2g", "trf5-2g-tru",
             "varas-justica-comum", "jef-5-regiao", "trs-5-regiao", "tru-5-regiao",
         ))
+        self.assertEqual(obter_url_pje("tre-rn-1g"), TRE_RN_PORTAL_URL)
+        self.assertEqual(obter_url_pje("tre-rn-2g"), TRE_RN_PORTAL_URL)
+        self.assertEqual(obter_url_pje("tse-3g"), TSE_PORTAL_URL)
         self.assertEqual(obter_url_pje("trt21"), "https://pje.trt21.jus.br/primeirograu/login.seam")
         self.assertEqual(obter_url_pje("trt21-2g"), "https://pje.trt21.jus.br/segundograu/login.seam")
 
@@ -505,6 +1036,32 @@ class PJeBrowserTests(TestCase):
         clicar_certificado(page, "trt21")
         page.locator.assert_called_once_with(".botao-certificado-titulo")
         title.click.assert_called_once_with()
+
+    def test_tre_rn_uses_the_sso_certificate_input(self):
+        page = Mock()
+        certificate = page.locator.return_value
+        certificate.count.return_value = 1
+
+        clicar_certificado(page, "tre-rn-1g")
+
+        certificate.wait_for.assert_called_once_with(
+            state="visible", timeout=15000
+        )
+        page.locator.assert_called_once_with("#kc-pje-office")
+        certificate.click.assert_called_once_with()
+
+    def test_tse_uses_the_sso_certificate_input(self):
+        page = Mock()
+        certificate = page.locator.return_value
+        certificate.count.return_value = 1
+
+        clicar_certificado(page, "tse-3g")
+
+        certificate.wait_for.assert_called_once_with(
+            state="visible", timeout=15000
+        )
+        page.locator.assert_called_once_with("#kc-pje-office")
+        certificate.click.assert_called_once_with()
 
     def test_trt21_opens_pdpj_by_clicking_its_image(self):
         page = Mock()

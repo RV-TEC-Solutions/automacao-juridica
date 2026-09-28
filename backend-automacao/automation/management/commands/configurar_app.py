@@ -50,6 +50,14 @@ class Command(BaseCommand):
                 "enabled": True
             },
         )
+        AutomationSource.objects.update_or_create(
+            code="tse-3g",
+            defaults={
+                "system": "PJe 3º Grau",
+                "tribunal": "TSE",
+                "enabled": True,
+            },
+        )
         for code, system in (
             ("trf5-2g-tru", "PJe 2º Grau / TRU"),
             ("varas-justica-comum", "PJe 1º Grau — Varas Federais"),

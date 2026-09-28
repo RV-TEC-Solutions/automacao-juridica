@@ -128,6 +128,9 @@ export function ExpedientesClient() {
                   <option value="">Todas as fontes</option>
                   <option value="pje-tjrn">PJe 1º Grau · TJRN</option>
                   <option value="pje2g-tjrn">PJe 2º Grau · TJRN</option>
+                  <option value="tre-rn-1g">PJe 1º Grau · TRE-RN</option>
+                  <option value="tre-rn-2g">PJe 2º Grau · TRE-RN</option>
+                  <option value="tse-3g">PJe 3º Grau · TSE</option>
                   <option value="trt21">PJe 1º Grau · TRT21</option>
                   <option value="trt21-2g">PJe 2º Grau · TRT21</option>
                 </select>

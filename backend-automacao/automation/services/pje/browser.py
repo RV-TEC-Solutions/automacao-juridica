@@ -28,6 +28,8 @@ CREDENCIAIS = Path.home() / ".config/pje-automacao/.env"
 PASTA_RESPOSTAS = settings.BASE_DIR / "respostas_expedientes"
 logger = logging.getLogger("automation")
 
+CERTIFICATE_EXPIRY_CLICK_RETRY_TIMEOUT_MS = 1000
+
 load_dotenv(CREDENCIAIS)
 
 
@@ -57,11 +59,26 @@ def localizar_arvore_pendencias(pagina):
     menu_contexto = painel.locator(
         '[id="formAbaExpediente:divMenuContexto"]'
     )
-    aba_pendencias = menu_contexto.locator(
+    texto_pendencias = menu_contexto.locator(
         "div.containerDocumentos.nivel1"
     ).get_by_text(
         texto_aba, exact=True
-    ).locator("xpath=ancestor::a[1]")
+    )
+    aba_pendencias = texto_pendencias.locator("xpath=ancestor::a[1]")
+    if aba_pendencias.count() == 0:
+        item_vazio = texto_pendencias.locator(
+            "xpath=ancestor::div["
+            "contains(concat(' ', normalize-space(@class), ' '), "
+            "' itemSemLink ')][1]"
+        )
+        contador = item_vazio.locator("span.pull-right")
+        if (
+            texto_pendencias.count() == 1
+            and item_vazio.count() == 1
+            and contador.count() == 1
+            and contador.inner_text().strip() == "0"
+        ):
+            return None
     linha_n1 = aba_pendencias.locator(
         'xpath=ancestor::div[parent::div['
         '@id="formAbaExpediente:divMenuContexto"]][1]'
@@ -82,7 +99,7 @@ def localizar_arvore_pendencias(pagina):
             "de forma única."
         )
 
-    aba_pendencias.click()
+    clicar_apos_dispensar_aviso_certificado(pagina, aba_pendencias)
     arvore.wait_for(state="visible")
 
     if linha_n2.count() != 1 or arvore.count() != 1:
@@ -92,6 +109,24 @@ def localizar_arvore_pendencias(pagina):
         )
 
     return arvore
+
+
+def clicar_apos_dispensar_aviso_certificado(pagina, alvo):
+    """Clica novamente apenas se o alerta RichFaces tardio bloquear o primeiro clique.
+
+    O PJe pode montar o alerta de expiração depois que o painel já está visível.
+    Assim, uma checagem feita antes de localizar o alvo não elimina a corrida. O
+    primeiro clique tem prazo curto: se ele for bloqueado, só o repetimos quando
+    conseguimos de fato fechar o alerta conhecido.
+    """
+    fechar_aviso_certificado_proximo_de_expirar(pagina)
+    try:
+        alvo.click(timeout=CERTIFICATE_EXPIRY_CLICK_RETRY_TIMEOUT_MS)
+        return
+    except PlaywrightTimeoutError:
+        if not fechar_aviso_certificado_proximo_de_expirar(pagina):
+            raise
+    alvo.click()
 
 
 def localizar_opcao_filha(pagina, texto_opcao):
@@ -111,6 +146,8 @@ def localizar_opcao_filha(pagina, texto_opcao):
 def localizar_abas_filhas(pagina):
     """Retorna os links das opções de primeiro nível da árvore de pendências."""
     arvore = localizar_arvore_pendencias(pagina)
+    if arvore is None:
+        return None
     opcoes = arvore.locator(
         ":scope > div > table.rich-tree-node "
         "> tbody > tr > td.rich-tree-node-text.treeNodeItem > a"
@@ -211,6 +248,9 @@ def url_atual(pagina):
 def coletar_expedientes(pagina, source_code):
     """Clica em cada aba-filha e salva o HTML renderizado."""
     abas_filhas = localizar_abas_filhas(pagina)
+    if abas_filhas is None:
+        print("Nenhum expediente pendente encontrado.")
+        return []
     quantidade = abas_filhas.count()
     identificador_execucao = datetime.now().strftime(
         "%Y%m%d_%H%M%S"
@@ -227,7 +267,7 @@ def coletar_expedientes(pagina, source_code):
             f"Processando aba filha {indice + 1}/{quantidade}..."
         )
 
-        aba_filha.click()
+        clicar_apos_dispensar_aviso_certificado(pagina, aba_filha)
         esperar_view_expedientes(pagina)
 
         arquivo = salvar_html_renderizado(
@@ -241,8 +281,16 @@ def coletar_expedientes(pagina, source_code):
     return arquivos
 
 
+TRE_RN_PANEL_BUTTON = "input[type=submit][value=\"Painel do usuário\"]"
+CERTIFICATE_EXPIRY_DIALOG = "#popupAlertaCertificadoProximoDeExpirarContainer"
+CERTIFICATE_EXPIRY_CLOSE = f"{CERTIFICATE_EXPIRY_DIALOG} span.btn-fechar"
+CERTIFICATE_EXPIRY_APPEAR_TIMEOUT_MS = 5000
+
+
+LEGACY_NOTICE_CARDS = "#avisosPannel_body > div"
 def _notice_cards(pagina):
-    return pagina.locator("#avisosPannel_body > div")
+    return pagina.locator(LEGACY_NOTICE_CARDS)
+
 
 
 def _run_database_call(operation, *args):
@@ -257,29 +305,49 @@ def _run_database_call(operation, *args):
         return executor.submit(call_in_database_thread).result()
 
 
-def tratar_quadro_avisos(pagina, source):
-    """Persiste todos os avisos antes de confirmá-los individualmente no PJe."""
-    cards = _notice_cards(pagina)
+def _persist_notice_cards(cards, source):
     count = cards.count()
     if count == 0:
         raise RuntimeError("O Quadro de Avisos não apresentou cartões reconhecíveis.")
 
-    # A leitura é feita integralmente antes de qualquer clique irreversível.
     raw_cards = [cards.nth(index).inner_html() for index in range(count)]
     notice_links = _run_database_call(persist_notices, raw_cards, source)
     if len(notice_links) != count:
         raise RuntimeError("O Quadro de Avisos retornou uma quantidade inesperada de registros.")
+    return count, notice_links
+
+
+def _abrir_painel_do_usuario(pagina, count, action, *, allow_already_open=False):
+    if allow_already_open and pagina.locator("#divResultadoMenuContexto").count() == 1:
+        return f"{count} aviso(s) do PJe armazenado(s) e {action}(s)."
+
+    painel = pagina.get_by_text("Painel do usuário", exact=True)
+    if painel.count() != 1:
+        raise RuntimeError("Botão Painel do usuário não encontrado de forma única.")
+    painel.click()
+    try:
+        pagina.locator("#divResultadoMenuContexto").wait_for(
+            state="visible", timeout=15000
+        )
+    except PlaywrightTimeoutError as error:
+        raise RuntimeError("O Painel do usuário não abriu após os avisos do PJe.") from error
+    return f"{count} aviso(s) do PJe armazenado(s) e {action}(s)."
+
+
+def _tratar_quadro_avisos_legado(pagina, source):
+    cards = _notice_cards(pagina)
+    count, notice_links = _persist_notice_cards(cards, source)
 
     for index, link in enumerate(notice_links):
         current_cards = _notice_cards(pagina)
         before = current_cards.count()
         button = current_cards.nth(0).get_by_text("Aviso lido", exact=True)
         if button.count() != 1:
-            raise RuntimeError(f"Botão 'Aviso lido' não encontrado para o aviso {index + 1}.")
+            raise RuntimeError(f"Botão Aviso lido não encontrado para o aviso {index + 1}.")
         button.click()
         try:
             pagina.wait_for_function(
-                "previous => document.querySelectorAll('#avisosPannel_body > div').length < previous",
+                """previous => document.querySelectorAll("#avisosPannel_body > div").length < previous""",
                 arg=before,
                 timeout=10000,
             )
@@ -287,25 +355,104 @@ def tratar_quadro_avisos(pagina, source):
             raise RuntimeError("O PJe não confirmou a leitura do aviso.") from error
         _run_database_call(mark_confirmed, link)
 
-    # Ao confirmar o último aviso, algumas instalações do PJe voltam ao painel
-    # automaticamente e removem o botão de navegação intermediário.
-    if pagina.locator("#divResultadoMenuContexto").count() == 1:
-        return f"{count} aviso(s) do PJe armazenado(s) e confirmado(s)."
+    return _abrir_painel_do_usuario(
+        pagina, count, "confirmado", allow_already_open=True
+    )
 
-    painel = pagina.get_by_text("Painel do usuário", exact=True)
+
+def _tratar_quadro_avisos_tre_rn(pagina, source):
+    """Ignora avisos institucionais TRE-RN e abre o painel de expedientes."""
+    pagina.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    painel = pagina.locator(TRE_RN_PANEL_BUTTON)
     if painel.count() != 1:
-        raise RuntimeError("Botão 'Painel do usuário' não encontrado de forma única.")
+        raise RuntimeError("Botão Painel do usuário TRE-RN não encontrado de forma única.")
+    painel.scroll_into_view_if_needed()
     painel.click()
-    pagina.locator("#divResultadoMenuContexto").wait_for(state="visible", timeout=15000)
-    return f"{count} aviso(s) do PJe armazenado(s) e confirmado(s)."
+    try:
+        pagina.locator("#divResultadoMenuContexto").wait_for(
+            state="visible", timeout=15000
+        )
+    except PlaywrightTimeoutError as error:
+        raise RuntimeError("O Painel do usuário TRE-RN não abriu.") from error
+
+    aguardar_e_fechar_aviso_certificado_proximo_de_expirar(pagina)
+    return "Avisos institucionais TRE-RN ignorados; Painel do usuário aberto."
+
+def tratar_quadro_avisos(pagina, source):
+    """Persiste e confirma avisos conforme a estratégia da fonte PJe."""
+    profile = get_source_profile(source.code)
+    if profile.notice_board_strategy == "tre-rn":
+        return _tratar_quadro_avisos_tre_rn(pagina, source)
+    return _tratar_quadro_avisos_legado(pagina, source)
+
+CERTIFICATE_EXPIRY_TITLE = "Certificado próximo de expirar"
+
+def fechar_aviso_certificado_proximo_de_expirar(pagina):
+    """Fecha o alerta RichFaces por ID estável, mantendo o fallback jQuery UI."""
+    richfaces_dialog = pagina.locator(
+        CERTIFICATE_EXPIRY_DIALOG
+    )
+    richfaces_count = richfaces_dialog.count()
+    if richfaces_count > 1:
+        raise RuntimeError("O alerta RichFaces de expiração não foi encontrado de forma única.")
+    if richfaces_count == 1:
+        close = richfaces_dialog.locator("span.btn-fechar")
+        if close.count() != 1:
+            raise RuntimeError("O botão para fechar o alerta RichFaces não foi encontrado.")
+        # O contêiner externo do RichFaces mede 0x0 mesmo quando a máscara e o
+        # conteúdo estão visíveis. A visibilidade deve ser lida no controle que
+        # recebe o clique, não no contêiner.
+        if not close.is_visible():
+            return False
+        close.click()
+        try:
+            close.wait_for(state="hidden", timeout=10000)
+        except PlaywrightTimeoutError as error:
+            raise RuntimeError("O alerta RichFaces do certificado não foi fechado.") from error
+        return True
+
+    title = pagina.get_by_text(CERTIFICATE_EXPIRY_TITLE, exact=True)
+    if title.count() == 0:
+        return False
+    if title.count() != 1:
+        raise RuntimeError("O aviso de expiração do certificado não foi encontrado de forma única.")
+
+    dialog = title.locator("""xpath=ancestor::*[contains(@class, "ui-dialog")][1]""")
+    if dialog.count() != 1:
+        raise RuntimeError("O contêiner do aviso de expiração do certificado não foi encontrado.")
+    if not dialog.is_visible():
+        return False
+    close = dialog.locator(".ui-dialog-titlebar-close")
+    if close.count() != 1:
+        raise RuntimeError("O botão para fechar o aviso de expiração do certificado não foi encontrado.")
+    close.click()
+    try:
+        dialog.wait_for(state="hidden", timeout=10000)
+    except PlaywrightTimeoutError as error:
+        raise RuntimeError("O aviso de expiração do certificado não foi fechado.") from error
+    return True
+
+
+def aguardar_e_fechar_aviso_certificado_proximo_de_expirar(pagina):
+    """Espera o alerta RichFaces tardio antes de interagir com expedientes."""
+    close = pagina.locator(CERTIFICATE_EXPIRY_CLOSE)
+    try:
+        close.wait_for(state="visible", timeout=CERTIFICATE_EXPIRY_APPEAR_TIMEOUT_MS)
+    except PlaywrightTimeoutError:
+        return False
+    return fechar_aviso_certificado_proximo_de_expirar(pagina)
 
 
 def esperar_destino_pos_login(pagina, source):
-    """Aceita diretamente o painel ou trata o bloqueio do Quadro de Avisos."""
+    """Aceita o painel após dispensar aviso de certificado e Quadro de Avisos."""
     for _ in range(30):
+        if fechar_aviso_certificado_proximo_de_expirar(pagina):
+            continue
         if pagina.locator("#avisosPannel").count() == 1:
             return tratar_quadro_avisos(pagina, source)
         if pagina.locator("#divResultadoMenuContexto").count() == 1:
+            if get_source_profile(source.code).notice_board_strategy == "tre-rn":
+                aguardar_e_fechar_aviso_certificado_proximo_de_expirar(pagina)
             return ""
         pagina.wait_for_timeout(500)
     if pagina.get_by_text("Código inválido", exact=True).count():
@@ -470,16 +617,122 @@ def abrir_link_trf5_pje(pagina, profile):
     pagina.wait_for_load_state("domcontentloaded", timeout=15000)
 
 
+def _abrir_link_tre_rn_pje(pagina, profile, portal_link_name, access_link_name):
+    """Chega ao PJe TRE-RN por links estáveis do portal institucional."""
+    if not profile.portal_destination_host:
+        raise RuntimeError(f"A fonte {profile.code} não possui destino PJe esperado.")
+
+    portal_link = pagina.get_by_role("link", name=portal_link_name, exact=True)
+    if portal_link.count() != 1:
+        raise RuntimeError(
+            f"O acesso {portal_link_name!r} do portal TRE-RN não foi encontrado "
+            "de forma única."
+        )
+    portal_link.click()
+    pagina.wait_for_load_state("domcontentloaded", timeout=15000)
+
+    access_link = pagina.get_by_role("link", name=access_link_name, exact=True)
+    if access_link.count() != 1:
+        raise RuntimeError(
+            f"O acesso {access_link_name!r} não foi encontrado de forma única."
+        )
+    destination = access_link.get_attribute("href") or ""
+    if urlparse(destination).hostname != profile.portal_destination_host:
+        raise RuntimeError(
+            f"O acesso {access_link_name!r} não corresponde ao destino esperado "
+            f"({profile.portal_destination_host})."
+        )
+
+    access_link.evaluate("element => element.removeAttribute('target')")
+    access_link.click()
+    pagina.wait_for_load_state("domcontentloaded", timeout=15000)
+
+
+def abrir_link_tre_rn_1g_pje(pagina, profile):
+    return _abrir_link_tre_rn_pje(
+        pagina, profile, "PJe - 1º Grau", "Clique aqui para acessar o PJE-Zonas"
+    )
+
+
+def abrir_link_tre_rn_2g_pje(pagina, profile):
+    return _abrir_link_tre_rn_pje(
+        pagina, profile, "PJe - 2º Grau", "Acesso ao sistema"
+    )
+
+
+def abrir_link_tse_3g_pje(pagina, profile):
+    """Abre o PJe 3º grau pelo acesso estável do portal institucional do TSE."""
+    if not profile.portal_destination_host:
+        raise RuntimeError(f"A fonte {profile.code} não possui destino PJe esperado.")
+
+    # O ícone +/- do acordeão é inserido por CSS e passa a integrar o nome
+    # acessível calculado pelo Chromium. Por isso, um get_by_role com o texto
+    # exato visível não encontra o botão. O id do painel e seu aria-controls
+    # formam o contrato estrutural estável publicado pelo portal.
+    secao = pagina.locator("#collapse-pje-3o-grau")
+    if secao.count() != 1:
+        raise RuntimeError(
+            "A seção PJE 3º grau do portal TSE não foi encontrada de forma única."
+        )
+    acionador = pagina.locator('[aria-controls="collapse-pje-3o-grau"]')
+    if acionador.count() != 1:
+        raise RuntimeError(
+            "O controle da seção PJE 3º grau do portal TSE não foi encontrado "
+            "de forma única."
+        )
+    if not secao.is_visible():
+        acionador.click()
+        secao.wait_for(state="visible", timeout=15000)
+
+    link = secao.get_by_role(
+        "link", name="Tribunal Superior Eleitoral", exact=True
+    )
+    link.wait_for(state="visible", timeout=15000)
+    if link.count() != 1:
+        raise RuntimeError(
+            "O acesso ao PJe do TSE não foi encontrado de forma única."
+        )
+    destination = link.get_attribute("href") or ""
+    if urlparse(destination).hostname != profile.portal_destination_host:
+        raise RuntimeError(
+            "O acesso ao PJe do TSE não corresponde ao destino esperado "
+            f"({profile.portal_destination_host})."
+        )
+
+    link.evaluate("element => element.removeAttribute('target')")
+    link.click()
+    pagina.wait_for_load_state("domcontentloaded", timeout=15000)
+
+
 def clicar_certificado(pagina, source_code):
-    """Seleciona o controle de certificado da tela de login da fonte."""
-    if get_source_profile(source_code).collector == "trt21":
+    """Seleciona o controle de certificado específico da fonte PJe."""
+    profile = get_source_profile(source_code)
+    if profile.certificate_button_selector:
+        botao = pagina.locator(profile.certificate_button_selector)
+        selector = profile.certificate_button_selector
+    elif profile.collector == "trt21":
         botao = pagina.locator(".botao-certificado-titulo").get_by_text(
             "Seu certificado digital", exact=True
         )
+        selector = ".botao-certificado-titulo >> text=Seu certificado digital"
     else:
         botao = pagina.get_by_text("CERTIFICADO DIGITAL", exact=True)
+        selector = "text=CERTIFICADO DIGITAL"
+
+    try:
+        botao.wait_for(state="visible", timeout=15000)
+    except PlaywrightTimeoutError as error:
+        raise RuntimeError(
+            "Botão de certificado digital não ficou visível no prazo. "
+            f"fonte={source_code} seletor={selector!r} url={pagina.url!r} "
+            f"quantidade={botao.count()}"
+        ) from error
     if botao.count() != 1:
-        raise RuntimeError("Botão de certificado digital não encontrado de forma única.")
+        raise RuntimeError(
+            "Botão de certificado digital não encontrado de forma única. "
+            f"fonte={source_code} seletor={selector!r} url={pagina.url!r} "
+            f"quantidade={botao.count()}"
+        )
     botao.click()
 
 
@@ -538,8 +791,18 @@ def abrir_pje(source_code, source=None):
             )
 
             profile = get_source_profile(source_code)
-            if profile.portal_button_name:
+            if profile.portal_flow == "trf5":
                 abrir_link_trf5_pje(pagina, profile)
+            elif profile.portal_flow == "tre-rn-1g":
+                abrir_link_tre_rn_1g_pje(pagina, profile)
+            elif profile.portal_flow == "tre-rn-2g":
+                abrir_link_tre_rn_2g_pje(pagina, profile)
+            elif profile.portal_flow == "tse-3g":
+                abrir_link_tse_3g_pje(pagina, profile)
+            elif profile.portal_flow:
+                raise RuntimeError(
+                    f"Fluxo de portal PJe não suportado: {profile.portal_flow}."
+                )
 
             print("O navegador foi aberto.")
             print("Aguardando o login por certificado digital.")

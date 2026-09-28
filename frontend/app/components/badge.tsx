@@ -2,6 +2,8 @@ import type { Expediente } from "../lib/types";
 
 const sourceBadgeClasses: Record<string, string> = {
   "pje-tjrn": "source-badge-tjrn-1g", "pje2g-tjrn": "source-badge-tjrn-2g",
+  "tre-rn-1g": "source-badge-tre-rn-1g", "tre-rn-2g": "source-badge-tre-rn-2g",
+  "tse-3g": "source-badge-tse-3g",
   trt21: "source-badge-trt21-1g", "trt21-2g": "source-badge-trt21-2g",
   "trf5-2g-tru": "source-badge-trf5-tru", "varas-justica-comum": "source-badge-trf5-varas",
   "jef-5-regiao": "source-badge-trf5-jef", "trs-5-regiao": "source-badge-trf5-trs",
