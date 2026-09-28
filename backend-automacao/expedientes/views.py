@@ -12,8 +12,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from automation.models import AutomationRun, UserProfile
-from automation.models import Notice
+from automation.models import AutomationRun, Notice, UserProfile
+from automation.pipeline import collection_pipeline_payload
 from automation.serializers import NoticeSerializer
 from .models import Expediente, ExpedienteEvent
 from .serializers import EventSerializer, ExpedienteSerializer
@@ -158,7 +158,8 @@ def _latest_run_data():
     if not run:
         return None
     return {
-        "id": run.id, "status": run.status, "trigger": run.trigger,
+        "id": run.id, "cycle_id": str(run.cycle_id),
+        "status": run.status, "trigger": run.trigger,
         "started_at": run.iniciada_em, "finished_at": run.finalizada_em,
         "found": run.expedientes_encontrados, "created": run.expedientes_criados,
         "updated": run.expedientes_atualizados, "resolved": run.expedientes_resolvidos,
@@ -217,6 +218,7 @@ def dashboard(request):
             "resolved": since_events.filter(kind="resolved").count(),
         },
         "latest_run": _latest_run_data(),
+        "collection_pipeline": collection_pipeline_payload(),
         "recent": ExpedienteSerializer(recent, many=True).data,
     })
 

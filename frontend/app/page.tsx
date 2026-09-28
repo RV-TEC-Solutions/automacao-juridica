@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Play, Sparkle, Stop, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Sparkle, WarningCircle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "./components/app-shell";
 import { Clock } from "./components/clock";
+import { CollectionPipeline } from "./components/collection-pipeline";
 import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
 import { Feedback, LoadingRows, MetricCard, PageTitle } from "./components/ui";
-import { api, formatDateTime } from "./lib/api";
+import { api } from "./lib/api";
 import type { Dashboard, Expediente, ExpedientePage } from "./lib/types";
 
 function greeting() {
@@ -46,6 +47,7 @@ export default function Home() {
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [running, setRunning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
   const [listPage, setListPage] = useState(1);
   const [expedientes, setExpedientes] = useState<ExpedientePage | null>(null);
@@ -91,12 +93,12 @@ export default function Home() {
     });
   }, [load]);
 
-  const run = async () => {
+  const run = async (source = "pje-tjrn") => {
     setRunning(true);
     try {
       await api("automation/runs/", {
         method: "POST",
-        body: JSON.stringify({ source: "pje-tjrn" }),
+        body: JSON.stringify({ source }),
       });
       await load();
     } catch (exception) {
@@ -121,26 +123,19 @@ export default function Home() {
     }
   };
 
+  const pipeline = data?.collection_pipeline;
   const runStatus = data?.latest_run?.status;
-  const collectionInProgress = ["pending", "running"].includes(runStatus ?? "");
+  const collectionInProgress = pipeline?.active ?? ["pending", "running"].includes(runStatus ?? "");
 
   useEffect(() => {
     if (!collectionInProgress) return;
 
     const interval = window.setInterval(() => {
       void load();
-    }, 10_000);
+    }, 1_500);
 
     return () => window.clearInterval(interval);
   }, [collectionInProgress, load]);
-  const statusTone =
-    runStatus === "success"
-      ? "bg-positive"
-      : runStatus === "failed"
-      ? "bg-danger"
-      : collectionInProgress
-      ? "bg-caution animate-pulse"
-      : "bg-quiet";
 
   const date = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Fortaleza",
@@ -171,136 +166,31 @@ export default function Home() {
         </Feedback>
       )}
 
-      <div className="mb-8 grid gap-6 xl:grid-cols-2 xl:items-start">
-        {/* Executive metrics section */}
-        <section className="order-2 min-w-0 xl:order-1">
-        <div className="mb-3.5 flex items-center justify-between">
-          <div>
-            <h2 className="mb-0.5 text-2xl font-extrabold tracking-tight leading-tight text-ink sm:text-3xl">
-              Visão executiva
-            </h2>
-            <p className="mb-0 text-xs text-quiet font-medium">
-              Indicadores consolidados do ciclo de monitoramento atual.
-            </p>
-          </div>
-          <div className="grid size-8 place-items-center rounded-xl border border-rule bg-panel text-quiet">
-            <ChartLineUp size={18} weight="duotone" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <MetricCard
-            label="Novos"
-            value={data?.today.new ?? 0}
-            note="expedientes descobertos"
-            icon={<Sparkle size={18} weight="duotone" />}
-            tone="green"
-            onClick={() => selectMetric("new")}
-            selected={activeMetric === "new"}
-          />
-          <MetricCard
-            label="Alterados"
-            value={data?.today.updated ?? 0}
-            note="mudanças de prazo/teor"
-            icon={<ClockCounterClockwise size={18} weight="duotone" />}
-            tone="blue"
-            onClick={() => selectMetric("updated")}
-            selected={activeMetric === "updated"}
-          />
-          <MetricCard
-            label="Não lidos"
-            value={data?.today.unread ?? 0}
-            note="aguardando leitura"
-            icon={<Bell size={18} weight="duotone" />}
-            tone="slate"
-            onClick={() => selectMetric("unread")}
-            selected={activeMetric === "unread"}
-          />
-          <MetricCard
-            label="Urgentes"
-            value={data?.today.urgent ?? 0}
-            note="vencidos ou até 72h"
-            icon={<WarningCircle size={18} weight="duotone" />}
-            tone="rose"
-            onClick={() => selectMetric("urgent")}
-            selected={activeMetric === "urgent"}
-          />
-          <MetricCard
-            label="Até próxima semana"
-            value={data?.today.next_week ?? 0}
-            note="prazos fatais a vencer"
-            icon={<CalendarDots size={18} weight="duotone" />}
-            tone="amber"
-            onClick={() => selectMetric("next_week")}
-            selected={activeMetric === "next_week"}
-          />
-          <MetricCard
-            label="Prazos em cálculo"
-            value={data?.today.calculating ?? 0}
-            note="prazos ainda em cálculo"
-            icon={<WarningCircle size={18} weight="duotone" />}
-            tone="slate"
-            onClick={() => selectMetric("calculating")}
-            selected={activeMetric === "calculating"}
-          />
-        </div>
-        </section>
-
-        {/* Collection status & trigger panel */}
-        <MetricCard
-          label=""
-          value=""
-          note=""
-          icon={null}
-          className="order-1 h-fit xl:order-2 xl:mt-[68px]"
-          innerClassName="gap-3 sm:flex-row sm:items-stretch sm:justify-between"
-        >
-          <div className="flex items-start gap-3.5">
-            <div className="relative mt-1 flex size-3 items-center justify-center">
-              {collectionInProgress && (
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-caution opacity-75" />
-              )}
-              <span className={`size-2.5 rounded-full ${statusTone}`} />
-            </div>
+      <div className="mb-8 grid min-w-0 gap-x-6 gap-y-3 xl:grid-cols-2 xl:grid-rows-[auto_1fr]">
+        <section className="contents">
+          <div className="order-2 flex items-center justify-between xl:order-none xl:col-start-1 xl:row-start-1">
             <div>
-              <small className="mt-0.5 block text-xs text-quiet font-medium">
-                {data?.latest_run
-                  ? data.latest_run.message || `Última sincronização ${formatDateTime(data.latest_run.finished_at ?? data.latest_run.started_at)}`
-                  : "Dispare uma coleta sob demanda para atualizar os expedientes da banca."}
-              </small>
-              {runStatus === "failed" && (
-                <div
-                  className="mt-3 flex items-center gap-2 rounded-lg border border-caution/25 bg-caution-soft px-3 py-2 text-xs font-semibold text-caution"
-                  role="alert"
-                >
-                  <WarningCircle size={16} weight="duotone" className="shrink-0" />
-                  <span>{data?.latest_run?.error || "Coleta interrompida antes da conclusão."}</span>
-                </div>
-              )}
+              <h2 className="mb-0.5 text-2xl font-extrabold tracking-tight leading-tight text-ink sm:text-3xl">Visão executiva</h2>
+              <p className="mb-0 text-xs font-medium text-quiet">Indicadores consolidados do ciclo de monitoramento atual.</p>
             </div>
+            <div className="grid size-8 place-items-center rounded-xl border border-rule bg-panel text-quiet"><ChartLineUp size={18} weight="duotone" /></div>
           </div>
-
-          <div className="flex shrink-0 gap-2 sm:self-stretch">
-            {collectionInProgress && (
-              <button
-                className="button-secondary cursor-pointer whitespace-nowrap border-danger/30 bg-danger-soft px-4 py-3 text-xs font-bold text-danger hover:border-danger/50 sm:px-4.5 sm:py-6 sm:text-sm"
-                onClick={cancel}
-                disabled={cancelling}
-              >
-                <Stop size={15} weight="fill" />
-                {cancelling ? "Interrompendo…" : "Interromper coleta"}
-              </button>
-            )}
-            <button
-              className="button-primary cursor-pointer whitespace-nowrap px-4.5 py-3 text-xs font-bold shadow-xs sm:py-6 sm:text-sm"
-              onClick={run}
-              disabled={running || collectionInProgress}
-            >
-              <Play size={15} weight="fill" />
-              {running ? "Solicitando coleta…" : "Executar coleta"}
-            </button>
+          <div className="order-3 grid min-w-0 grid-cols-2 gap-3 xl:order-none xl:col-start-1 xl:row-start-2 lg:grid-cols-3">
+            <MetricCard label="Novos" value={data?.today.new ?? 0} note="expedientes descobertos" icon={<Sparkle size={18} weight="duotone" />} tone="green" onClick={() => selectMetric("new")} selected={activeMetric === "new"} />
+            <MetricCard label="Alterados" value={data?.today.updated ?? 0} note="mudanças de prazo/teor" icon={<ClockCounterClockwise size={18} weight="duotone" />} tone="blue" onClick={() => selectMetric("updated")} selected={activeMetric === "updated"} />
+            <MetricCard label="Não lidos" value={data?.today.unread ?? 0} note="aguardando leitura" icon={<Bell size={18} weight="duotone" />} tone="slate" onClick={() => selectMetric("unread")} selected={activeMetric === "unread"} />
+            <MetricCard label="Urgentes" value={data?.today.urgent ?? 0} note="vencidos ou até 72h" icon={<WarningCircle size={18} weight="duotone" />} tone="rose" onClick={() => selectMetric("urgent")} selected={activeMetric === "urgent"} />
+            <MetricCard label="Até próxima semana" value={data?.today.next_week ?? 0} note="prazos fatais a vencer" icon={<CalendarDots size={18} weight="duotone" />} tone="amber" onClick={() => selectMetric("next_week")} selected={activeMetric === "next_week"} />
+            <MetricCard label="Prazos em cálculo" value={data?.today.calculating ?? 0} note="prazos ainda em cálculo" icon={<WarningCircle size={18} weight="duotone" />} tone="slate" onClick={() => selectMetric("calculating")} selected={activeMetric === "calculating"} />
           </div>
-        </MetricCard>
+        </section>
+        {pipeline && (
+          <div className="order-1 min-w-0 xl:order-none xl:col-start-2 xl:row-start-2">
+            <CollectionPipeline pipeline={pipeline} refreshing={refreshing} starting={running} cancelling={cancelling}
+              onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
+              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onRerun={(source) => { void run(source); }} />
+          </div>
+        )}
       </div>
 
       {/* Recent expedientes */}

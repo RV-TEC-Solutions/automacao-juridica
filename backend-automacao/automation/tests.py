@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from django.contrib.auth import get_user_model
 from django.core.exceptions import SynchronousOnlyOperation
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
@@ -34,6 +35,7 @@ from .services.pje.browser import (
     tratar_quadro_avisos,
     tratar_quadro_avisos_trt21,
 )
+from .pipeline import collection_pipeline_payload
 from .services.pje.runner import executar_coleta
 from .services.pje.sources import (
     PJE_SOURCE_ORDER,
@@ -168,7 +170,9 @@ class PJePipelineTests(TestCase):
             self.second_degree,
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_chain_continues_when_a_source_fails(self):
@@ -189,7 +193,9 @@ class PJePipelineTests(TestCase):
             next_source,
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_failure_persists_safe_message_and_logs_traceback_with_run_context(self):
@@ -225,7 +231,9 @@ class PJePipelineTests(TestCase):
             tre_rn,
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_chain_continues_from_tre_rn_first_to_second_degree(self):
@@ -242,7 +250,9 @@ class PJePipelineTests(TestCase):
             tre_rn_2g,
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_chain_continues_from_tre_rn_second_degree_to_tse(self):
@@ -259,7 +269,9 @@ class PJePipelineTests(TestCase):
             tse,
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_chain_continues_from_tse_to_trt21(self):
@@ -276,7 +288,9 @@ class PJePipelineTests(TestCase):
             trt21,
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_chain_skips_disabled_sources(self):
@@ -292,7 +306,9 @@ class PJePipelineTests(TestCase):
             executar_coleta(run)
         enqueue.assert_called_once_with(
             tre_rn, trigger=AutomationRun.Trigger.MANUAL,
-            requested_by=None, scheduled_for=None,
+            requested_by=None,
+            scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
     def test_empty_trt21_collection_is_successful_and_informative(self):
@@ -314,7 +330,9 @@ class PJePipelineTests(TestCase):
             AutomationSource.objects.get(code="trt21-2g"),
             trigger=AutomationRun.Trigger.MANUAL,
             requested_by=None,
+
             scheduled_for=None,
+            cycle_id=run.cycle_id,
         )
 
 
@@ -370,6 +388,7 @@ class AutomationRunApiTests(TestCase):
 
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.data["source"], "tre-rn-1g")
+        self.assertTrue(response.data["cycle_id"])
 
 
 class PJeBrowserTests(TestCase):
@@ -1329,3 +1348,45 @@ class PJeOfficeTests(TestCase):
         janela = Node("dialog", "Informe a senha", set(), [botao_ok])
 
         self.assertIs(helper.localizar_botao_confirmar(janela), botao_ok)
+
+
+class CollectionPipelinePayloadTests(TestCase):
+    def setUp(self):
+        self.first = AutomationSource.objects.get(code="pje-tjrn")
+        self.second = AutomationSource.objects.get(code="pje2g-tjrn")
+
+    def test_exposes_official_order_and_real_cycle_states(self):
+        first_run = AutomationRun.objects.create(
+            source=self.first, status=AutomationRun.Status.SUCCESS,
+            finalizada_em=timezone.now(),
+        )
+        AutomationRun.objects.create(
+            source=self.second, status=AutomationRun.Status.RUNNING,
+            iniciada_em=timezone.now(), cycle_id=first_run.cycle_id,
+        )
+        AutomationSource.objects.filter(code="tse-3g").update(enabled=False)
+
+        payload = collection_pipeline_payload()
+
+        self.assertEqual([step["code"] for step in payload["steps"]], list(PJE_SOURCE_ORDER))
+        self.assertEqual(payload["cycle_id"], str(first_run.cycle_id))
+        self.assertEqual(payload["status"], "running")
+        self.assertEqual(payload["current_step"], "pje2g-tjrn")
+        self.assertEqual(payload["steps"][0]["status"], "success")
+        self.assertEqual(payload["steps"][1]["status"], "running")
+        self.assertEqual(payload["steps"][2]["status"], "pending")
+        self.assertEqual(payload["steps"][4]["status"], "disabled")
+
+    def test_marks_unreached_steps_skipped_after_cancellation(self):
+        AutomationRun.objects.create(
+            source=self.second, status=AutomationRun.Status.CANCELLED,
+            finalizada_em=timezone.now(),
+        )
+
+        payload = collection_pipeline_payload()
+
+        self.assertEqual(payload["status"], "cancelled")
+        self.assertFalse(payload["active"])
+        self.assertEqual(payload["steps"][0]["status"], "skipped")
+        self.assertEqual(payload["steps"][1]["status"], "cancelled")
+        self.assertEqual(payload["steps"][2]["status"], "skipped")

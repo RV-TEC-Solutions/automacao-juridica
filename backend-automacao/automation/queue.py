@@ -31,17 +31,17 @@ def first_enabled_source(start_code=None):
     return next((sources[code] for code in source_codes if code in sources), None)
 
 
-def enqueue_run(source, trigger, requested_by=None, scheduled_for=None):
+def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id=None):
     if not source.enabled:
         raise ValueError("A fonte está desativada.")
     try:
-        return AutomationRun.objects.create(
-            source=source,
-            trigger=trigger,
-            requested_by=requested_by,
-            scheduled_for=scheduled_for,
-            status=AutomationRun.Status.PENDING,
-        )
+        values = {
+            "source": source, "trigger": trigger, "requested_by": requested_by,
+            "scheduled_for": scheduled_for, "status": AutomationRun.Status.PENDING,
+        }
+        if cycle_id is not None:
+            values["cycle_id"] = cycle_id
+        return AutomationRun.objects.create(**values)
     except IntegrityError as error:
         raise ValueError("Já existe uma coleta pendente ou em execução.") from error
 

@@ -68,19 +68,32 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
       return route.fulfill({ json: user });
     }
     if (path.endsWith("dashboard/") && route.request().method() === "GET") {
+      const cycleStatus = collectionRequests > 0 && ++activeDashboardRequests === 1 ? "pending" : "success";
       const latestRun = collectionRequests === 0 ? null : {
-        id: 1,
-        status: ++activeDashboardRequests === 1 ? "pending" : "success",
-        trigger: "manual",
+        id: 1, status: cycleStatus, trigger: "manual",
         started_at: "2026-08-25T08:00:00Z",
-        finished_at: activeDashboardRequests === 1 ? null : "2026-08-25T08:01:00Z",
-        found: 1,
-        created: 1,
-        updated: 0,
-        resolved: 0,
-        error: "",
-        message: "",
-        source: "PJe / TJRN",
+        finished_at: cycleStatus === "pending" ? null : "2026-08-25T08:01:00Z",
+        found: 1, created: 1, updated: 0, resolved: 0, error: "", message: "", source: "PJe / TJRN",
+      };
+      const pipelineSources = [
+        ["pje-tjrn", "TJRN", "1º Grau"], ["pje2g-tjrn", "TJRN", "2º Grau"],
+        ["tre-rn-1g", "Justiça Eleitoral", "TRE-RN · 1º Grau"], ["tre-rn-2g", "Justiça Eleitoral", "TRE-RN · 2º Grau"],
+        ["tse-3g", "Justiça Eleitoral", "TSE · 3º Grau"], ["trt21", "TRT21", "1º Grau"],
+        ["trt21-2g", "TRT21", "2º Grau"], ["trf5-2g-tru", "TRF5", "2º Grau / TRU"],
+        ["varas-justica-comum", "TRF5", "Varas federais"], ["jef-5-regiao", "TRF5", "JEF · 5ª Região"],
+        ["trs-5-regiao", "TRF5", "Turmas recursais"], ["tru-5-regiao", "TRF5", "TRU · perfil alternativo"],
+      ];
+      const collectionPipeline = {
+        cycle_id: collectionRequests ? "cycle-1" : null,
+        status: collectionRequests === 0 ? "idle" : cycleStatus === "pending" ? "running" : "success",
+        active: cycleStatus === "pending", completed: cycleStatus === "success" && collectionRequests ? 12 : 0, total: 12,
+        started_at: collectionRequests ? "2026-08-25T08:00:00Z" : null,
+        finished_at: cycleStatus === "success" && collectionRequests ? "2026-08-25T08:01:00Z" : null,
+        current_step: cycleStatus === "pending" ? "pje-tjrn" : null,
+        steps: pipelineSources.map(([code, group, label], index) => ({
+          code, group, label, run_id: index === 0 ? 1 : null, error: "", message: "",
+          status: collectionRequests === 0 ? "pending" : cycleStatus === "pending" ? (index === 0 ? "pending" : "pending") : "success",
+        })),
       };
       return route.fulfill({
         json: {
@@ -88,6 +101,7 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
           today: { new: 1, updated: 0, unread: 1, urgent: 0, calculating: 0 },
           since_last_visit: { since: null, new: 1, updated: 0, resolved: 0 },
           latest_run: latestRun,
+          collection_pipeline: collectionPipeline,
           recent: [item],
           notices: { unread: 0, recent: [] },
         },
@@ -124,9 +138,15 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.getByTestId("clock-face")).toBeVisible();
   await expect(page.getByRole("link", { name: "Expedientes", exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId("pipeline-scroll-region")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expect(page.getByTestId("pipeline-scroll-region")).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Executar coleta" }).click();
   await expect.poll(() => collectionRequests).toBe(1);
-  await expect(page.getByText("Coleta concluída com êxito")).toBeVisible();
+  await expect(page.getByText("12 de 12 fontes concluídas", { exact: false }).first()).toBeVisible();
   await page.getByText("0800000-00.2026.8.20.0001").click();
   await expect(page.getByRole("dialog")).toContainText("Obrigação de fazer");
   await page.getByLabel("Fechar").click();

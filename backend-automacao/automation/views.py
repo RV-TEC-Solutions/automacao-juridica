@@ -143,7 +143,8 @@ def source_detail(request, code):
 
 def _run_payload(run):
     return {
-        "id": run.id, "status": run.status, "trigger": run.trigger,
+        "id": run.id, "cycle_id": str(run.cycle_id),
+        "status": run.status, "trigger": run.trigger,
         "created_at": run.criada_em, "started_at": run.iniciada_em,
         "finished_at": run.finalizada_em, "error": run.mensagem_erro,
         "message": run.mensagem_info,

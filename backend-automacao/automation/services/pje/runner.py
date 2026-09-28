@@ -36,6 +36,7 @@ def _enqueue_next_source(execucao):
                 trigger=execucao.trigger,
                 requested_by=execucao.requested_by,
                 scheduled_for=execucao.scheduled_for,
+                cycle_id=execucao.cycle_id,
             )
         except ValueError:
             logger.warning(

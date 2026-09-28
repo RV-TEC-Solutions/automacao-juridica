@@ -1,3 +1,4 @@
+import uuid
 from datetime import time
 
 from django.conf import settings
@@ -115,6 +116,8 @@ class AutomationRun(models.Model):
         null=True,
         blank=True,
     )
+    cycle_id = models.UUIDField(default=uuid.uuid4, db_index=True, editable=False)
+
     scheduled_for = models.DateTimeField(null=True, blank=True)
 
     status = models.CharField(

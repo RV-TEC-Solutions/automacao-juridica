@@ -50,8 +50,33 @@ export type Expediente = {
   };
 };
 
+export type PipelineStepStatus = "pending" | "running" | "success" | "failed" | "cancelled" | "disabled" | "skipped";
+
+export type PipelineStep = {
+  code: string;
+  group: string;
+  label: string;
+  status: PipelineStepStatus;
+  run_id: number | null;
+  error: string;
+  message: string;
+};
+
+export type CollectionPipeline = {
+  cycle_id: string | null;
+  status: "idle" | "running" | "success" | "failed" | "cancelled";
+  active: boolean;
+  completed: number;
+  total: number;
+  started_at: string | null;
+  finished_at: string | null;
+  current_step: string | null;
+  steps: PipelineStep[];
+};
+
 export type Run = {
   id: number;
+  cycle_id: string;
   status: string;
   trigger: string;
   started_at: string | null;
@@ -105,6 +130,7 @@ export type Dashboard = {
     resolved: number;
   };
   latest_run: Run | null;
+  collection_pipeline: CollectionPipeline;
   recent: Expediente[];
   notices: { unread: number; recent: Notice[] };
 };
