@@ -133,18 +133,6 @@ export default function Home() {
 
     return () => window.clearInterval(interval);
   }, [collectionInProgress, load]);
-  const statusCopy = !data?.latest_run
-    ? "Nenhuma coleta executada"
-    : runStatus === "success"
-    ? "Coleta concluída com êxito"
-    : runStatus === "failed"
-    ? "Coleta requer atenção"
-    : runStatus === "cancelled"
-    ? "Coleta interrompida"
-    : runStatus === "running"
-    ? "Coleta em andamento no PJe"
-    : "Coleta aguardando execução";
-
   const statusTone =
     runStatus === "success"
       ? "bg-positive"
@@ -275,12 +263,6 @@ export default function Home() {
               <span className={`size-2.5 rounded-full ${statusTone}`} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <strong className="text-sm font-extrabold text-ink">{statusCopy}</strong>
-                <span className="rounded-md border border-rule bg-panel-muted px-2 py-0.5 text-[10px] font-bold text-quiet">
-                  PJe · TJRN
-                </span>
-              </div>
               <small className="mt-0.5 block text-xs text-quiet font-medium">
                 {data?.latest_run
                   ? data.latest_run.message || `Última sincronização ${formatDateTime(data.latest_run.finished_at ?? data.latest_run.started_at)}`
