@@ -6,7 +6,7 @@ from django.utils import timezone
 from zoneinfo import ZoneInfo
 from rest_framework.test import APIClient
 
-from automation.models import AutomationSource
+from automation.models import AutomationRun, AutomationSource
 from automation.services.pje.persistence import salvar_expedientes
 from .models import Expediente, ExpedienteEvent
 
@@ -89,6 +89,20 @@ class ApiTests(TestCase):
         response = self.client.post(f"/api/expedientes/{expediente.pk}/read/")
         self.assertEqual(response.status_code, 200)
         self.assertFalse(expediente.events.filter(read_at__isnull=True).exists())
+
+    def test_dashboard_allows_discarding_a_failed_run_without_events(self):
+        ExpedienteEvent.objects.all().delete()
+        AutomationRun.objects.create(
+            source=self.source,
+            status=AutomationRun.Status.FAILED,
+            iniciada_em=timezone.now(),
+            finalizada_em=timezone.now(),
+            mensagem_erro="Falha antes de encontrar expedientes",
+        )
+
+        dashboard = self.client.get("/api/dashboard/")
+
+        self.assertGreater(dashboard.data["today"]["discardable"], 0)
 
     def test_search_filter_and_pagination_contract(self):
         response = self.client.get("/api/expedientes/?q=PARTE+A&read=unread")

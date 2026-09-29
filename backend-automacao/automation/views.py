@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from .models import AutomationRun, AutomationSource, Notice, UserProfile
 from .serializers import NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
+from .services.pjeoffice.token import TokenFisicoError, validar_token_fisico
 from expedientes.models import Expediente, ExpedienteEvent, Processo
 
 
@@ -231,7 +232,7 @@ def discard_today_collection(request):
     day, window_start, window_end = _local_day_window()
     with transaction.atomic():
         if AutomationRun.objects.select_for_update().filter(
-            status__in=(AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING)
+            status=AutomationRun.Status.RUNNING,
         ).exists():
             return Response(
                 {"detail": "Não é possível descartar dados enquanto há uma coleta em andamento."},
@@ -246,6 +247,13 @@ def discard_today_collection(request):
                 criada_em__gte=window_start,
                 criada_em__lt=window_end,
             )
+        )
+        # As próximas fontes de um ciclo ainda não começaram. Elas podem ser
+        # canceladas e descartadas com segurança junto com os dados do dia.
+        today_runs.filter(status=AutomationRun.Status.PENDING).update(
+            status=AutomationRun.Status.CANCELLED,
+            mensagem_info="Coleta descartada pelo usuário antes da execução.",
+            finalizada_em=timezone.now(),
         )
         events = list(
             ExpedienteEvent.objects.select_for_update()
@@ -364,6 +372,10 @@ def collection_history(request):
 @permission_classes([IsAuthenticated])
 def runs(request):
     if request.method == "POST":
+        try:
+            validar_token_fisico()
+        except TokenFisicoError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
         requested_code = request.data.get("source", "pje-tjrn")
         rerun = request.data.get("rerun") is True
         requested_source = AutomationSource.objects.filter(code=requested_code).first()
@@ -396,6 +408,15 @@ def runs(request):
         return Response(_run_payload(run), status=status.HTTP_202_ACCEPTED)
     return Response([_run_payload(run) for run in AutomationRun.objects.select_related("source")[:20]])
 
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def token_status(request):
+    try:
+        validar_token_fisico()
+    except TokenFisicoError as error:
+        return Response({"available": False, "message": str(error)})
+    return Response({"available": True, "message": "Token físico conectado."})
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

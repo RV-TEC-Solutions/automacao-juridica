@@ -39,6 +39,7 @@ from .services.pje.browser import (
 )
 from .pipeline import collection_pipeline_payload
 from .services.pje.runner import executar_coleta
+from .services.pjeoffice.token import TokenFisicoError
 from .services.pje.sources import (
     PJE_SOURCE_ORDER,
     TSE_PORTAL_URL,
@@ -361,6 +362,9 @@ class AutomationRunApiTests(TestCase):
         self.user = get_user_model().objects.create_user("operador")
         self.client = APIClient()
         self.client.force_authenticate(self.user)
+        self.token_validator = patch("automation.views.validar_token_fisico")
+        self.token_validator.start()
+        self.addCleanup(self.token_validator.stop)
 
     def test_sources_include_the_enabled_tre_rn_first_degree_profile(self):
         response = self.client.get("/api/sources/")
@@ -409,6 +413,25 @@ class AutomationRunApiTests(TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.data["source"], "tre-rn-1g")
         self.assertTrue(response.data["cycle_id"])
+
+    def test_manual_run_fails_fast_when_the_physical_token_is_absent(self):
+        with patch(
+            "automation.views.validar_token_fisico",
+            side_effect=TokenFisicoError(
+                "Token físico não detectado. Conecte o token ao computador e tente novamente."
+            ),
+            create=True,
+        ):
+            response = self.client.post(
+                "/api/automation/runs/", {"source": "pje-tjrn"}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.data["detail"],
+            "Token físico não detectado. Conecte o token ao computador e tente novamente.",
+        )
+        self.assertFalse(AutomationRun.objects.exists())
 
     def test_rerun_enqueues_only_the_requested_source(self):
         source = AutomationSource.objects.get(code="pje2g-tjrn")
@@ -547,11 +570,37 @@ class CollectionAuditApiTests(TestCase):
         self.assertEqual(repeated.data["cleared_runs"], 0)
 
     def test_discard_rejects_when_a_collection_is_active(self):
-        AutomationRun.objects.create(source=AutomationSource.objects.get(code="pje2g-tjrn"))
+        AutomationRun.objects.create(
+            source=AutomationSource.objects.get(code="pje2g-tjrn"),
+            status=AutomationRun.Status.RUNNING,
+            iniciada_em=timezone.now(),
+        )
 
         response = self.client.post("/api/automation/collections/today/discard/")
 
         self.assertEqual(response.status_code, 409)
+
+    def test_discard_cancels_pending_sources_after_a_failed_collection(self):
+        self.run.status = AutomationRun.Status.FAILED
+        self.run.mensagem_erro = "Falha de autenticação"
+        self.run.save(update_fields=("status", "mensagem_erro"))
+        pending = AutomationRun.objects.create(
+            source=AutomationSource.objects.get(code="pje2g-tjrn"),
+            cycle_id=self.run.cycle_id,
+        )
+        expediente = self.expediente(4)
+        ExpedienteEvent.objects.create(
+            expediente=expediente, run=self.run, kind=ExpedienteEvent.Kind.NEW,
+        )
+
+        response = self.client.post("/api/automation/collections/today/discard/")
+
+        self.assertEqual(response.status_code, 200)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, AutomationRun.Status.CANCELLED)
+        self.assertIsNotNone(pending.finalizada_em)
+        self.assertIsNotNone(pending.descartada_em)
+        self.assertFalse(Expediente.objects.filter(pk=expediente.pk).exists())
 
     def test_collection_history_groups_runs_and_exposes_error_details(self):
         failed = AutomationRun.objects.create(

@@ -3,6 +3,7 @@ import time
 from django.core.management.base import BaseCommand
 
 from automation.queue import claim_next_run, enqueue_due_runs, recover_interrupted_runs
+from automation.services.pjeoffice.token import TokenFisicoError, validar_token_fisico
 from automation.services.pje.runner import executar_coleta
 
 
@@ -22,6 +23,19 @@ class Command(BaseCommand):
                 )
             )
         while True:
+            try:
+                validar_token_fisico()
+            except TokenFisicoError as error:
+                message = str(error)
+                if message != getattr(self, "_last_token_error", None):
+                    self.stderr.write(self.style.WARNING(message))
+                    self._last_token_error = message
+                if options["once"]:
+                    break
+                time.sleep(5)
+                continue
+
+            self._last_token_error = None
             enqueue_due_runs()
             run = claim_next_run()
             if run:
