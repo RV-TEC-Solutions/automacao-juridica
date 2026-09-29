@@ -2,8 +2,13 @@
 
 import { CheckCircle, Clock, FloppyDisk, Key, ShieldCheck, UserCircle } from "@phosphor-icons/react";
 import { FormEvent, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { AppShell } from "../components/app-shell";
-import { BezelCard, Feedback, PageTitle } from "../components/ui";
+import { Panel, Feedback, PageTitle } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../providers";
 
@@ -21,9 +26,6 @@ type Source = {
   tribunal: string;
   enabled: boolean;
 };
-
-const fieldClass =
-  "control mt-1.5 w-full px-3.5 py-2 text-xs sm:text-sm font-semibold";
 
 export default function SettingsPage() {
   const { refresh } = useAuth();
@@ -105,7 +107,6 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <PageTitle
-        eyebrow="Preferências e integração"
         title="Configurações"
         description="Ajuste suas preferências operacionais, credenciais do PJe e rotinas automáticas da banca."
       />
@@ -116,210 +117,197 @@ export default function SettingsPage() {
       {data && (
         <form onSubmit={save} className="grid gap-6 lg:grid-cols-2">
           {/* Perfil */}
-          <BezelCard innerClassName="p-6">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-xl border border-rule bg-panel-muted text-ink">
+          <Panel innerClassName="p-6">
+            <div className="mb-6 flex items-center gap-4">
+              <span className="grid size-10 place-items-center rounded-xl border border-border bg-muted text-foreground">
                 <UserCircle size={22} weight="duotone" />
               </span>
               <div>
-                <h2 className="mb-0.5 text-sm font-extrabold text-ink">Seu perfil</h2>
-                <p className="mb-0 text-xs text-quiet font-medium">
+                <h2 className="mb-2 text-sm font-extrabold text-foreground">Seu perfil</h2>
+                <p className="mb-0 text-xs text-muted-foreground font-medium">
                   Informações de identificação no painel.
                 </p>
               </div>
             </div>
 
-            <label className="block text-xs font-bold text-ink-soft">
+            <Label className="block text-xs">
               Nome de exibição
-              <input className={fieldClass} name="display_name" defaultValue={data.display_name} />
-            </label>
+              <Input className="mt-2" name="display_name" defaultValue={data.display_name} />
+            </Label>
 
-            <label className="mt-4 block text-xs font-bold text-ink-soft">
+            <Label className="mt-4 block text-xs">
               Tema visual
-              <select className={fieldClass} name="theme" defaultValue={data.theme}>
+              <Select className="mt-2" name="theme" defaultValue={data.theme}>
                 <option value="light">Claro (Executive Gray)</option>
                 <option value="dark">Escuro (Obsidian Graphite)</option>
                 <option value="system">Seguir o sistema operacional</option>
-              </select>
-            </label>
-          </BezelCard>
+              </Select>
+            </Label>
+          </Panel>
 
           {/* Coleta diária */}
-          <BezelCard innerClassName="p-6">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-xl border border-rule bg-panel-muted text-ink">
+          <Panel innerClassName="p-6">
+            <div className="mb-6 flex items-center gap-4">
+              <span className="grid size-10 place-items-center rounded-xl border border-border bg-muted text-foreground">
                 <Clock size={22} weight="duotone" />
               </span>
               <div>
-                <h2 className="mb-0.5 text-sm font-extrabold text-ink">Rotina de coleta</h2>
-                <p className="mb-0 text-xs text-quiet font-medium">
+                <h2 className="mb-2 text-sm font-extrabold text-foreground">Rotina de coleta</h2>
+                <p className="mb-0 text-xs text-muted-foreground font-medium">
                   Agendamento automático de consultas aos tribunais.
                 </p>
               </div>
             </div>
 
-            <label className="block text-xs font-bold text-ink-soft">
+            <Label className="block text-xs">
               Horário diário
-              <input
-                className={fieldClass}
+              <Input
+                className="mt-2"
                 name="collection_time"
                 type="time"
                 defaultValue={data.collection_time}
               />
-            </label>
+            </Label>
 
-            <label className="mt-4 block text-xs font-bold text-ink-soft">
+            <Label className="mt-4 block text-xs">
               Fuso horário de referência
-              <input className={`${fieldClass} opacity-70 cursor-not-allowed`} value="America/Fortaleza (GMT-3)" disabled />
-            </label>
-          </BezelCard>
+              <Input className="mt-2" value="America/Fortaleza (GMT-3)" disabled />
+            </Label>
+          </Panel>
 
           <div className="flex justify-end lg:col-span-2">
-            <button type="submit" className="button-primary cursor-pointer px-5 text-sm font-bold shadow-xs">
+            <Button type="submit">
               <FloppyDisk size={16} weight="bold" />
               Salvar alterações
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {/* Fontes conectadas e Prontidão */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <BezelCard innerClassName="p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl border border-rule bg-panel-muted text-ink">
+        <Panel innerClassName="p-6">
+          <div className="mb-6 flex items-center gap-4">
+            <span className="grid size-10 place-items-center rounded-xl border border-border bg-muted text-foreground">
               <ShieldCheck size={22} weight="duotone" />
             </span>
             <div>
-              <h2 className="mb-0.5 text-sm font-extrabold text-ink">Fontes conectadas</h2>
-              <p className="mb-0 text-xs text-quiet font-medium">
+              <h2 className="mb-2 text-sm font-extrabold text-foreground">Fontes conectadas</h2>
+              <p className="mb-0 text-xs text-muted-foreground font-medium">
                 Desativar uma fonte interrompe coletas mas preserva o histórico.
               </p>
             </div>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {sources.map((source) => (
               <div
-                className="flex items-center gap-3.5 rounded-xl border border-rule bg-panel-muted/50 p-3.5"
+                className="flex items-center gap-4 rounded-xl border border-border bg-muted/50 p-4"
                 key={source.code}
               >
-                <span className="grid size-9 place-items-center rounded-lg border border-rule bg-panel text-xs font-extrabold text-ink font-mono">
+                <span className="grid size-10 place-items-center rounded-lg border border-border bg-card text-xs font-extrabold text-foreground font-mono">
                   PJe
                 </span>
                 <div className="min-w-0 flex-1">
-                  <strong className="block truncate text-xs sm:text-sm font-bold text-ink">
+                  <strong className="block truncate text-xs sm:text-sm font-bold text-foreground">
                     {source.system} · {source.tribunal}
                   </strong>
-                  <small className="text-[11px] text-quiet font-medium">
+                  <small className="text-xs text-muted-foreground font-medium">
                     Monitoramento de expedientes e intimações
                   </small>
                 </div>
-                <button
-                  role="switch"
+                <Switch
                   aria-label={`Coleta ${source.system} ${source.tribunal}`}
-                  aria-checked={source.enabled}
-                  className={`relative h-6 w-11 cursor-pointer rounded-full border-0 p-1 transition-colors ${
-                    source.enabled ? "bg-brand" : "bg-quiet/40"
-                  }`}
-                  onClick={() => toggle(source)}
-                >
-                  <i
-                    className={`block size-4 rounded-full bg-white shadow-xs transition-transform ${
-                      source.enabled ? "translate-x-5" : ""
-                    }`}
-                  />
-                </button>
+                  checked={source.enabled}
+                  onCheckedChange={() => { void toggle(source); }}
+                />
               </div>
             ))}
           </div>
-        </BezelCard>
+        </Panel>
 
         {data && (
-          <BezelCard innerClassName="p-6">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-xl border border-rule bg-panel-muted text-positive">
+          <Panel innerClassName="p-6">
+            <div className="mb-6 flex items-center gap-4">
+              <span className="grid size-10 place-items-center rounded-xl border border-border bg-muted text-success">
                 <CheckCircle size={22} weight="duotone" />
               </span>
               <div>
-                <h2 className="mb-0.5 text-sm font-extrabold text-ink">Prontidão operacional</h2>
-                <p className="mb-0 text-xs text-quiet font-medium">
+                <h2 className="mb-2 text-sm font-extrabold text-foreground">Prontidão operacional</h2>
+                <p className="mb-0 text-xs text-muted-foreground font-medium">
                   Status dos certificados e chaves de segurança locais.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <Check ok={Boolean(data.credential_status.credential_file)} label="Arquivo de credenciais" />
               <Check ok={Boolean(data.credential_status.pin)} label="PIN do certificado digital A1/A3" />
               <Check ok={Boolean(data.credential_status.totp)} label="Segredo TOTP de dois fatores" />
               <Check ok label="PJeOffice Integrado" note="Verificado e autenticado a cada coleta" />
-              <code className="mt-2.5 block rounded-xl border border-rule bg-panel-muted/60 p-2.5 text-[11px] font-mono text-quiet">
+              <code className="mt-2 block rounded-xl border border-border bg-muted/60 p-2 text-xs font-mono text-muted-foreground">
                 ~/.config/pje-automacao/.env
               </code>
             </div>
-          </BezelCard>
+          </Panel>
         )}
       </div>
 
       {/* Alteração de senha */}
       <form onSubmit={changePassword} className="mt-6">
-        <BezelCard innerClassName="p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl border border-rule bg-panel-muted text-caution">
+        <Panel innerClassName="p-6">
+          <div className="mb-6 flex items-center gap-4">
+            <span className="grid size-10 place-items-center rounded-xl border border-border bg-muted text-warning">
               <Key size={22} weight="duotone" />
             </span>
             <div>
-              <h2 className="mb-0.5 text-sm font-extrabold text-ink">Segurança e senha de acesso</h2>
-              <p className="mb-0 text-xs text-quiet font-medium">
+              <h2 className="mb-2 text-sm font-extrabold text-foreground">Segurança e senha de acesso</h2>
+              <p className="mb-0 text-xs text-muted-foreground font-medium">
                 Altere a chave de acesso utilizada exclusivamente nesta máquina.
               </p>
             </div>
           </div>
 
-          <div className="grid gap-3.5 md:grid-cols-4">
-            <label className="text-xs font-bold text-ink-soft">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Label className="text-xs">
               Senha atual
-              <input
-                className={fieldClass}
+              <Input
+                className="mt-2"
                 name="current_password"
                 type="password"
                 autoComplete="current-password"
                 required
               />
-            </label>
-            <label className="text-xs font-bold text-ink-soft">
+            </Label>
+            <Label className="text-xs">
               Nova senha
-              <input
-                className={fieldClass}
+              <Input
+                className="mt-2"
                 name="new_password"
                 type="password"
                 minLength={8}
                 autoComplete="new-password"
                 required
               />
-            </label>
-            <label className="text-xs font-bold text-ink-soft">
+            </Label>
+            <Label className="text-xs">
               Confirmar nova senha
-              <input
-                className={fieldClass}
+              <Input
+                className="mt-2"
                 name="confirmation"
                 type="password"
                 minLength={8}
                 autoComplete="new-password"
                 required
               />
-            </label>
+            </Label>
             <div className="flex items-end">
-              <button
-                type="submit"
-                className="button-secondary cursor-pointer w-full px-4 text-xs font-bold h-[2.625rem]"
-              >
+              <Button type="submit" variant="outline" className="w-full">
                 Alterar senha
-              </button>
+              </Button>
             </div>
           </div>
-        </BezelCard>
+        </Panel>
       </form>
     </AppShell>
   );
@@ -327,17 +315,17 @@ export default function SettingsPage() {
 
 function Check({ ok, label, note }: { ok: boolean; label: string; note?: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-rule bg-panel-muted/50 p-3">
+    <div className="flex items-center gap-4 rounded-xl border border-border bg-muted/50 p-4">
       <span
         className={`grid size-6 place-items-center rounded-full text-xs font-bold ${
-          ok ? "bg-positive-soft text-positive border border-positive/30" : "bg-caution-soft text-caution border border-caution/30"
+          ok ? "bg-success-soft text-success border border-success/30" : "bg-warning-soft text-warning border border-warning/30"
         }`}
       >
         {ok ? "✓" : "!"}
       </span>
       <div>
-        <strong className="block text-xs text-ink font-bold">{label}</strong>
-        <small className="text-[11px] text-quiet font-medium">
+        <strong className="block text-xs text-foreground font-bold">{label}</strong>
+        <small className="text-xs text-muted-foreground font-medium">
           {note ?? (ok ? "Configurado e operacional" : "Configuração ausente")}
         </small>
       </div>

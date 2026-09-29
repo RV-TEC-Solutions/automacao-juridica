@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning data-theme="light">
-      <body className="min-h-full font-[family-name:var(--font-sans)] antialiased selection:bg-brand selection:text-brand-fg">
+      <body>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

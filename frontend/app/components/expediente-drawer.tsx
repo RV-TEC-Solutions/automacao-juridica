@@ -1,7 +1,9 @@
 "use client";
 
-import { Check, Copy, X } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { Check, Copy } from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api, formatDateTime } from "../lib/api";
 import type { Expediente } from "../lib/types";
 import { Badge, EventBadges } from "./badge";
@@ -31,227 +33,80 @@ function show(value: unknown) {
   return String(value);
 }
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[10px] font-extrabold tracking-[.14em] text-quiet uppercase">
-        {label}
-      </dt>
-      <dd className="mt-1 text-xs sm:text-sm font-semibold leading-relaxed text-ink-soft">
-        {value}
-      </dd>
-    </div>
-  );
+function Field({ label, value }: { label: string; value: ReactNode }) {
+  return <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="mt-2 text-sm font-medium leading-6 text-foreground">{value}</dd></div>;
 }
 
-export function ExpedienteDrawer({
-  item,
-  onClose,
-  onRead,
-}: {
-  item: Expediente | null;
-  onClose: () => void;
-  onRead: () => void;
-}) {
-  const closeRef = useRef<HTMLButtonElement>(null);
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="rounded-lg border bg-card p-6"><h3 className="mb-4 text-xs font-semibold uppercase tracking-wide">{title}</h3>{children}</section>;
+}
+
+export function ExpedienteDrawer({ item, onClose, onRead }: { item: Expediente | null; onClose: () => void; onRead: () => void }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!item) return;
-    closeRef.current?.focus();
-    if (item.unread) {
-      api(`expedientes/${item.id}/read/`, { method: "POST" })
-        .then(onRead)
-        .catch(() => {});
-    }
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    addEventListener("keydown", escape);
-    return () => removeEventListener("keydown", escape);
-  }, [item, onClose, onRead]);
+    if (!item?.unread) return;
+    api(`expedientes/${item.id}/read/`, { method: "POST" }).then(onRead).catch(() => {});
+  }, [item, onRead]);
 
   if (!item) return null;
-
-  const copyProcess = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(item.processo.numero);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   const event = item.latest_event;
 
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex justify-end bg-black/40 backdrop-blur-sm transition-opacity"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <aside
-        className="h-full w-full max-w-[680px] overflow-y-auto border-l border-rule bg-app shadow-[-16px_0_48px_var(--shadow)] flex flex-col"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="drawer-title"
-      >
-        <header className="sticky top-0 z-10 flex items-start justify-between border-b border-rule bg-[var(--shell)] px-6 py-5 backdrop-blur-xl">
-          <div className="min-w-0 pr-3">
-            <p className="mb-1 text-[10px] font-extrabold tracking-[.16em] text-quiet uppercase">
-              Detalhe do Expediente
-            </p>
-            <div className="flex items-center gap-2">
-              <h2
-                id="drawer-title"
-                className="mb-0 truncate font-[family-name:var(--font-mono)] text-lg font-extrabold text-ink"
-              >
-                {item.processo.numero}
-              </h2>
-              <button
-                type="button"
-                onClick={copyProcess}
-                title="Copiar processo"
-                aria-label="Copiar processo"
-                className="grid size-7 place-items-center rounded-lg border border-rule bg-panel text-quiet transition-colors hover:bg-panel-muted hover:text-ink"
-              >
-                {copied ? (
-                  <Check size={14} weight="bold" className="text-positive" />
-                ) : (
-                  <Copy size={14} />
-                )}
-              </button>
-            </div>
-          </div>
+  const copyProcess = () => {
+    if (!navigator.clipboard) return;
+    void navigator.clipboard.writeText(item.processo.numero);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
 
-          <button
-            ref={closeRef}
-            className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-rule bg-panel text-quiet shadow-xs transition-colors hover:bg-panel-muted hover:text-ink"
-            onClick={onClose}
-            aria-label="Fechar"
-            title="Fechar"
-          >
-            <X size={18} weight="bold" />
-          </button>
-        </header>
-
-        <div className="flex-1 space-y-4 p-6">
-          {/* Main summary card */}
-          <section className="bezel-card">
-            <div className="bezel-inner p-5 sm:p-6">
-              <EventBadges item={item} />
-              <span className="mt-3.5 block text-[10px] font-extrabold tracking-[.14em] text-quiet uppercase">
-                {item.tipo_documento || "Expediente"}
-              </span>
-              <strong className="mt-1.5 block text-lg sm:text-xl font-extrabold leading-snug text-ink">
-                {item.processo.assunto || "Assunto não informado"}
-              </strong>
-              <p className="mt-2.5 mb-0 text-xs sm:text-sm leading-relaxed text-quiet">
-                {item.processo.partes_texto || "Partes não informadas"}
-              </p>
-            </div>
-          </section>
-
-          {/* Prazo e providência */}
-          <section className="bezel-card">
-            <div className="bezel-inner p-5 sm:p-6">
-              <h3 className="mb-4 text-xs font-extrabold tracking-tight text-ink uppercase">
-                Prazo e Ação Processual
-              </h3>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Prazo fatal" value={formatDateTime(item.prazo_fatal)} />
-                <Field label="Prazo original" value={item.prazo_texto || "—"} />
-                <Field
-                  label="Situação do prazo"
-                  value={
-                    <Badge tone={item.status_prazo_fatal === "em_calculo" ? "warning" : "neutral"}>
-                      {item.status_prazo_fatal_label}
-                    </Badge>
-                  }
-                />
-                <Field label="Ação disponível" value={item.acao_pje_label || "Nenhuma"} />
-              </dl>
-              <div className="mt-4 pt-3 border-t border-rule/60">
-                <p className="mb-0 text-[11px] text-quiet leading-relaxed">
-                  As ações processuais são informativas e devem ser executadas diretamente na respectiva plataforma do PJe.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Processo details */}
-          <section className="bezel-card">
-            <div className="bezel-inner p-5 sm:p-6">
-              <h3 className="mb-4 text-xs font-extrabold tracking-tight text-ink uppercase">
-                Dados do Processo
-              </h3>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Classe" value={item.processo.classe || "—"} />
-                <Field label="Unidade Judiciária" value={item.processo.unidade_judiciaria || "—"} />
-                <Field label="Destinatário" value={item.destinatario || "—"} />
-                <Field label="Expedido em" value={formatDateTime(item.data_expedicao)} />
-                <Field label="Meio de Comunicação" value={item.meio_comunicacao || "—"} />
-                <Field
-                  label="Tribunal de Origem"
-                  value={item.source ? `${item.source.system} · ${item.source.tribunal}` : "—"}
-                />
-              </dl>
-            </div>
-          </section>
-
-          {/* Alterações detectadas */}
-          {event && Object.keys(event.changes).length > 0 && (
-            <section className="bezel-card">
-              <div className="bezel-inner p-5 sm:p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="mb-0 text-xs font-extrabold tracking-tight text-ink uppercase">
-                    Última Alteração Identificada
-                  </h3>
-                  <small className="font-mono text-[11px] text-quiet">
-                    {formatDateTime(event.created_at)}
-                  </small>
-                </div>
-                <div className="space-y-3">
-                  {Object.entries(event.changes).map(([key, values]) => (
-                    <div
-                      key={key}
-                      className="grid gap-1.5 rounded-xl border border-rule bg-panel-muted/50 p-3 sm:grid-cols-[120px_1fr] sm:items-center"
-                    >
-                      <strong className="text-xs font-bold text-ink-soft">
-                        {labels[key] ?? key}
-                      </strong>
-                      <span className="flex flex-wrap items-center gap-2 text-xs">
-                        <del className="rounded-md border border-danger/30 bg-danger-soft px-2 py-0.5 text-danger no-underline font-medium">
-                          {show(values.before)}
-                        </del>
-                        <b className="text-quiet">→</b>
-                        <ins className="rounded-md border border-positive/30 bg-positive-soft px-2 py-0.5 text-positive no-underline font-semibold">
-                          {show(values.after)}
-                        </ins>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Ciência */}
-          {item.ciencia_texto && (
-            <section className="bezel-card">
-              <div className="bezel-inner p-5 sm:p-6">
-                <h3 className="mb-2 text-xs font-extrabold tracking-tight text-ink uppercase">
-                  Registro de Ciência
-                </h3>
-                <p className="mb-0 text-xs sm:text-sm leading-relaxed text-quiet">
-                  {item.ciencia_texto}
-                </p>
-              </div>
-            </section>
-          )}
+  return <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <SheetContent className="max-w-2xl overflow-y-auto bg-background">
+      <SheetHeader className="sticky top-0 z-10 bg-background/95 pr-16 backdrop-blur">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Detalhe do expediente</span>
+        <div className="flex items-center gap-2">
+          <SheetTitle className="truncate font-mono">{item.processo.numero}</SheetTitle>
+          <Button variant="outline" size="icon-sm" onClick={copyProcess} aria-label="Copiar processo" title="Copiar processo">
+            {copied ? <Check className="text-success" weight="bold" /> : <Copy />}
+          </Button>
         </div>
-      </aside>
-    </div>
-  );
+      </SheetHeader>
+
+      <div className="space-y-4 p-6">
+        <section className="rounded-lg border bg-card p-6">
+          <EventBadges item={item} />
+          <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{item.tipo_documento || "Expediente"}</span>
+          <strong className="mt-2 block text-xl font-semibold leading-6">{item.processo.assunto || "Assunto não informado"}</strong>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.processo.partes_texto || "Partes não informadas"}</p>
+        </section>
+
+        <DetailSection title="Prazo e ação processual">
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <Field label="Prazo fatal" value={formatDateTime(item.prazo_fatal)} />
+            <Field label="Prazo original" value={item.prazo_texto || "—"} />
+            <Field label="Situação do prazo" value={<Badge tone={item.status_prazo_fatal === "em_calculo" ? "warning" : "neutral"}>{item.status_prazo_fatal_label}</Badge>} />
+            <Field label="Ação disponível" value={item.acao_pje_label || "Nenhuma"} />
+          </dl>
+          <p className="mt-4 border-t pt-4 text-xs leading-6 text-muted-foreground">As ações processuais são informativas e devem ser executadas diretamente na respectiva plataforma do PJe.</p>
+        </DetailSection>
+
+        <DetailSection title="Dados do processo">
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <Field label="Classe" value={item.processo.classe || "—"} />
+            <Field label="Unidade judiciária" value={item.processo.unidade_judiciaria || "—"} />
+            <Field label="Destinatário" value={item.destinatario || "—"} />
+            <Field label="Expedido em" value={formatDateTime(item.data_expedicao)} />
+            <Field label="Meio de comunicação" value={item.meio_comunicacao || "—"} />
+            <Field label="Tribunal de origem" value={item.source ? `${item.source.system} · ${item.source.tribunal}` : "—"} />
+          </dl>
+        </DetailSection>
+
+        {event && Object.keys(event.changes).length > 0 && <DetailSection title="Última alteração identificada">
+          <p className="mb-4 font-mono text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
+          <div className="space-y-2">{Object.entries(event.changes).map(([key, values]) => <div key={key} className="grid gap-2 rounded-md border bg-muted/50 p-4 sm:grid-cols-2"><strong className="text-xs font-semibold">{labels[key] ?? key}</strong><span className="flex flex-wrap items-center gap-2 text-xs"><del className="rounded-md bg-destructive/10 px-2 py-2 text-destructive no-underline">{show(values.before)}</del><b className="text-muted-foreground">→</b><ins className="rounded-md bg-success-soft px-2 py-2 text-success no-underline">{show(values.after)}</ins></span></div>)}</div>
+        </DetailSection>}
+
+        {item.ciencia_texto && <DetailSection title="Registro de ciência"><p className="text-sm leading-6 text-muted-foreground">{item.ciencia_texto}</p></DetailSection>}
+      </div>
+    </SheetContent>
+  </Sheet>;
 }

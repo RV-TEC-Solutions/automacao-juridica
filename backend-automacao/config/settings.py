@@ -142,3 +142,28 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "automation": {
+            "format": "{asctime} {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "automation_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "automation",
+        },
+    },
+    "loggers": {
+        "automation": {
+            "handlers": ["automation_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

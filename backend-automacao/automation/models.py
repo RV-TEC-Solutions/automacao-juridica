@@ -1,3 +1,4 @@
+import uuid
 from datetime import time
 
 from django.conf import settings
@@ -12,6 +13,49 @@ class AutomationSource(models.Model):
 
     def __str__(self):
         return f"{self.system} / {self.tribunal}"
+
+
+class Notice(models.Model):
+    """Comunicado canônico exibido pelo Quadro de Avisos do PJe."""
+
+    fingerprint = models.CharField(max_length=64, unique=True)
+    title = models.CharField(max_length=500)
+    included_by = models.CharField(max_length=255, blank=True)
+    included_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateField(null=True, blank=True)
+    raw_html = models.TextField()
+    content_html = models.TextField()
+    content_text = models.TextField()
+    links = models.JSONField(default=list, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-published_at", "-created_at")
+
+    def __str__(self):
+        return self.title
+
+
+class NoticeSource(models.Model):
+    """Rastreia a descoberta e a confirmação externa de um aviso por fonte."""
+
+    notice = models.ForeignKey(
+        Notice, on_delete=models.CASCADE, related_name="source_links"
+    )
+    source = models.ForeignKey(
+        AutomationSource, on_delete=models.PROTECT, related_name="notice_links"
+    )
+    collected_at = models.DateTimeField(auto_now=True)
+    pje_confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("notice", "source"), name="unique_notice_per_source"
+            )
+        ]
 
 
 class UserProfile(models.Model):
@@ -46,10 +90,12 @@ class AutomationRun(models.Model):
         RUNNING = "running", "Executando"
         SUCCESS = "success", "Sucesso"
         FAILED = "failed", "Erro"
+        CANCELLED = "cancelled", "Interrompida"
 
     class Trigger(models.TextChoices):
         SCHEDULED = "scheduled", "Agendada"
         MANUAL = "manual", "Manual"
+        RERUN = "rerun", "Reexecução de fonte"
         CATCH_UP = "catch_up", "Recuperação"
 
     source = models.ForeignKey(
@@ -71,6 +117,8 @@ class AutomationRun(models.Model):
         null=True,
         blank=True,
     )
+    cycle_id = models.UUIDField(default=uuid.uuid4, db_index=True, editable=False)
+
     scheduled_for = models.DateTimeField(null=True, blank=True)
 
     status = models.CharField(
@@ -88,6 +136,8 @@ class AutomationRun(models.Model):
         null=True,
         blank=True,
     )
+
+    descartada_em = models.DateTimeField(null=True, blank=True, db_index=True)
 
     expedientes_encontrados = models.PositiveIntegerField(
         default=0,
@@ -108,6 +158,10 @@ class AutomationRun(models.Model):
     expedientes_resolvidos = models.PositiveIntegerField(default=0)
 
     mensagem_erro = models.TextField(
+        blank=True,
+    )
+
+    mensagem_info = models.TextField(
         blank=True,
     )
 

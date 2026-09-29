@@ -35,6 +35,14 @@ class Command(BaseCommand):
             defaults={"system": "PJe", "tribunal": "TJRN", "enabled": True},
         )
         AutomationSource.objects.get_or_create(
+            code="trt21",
+            defaults={"system": "PJe 1º Grau", "tribunal": "TRT21", "enabled": True},
+        )
+        AutomationSource.objects.get_or_create(
+            code="trt21-2g",
+            defaults={"system": "PJe 2º Grau", "tribunal": "TRT21", "enabled": True},
+        )
+        AutomationSource.objects.get_or_create(
             code="pje2g-tjrn",
             defaults={
                 "system": "PJe 2° Grau",
@@ -42,4 +50,23 @@ class Command(BaseCommand):
                 "enabled": True
             },
         )
+        AutomationSource.objects.update_or_create(
+            code="tse-3g",
+            defaults={
+                "system": "PJe 3º Grau",
+                "tribunal": "TSE",
+                "enabled": True,
+            },
+        )
+        for code, system in (
+            ("trf5-2g-tru", "PJe 2º Grau / TRU"),
+            ("varas-justica-comum", "PJe 1º Grau — Varas Federais"),
+            ("jef-5-regiao", "PJe 1º Grau — JEF"),
+            ("trs-5-regiao", "PJe — Turmas Recursais"),
+            ("tru-5-regiao", "PJe 2º Grau / TRU — perfil alternativo"),
+        ):
+            AutomationSource.objects.update_or_create(
+                code=code,
+                defaults={"system": system, "tribunal": "TRF5", "enabled": True},
+            )
         self.stdout.write(self.style.SUCCESS("Conta configurada com sucesso."))

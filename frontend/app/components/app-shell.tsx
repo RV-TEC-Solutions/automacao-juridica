@@ -1,61 +1,46 @@
 "use client";
 
+import { Bell, ChartBar, ClockCounterClockwise, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChartBar, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { api } from "../lib/api";
+import type { NoticePage } from "../lib/types";
 import { useAuth } from "../providers";
 
 const links = [
   ["/", "Visão geral", House],
   ["/expedientes", "Expedientes", FileText],
+  ["/historico", "Histórico", ClockCounterClockwise],
+  ["/avisos", "Avisos", Bell],
   ["/estatisticas", "Estatísticas", ChartBar],
   ["/configuracoes", "Configurações", GearSix],
 ] as const;
 
 export function Brand({ compact = false }: { compact?: boolean }) {
-  if (compact) {
-    return (
-      <Link href="/" className="group flex shrink-0 items-center gap-2 no-underline" title="Barros, Mariz & Rebouças Advogados">
-        <div className="flex items-center">
-          <img
-            src="/brand/logo-mark-light@2x.png"
-            alt="BMR Advogados"
-            className="theme-light-only h-9 w-auto object-contain transition-transform group-hover:scale-105"
-          />
-          <img
-            src="/brand/logo-mark-dark@2x.png"
-            alt="BMR Advogados"
-            className="theme-dark-only h-9 w-auto object-contain transition-transform group-hover:scale-105"
-          />
-        </div>
-      </Link>
-    );
-  }
+  const size = compact ? { width: 66, light: "/brand/logo-mark-light@2x.png", dark: "/brand/logo-mark-dark@2x.png" } : { width: 159, light: "/brand/logo-light@2x.png", dark: "/brand/logo-dark@2x.png" };
+  return <Link href="/" className="flex items-center gap-4" title="Barros, Mariz & Rebouças Advogados">
+    <Image src={size.light} alt="BMR Advogados" width={size.width} height={64} className="block h-10 w-auto object-contain dark:hidden" priority />
+    <Image src={size.dark} alt="BMR Advogados" width={size.width} height={64} className="hidden h-10 w-auto object-contain dark:block" priority />
+    {!compact && <span className="border-l pl-4"><strong className="block text-sm font-semibold">Automação PJe</strong><small className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><i className="size-2 rounded-full bg-success" />Operação local</small></span>}
+  </Link>;
+}
 
-  return (
-    <Link href="/" className="group flex shrink-0 items-center gap-3.5 no-underline" title="Barros, Mariz & Rebouças Advogados">
-      <div className="flex items-center">
-        <img
-          src="/brand/logo-light@2x.png"
-          alt="Barros, Mariz & Rebouças Advogados"
-          className="theme-light-only h-9 w-auto object-contain transition-transform group-hover:scale-[1.02]"
-        />
-        <img
-          src="/brand/logo-dark@2x.png"
-          alt="Barros, Mariz & Rebouças Advogados"
-          className="theme-dark-only h-9 w-auto object-contain transition-transform group-hover:scale-[1.02]"
-        />
-      </div>
-      <div className="hidden min-[540px]:flex flex-col border-l border-rule pl-3 py-0.5">
-        <strong className="text-[11px] font-extrabold tracking-tight text-ink leading-none">Automação PJe</strong>
-        <span className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-quiet">
-          <span className="size-1.5 rounded-full bg-positive animate-pulse" />
-          Operação Local
-        </span>
-      </div>
-    </Link>
-  );
+function NavLinks({ pathname, unreadNotices, mobile = false }: { pathname: string; unreadNotices: number; mobile?: boolean }) {
+  return <nav className={cn("items-center gap-2", mobile ? "flex overflow-x-auto border-t px-4 py-2 xl:hidden" : "hidden xl:flex")} aria-label="Navegação principal">
+    {links.map(([href, label, Icon]) => {
+      const active = pathname === href;
+      const count = href === "/avisos" ? unreadNotices : 0;
+      return <Link key={href} href={href} className={cn("flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors", mobile && "shrink-0", active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")} aria-current={active ? "page" : undefined}>
+        <Icon size={18} weight={active ? "fill" : "regular"} />
+        <span>{label}</span>
+        {count > 0 && <span className={cn("ml-auto grid size-6 place-items-center rounded-full text-xs font-semibold", active ? "bg-primary-foreground text-primary" : "bg-warning-soft text-warning")}>{count}</span>}
+      </Link>;
+    })}
+  </nav>;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -63,127 +48,52 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [switchingTheme, setSwitchingTheme] = useState(false);
+  const [dark, setDark] = useState(false);
+  const [unreadNotices, setUnreadNotices] = useState(0);
 
+  const loadUnreadNotices = useCallback(async () => {
+    try { setUnreadNotices((await api<NoticePage>("notices/?read=unread")).count ?? 0); } catch { /* Navigation remains available offline. */ }
+  }, []);
+
+  useEffect(() => { if (!loading && !user) router.replace("/login"); }, [loading, user, router]);
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [loading, user, router]);
+    queueMicrotask(() => setDark(document.documentElement.dataset.theme === "dark"));
+    if (!user) return;
+    queueMicrotask(() => { void loadUnreadNotices(); });
+    window.addEventListener("notices:changed", loadUnreadNotices);
+    return () => window.removeEventListener("notices:changed", loadUnreadNotices);
+  }, [user, loadUnreadNotices]);
 
-  if (loading || !user) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-app text-quiet">
-        <div className="flex items-center gap-3 rounded-2xl border border-rule bg-panel px-5 py-4 text-sm font-semibold shadow-sm">
-          <SpinnerGap size={20} className="animate-spin text-ink-soft" />
-          Preparando o painel operacional…
-        </div>
-      </div>
-    );
-  }
+  if (loading || !user) return <div className="grid min-h-screen place-items-center bg-background text-muted-foreground"><div className="flex items-center gap-4 rounded-lg border bg-card px-6 py-4 text-sm font-medium shadow-sm"><SpinnerGap size={20} className="animate-spin" />Preparando o painel operacional…</div></div>;
 
+  const toggleTheme = async () => {
+    setSwitchingTheme(true);
+    try { await setTheme(dark ? "light" : "dark"); setDark(!dark); } finally { setSwitchingTheme(false); }
+  };
+  const leave = async () => { await logout(); router.replace("/login"); };
   const initials = user.display_name.charAt(0).toUpperCase();
 
-  return (
-    <div className="min-h-screen bg-app text-ink">
-      <header className="sticky top-0 z-40 border-b border-rule bg-[var(--shell)] backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Brand />
+  return <div className="min-h-screen bg-background text-foreground">
+    <span role="status" aria-atomic="true" className="sr-only">{unreadNotices === 0 ? "Nenhum aviso não lido" : `${unreadNotices} aviso${unreadNotices === 1 ? "" : "s"} não lido${unreadNotices === 1 ? "" : "s"}`}</span>
 
-          <nav className="hidden items-center rounded-xl border border-rule bg-panel-muted/80 p-1 shadow-sm lg:flex" aria-label="Navegação principal">
-            {links.map(([href, label, Icon]) => {
-              const active = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold no-underline transition-all ${
-                    active
-                      ? "bg-brand text-brand-fg shadow-sm"
-                      : "text-quiet hover:bg-panel hover:text-ink"
-                  }`}
-                >
-                  <Icon size={16} weight={active ? "fill" : "regular"} />
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="flex items-center gap-2.5">
-            <Link
-              href="/configuracoes"
-              className="hidden items-center gap-2.5 rounded-xl border border-rule bg-panel px-3 py-2 text-xs font-bold text-ink-soft no-underline shadow-sm transition-colors hover:border-zinc-400 sm:flex"
-            >
-              <span className="grid size-6 place-items-center rounded-full bg-panel-muted border border-rule text-[10px] font-extrabold text-ink">
-                {initials}
-              </span>
-              <span className="max-w-32 truncate">{user.display_name}</span>
-            </Link>
-
-            <button
-              className="grid size-10 cursor-pointer place-items-center rounded-xl border border-rule bg-panel text-quiet shadow-sm transition-all hover:bg-panel-muted hover:text-ink disabled:opacity-50"
-              aria-label={document.documentElement.dataset.theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
-              title={document.documentElement.dataset.theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
-              disabled={switchingTheme}
-              onClick={async () => {
-                const current = document.documentElement.dataset.theme;
-                setSwitchingTheme(true);
-                try {
-                  await setTheme(current === "dark" ? "light" : "dark");
-                } finally {
-                  setSwitchingTheme(false);
-                }
-              }}
-            >
-              {document.documentElement.dataset.theme === "dark" ? (
-                <Sun size={18} weight="duotone" />
-              ) : (
-                <Moon size={18} weight="duotone" />
-              )}
-            </button>
-
-            <button
-              className="grid size-10 cursor-pointer place-items-center rounded-xl border border-rule bg-panel text-quiet shadow-sm transition-all hover:bg-panel-muted hover:text-danger"
-              aria-label="Sair"
-              title="Sair"
-              onClick={async () => {
-                await logout();
-                router.replace("/login");
-              }}
-            >
-              <SignOut size={18} />
-            </button>
-          </div>
+    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="xl:hidden"><Brand compact /></div>
+        <div className="hidden xl:block"><Brand /></div>
+        <NavLinks pathname={pathname} unreadNotices={unreadNotices} />
+        <div className="flex items-center gap-2">
+          <Link href="/configuracoes" className="flex h-10 items-center gap-2 rounded-md border bg-card px-2 hover:bg-muted" title="Perfil e preferências">
+            <span className="grid size-8 place-items-center rounded-full bg-muted text-xs font-semibold">{initials}</span>
+            <span className="hidden max-w-32 truncate text-sm font-medium 2xl:block">{user.display_name}</span>
+          </Link>
+          <Button variant="outline" size="icon" disabled={switchingTheme} onClick={toggleTheme} aria-label={dark ? "Mudar para tema claro" : "Mudar para tema escuro"} title={dark ? "Mudar para tema claro" : "Mudar para tema escuro"}>{dark ? <Sun /> : <Moon />}</Button>
+          <Button variant="outline" size="icon" onClick={leave} aria-label="Sair" title="Sair"><SignOut /></Button>
         </div>
+      </div>
+      <NavLinks pathname={pathname} unreadNotices={unreadNotices} mobile />
+    </header>
 
-        <nav className="flex gap-1.5 overflow-x-auto border-t border-rule px-4 py-2 lg:hidden" aria-label="Navegação principal móvel">
-          {links.map(([href, label, Icon]) => {
-            const active = pathname === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold no-underline transition-colors ${
-                  active ? "bg-brand text-brand-fg" : "bg-panel-muted/80 text-quiet"
-                }`}
-              >
-                <Icon size={15} weight={active ? "fill" : "regular"} />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
-
-      <footer className="mt-12 border-t border-rule px-4 py-7 text-center text-xs text-quiet">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-          <span className="font-bold tracking-wider text-ink-soft uppercase">Barros, Mariz & Rebouças Advogados</span>
-          <span className="hidden sm:inline text-quiet/60">•</span>
-          <span>Automação de Expedientes PJe</span>
-          <span className="hidden sm:inline text-quiet/60">•</span>
-          <span className="text-[11px]">Operação local e segura</span>
-        </div>
-      </footer>
-    </div>
-  );
+    <main className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+    <footer className="border-t px-6 py-8 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · Automação de Expedientes PJe</footer>
+  </div>;
 }

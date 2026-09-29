@@ -50,8 +50,33 @@ export type Expediente = {
   };
 };
 
+export type PipelineStepStatus = "pending" | "running" | "success" | "failed" | "cancelled" | "disabled" | "skipped";
+
+export type PipelineStep = {
+  code: string;
+  group: string;
+  label: string;
+  status: PipelineStepStatus;
+  run_id: number | null;
+  error: string;
+  message: string;
+};
+
+export type CollectionPipeline = {
+  cycle_id: string | null;
+  status: "idle" | "running" | "success" | "failed" | "cancelled";
+  active: boolean;
+  completed: number;
+  total: number;
+  started_at: string | null;
+  finished_at: string | null;
+  current_step: string | null;
+  steps: PipelineStep[];
+};
+
 export type Run = {
   id: number;
+  cycle_id: string;
   status: string;
   trigger: string;
   started_at: string | null;
@@ -61,7 +86,31 @@ export type Run = {
   updated: number;
   resolved: number;
   error: string;
+  message: string;
   source: string | null;
+};
+
+export type Notice = {
+  id: number;
+  title: string;
+  included_by: string;
+  included_at: string | null;
+  published_at: string | null;
+  content_html: string;
+  content_text: string;
+  links: string[];
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+  unread: boolean;
+  sources: { code: string; system: string; tribunal: string; pje_confirmed_at: string | null }[];
+};
+
+export type NoticePage = {
+  count: number;
+  next: number | null;
+  previous: number | null;
+  results: Notice[];
 };
 
 export type Dashboard = {
@@ -69,8 +118,11 @@ export type Dashboard = {
   today: {
     new: number;
     updated: number;
+    resolved: number;
+    discardable: number;
     unread: number;
     urgent: number;
+    next_week: number;
     calculating: number;
   };
   since_last_visit: {
@@ -80,5 +132,51 @@ export type Dashboard = {
     resolved: number;
   };
   latest_run: Run | null;
+  collection_pipeline: CollectionPipeline;
   recent: Expediente[];
+  notices: { unread: number; recent: Notice[] };
+};
+
+export type ExpedientePage = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Expediente[];
+};
+
+export type HistoryItem = { event: Event; expediente: Expediente };
+export type HistoryDay = { date: string; new_count: number; items: HistoryItem[] };
+export type History = {
+  period_start: string;
+  period_end: string;
+  count: number;
+  page: number;
+  page_size: number;
+  days: HistoryDay[];
+};
+
+export type CollectionRun = {
+  id: number;
+  cycle_id: string;
+  status: PipelineStepStatus;
+  status_label: string;
+  trigger: string;
+  trigger_label: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  found: number;
+  created: number;
+  updated: number;
+  resolved: number;
+  error: string;
+  message: string;
+  source: { code: string; system: string; tribunal: string } | null;
+};
+
+export type CollectionHistory = {
+  period_start: string;
+  period_end: string;
+  days: { date: string; runs: CollectionRun[] }[];
 };
