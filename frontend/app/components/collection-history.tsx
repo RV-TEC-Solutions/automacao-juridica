@@ -1,13 +1,14 @@
 "use client";
 
 import { CaretDown, Clock, FolderSimple, WarningCircle } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, formatDateTime } from "../lib/api";
 import type { CollectionHistory, CollectionRun } from "../lib/types";
-import { Feedback, LoadingRows, Panel } from "./ui";
+import { LoadingRows, Panel } from "./ui";
+import { useNotifications } from "./notifications";
 
 const statusVariant: Record<CollectionRun["status"], "outline" | "warning" | "success" | "destructive"> = {
   pending: "outline", running: "warning", success: "success", failed: "destructive",
@@ -43,18 +44,19 @@ function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: bo
 
 export function CollectionHistoryPanel() {
   const [data, setData] = useState<CollectionHistory | null>(null);
+  const { notify } = useNotifications();
   const [error, setError] = useState("");
   const [expandedRun, setExpandedRun] = useState<number | null>(null);
   const load = useCallback(async () => {
     try { setData(await api<CollectionHistory>("automation/history/")); setError(""); }
-    catch (exception) { setError(exception instanceof Error ? exception.message : "Falha ao carregar o relatório de coletas."); }
-  }, []);
+    catch (exception) { const message = exception instanceof Error ? exception.message : "Falha ao carregar o relatório de coletas."; setError(message); notify({ message }); }
+  }, [notify]);
 
   useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
   if (!data && !error) return <LoadingRows />;
 
   return <div className="space-y-8">
-    {error && <Feedback action={<Button variant="outline" size="sm" onClick={load}>Tentar novamente</Button>}>{error}</Feedback>}
+
     {data?.days.map((day) => <section key={day.date} aria-labelledby={`collection-day-${day.date}`}>
       <header className="mb-4 flex items-center gap-4"><span className="grid size-10 place-items-center rounded-md border bg-muted text-muted-foreground"><Clock size={18} /></span><h2 id={`collection-day-${day.date}`} className="text-base font-semibold">{formatDay(day.date)} <span className="font-normal text-muted-foreground">({day.runs.length} fonte{day.runs.length === 1 ? "" : "s"})</span></h2></header>
       <div className="overflow-hidden rounded-lg border bg-card"><Table className="min-w-5xl" aria-label={`Execuções de ${formatDay(day.date)}`}><TableHeader className="bg-muted/50"><TableRow><TableHead>Status</TableHead><TableHead>Fonte</TableHead><TableHead>Acionamento</TableHead><TableHead>Início</TableHead><TableHead>Duração</TableHead><TableHead>Resultados</TableHead><TableHead className="text-right">Detalhes</TableHead></TableRow></TableHeader><TableBody>{day.runs.map((run) => <RunRows key={run.id} run={run} expanded={expandedRun === run.id} onToggle={() => setExpandedRun((current) => current === run.id ? null : run.id)} />)}</TableBody></Table></div>

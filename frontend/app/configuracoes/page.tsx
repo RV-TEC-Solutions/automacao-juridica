@@ -1,14 +1,15 @@
 "use client";
 
 import { CheckCircle, Clock, FloppyDisk, Key, ShieldCheck, UserCircle } from "@phosphor-icons/react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { AppShell } from "../components/app-shell";
-import { Panel, Feedback, PageTitle } from "../components/ui";
+import { Panel, PageTitle } from "../components/ui";
+import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 import { useAuth } from "../providers";
 
@@ -29,24 +30,23 @@ type Source = {
 
 export default function SettingsPage() {
   const { refresh } = useAuth();
+  const { notify } = useNotifications();
   const [data, setData] = useState<Settings | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
-  const load = () =>
+  const load = useCallback(() =>
     Promise.all([api<Settings>("settings/"), api<Source[]>("sources/")])
       .then(([settings, items]) => {
         setData(settings);
         setSources(items);
       })
-      .catch((exception) => setError(exception.message));
+      .catch((exception) => notify({ message: exception instanceof Error ? exception.message : "Não foi possível carregar as configurações." })), [notify]);
 
   useEffect(() => {
     queueMicrotask(() => {
       void load();
     });
-  }, []);
+  }, [load]);
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,10 +62,9 @@ export default function SettingsPage() {
       });
       setData(value);
       await refresh();
-      setMessage("Configurações salvas com sucesso.");
-      setError("");
+      notify({ tone: "success", message: "Configurações salvas." });
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Falha ao salvar.");
+      notify({ message: exception instanceof Error ? exception.message : "Falha ao salvar." });
     }
   };
 
@@ -73,7 +72,7 @@ export default function SettingsPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     if (form.get("new_password") !== form.get("confirmation")) {
-      setError("A confirmação da nova senha não coincide.");
+      notify({ message: "A confirmação da nova senha não coincide." });
       return;
     }
     try {
@@ -85,10 +84,9 @@ export default function SettingsPage() {
         }),
       });
       event.currentTarget.reset();
-      setMessage("Senha de acesso alterada com sucesso.");
-      setError("");
+      notify({ tone: "success", message: "Senha de acesso alterada." });
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Falha ao alterar senha.");
+      notify({ message: exception instanceof Error ? exception.message : "Falha ao alterar senha." });
     }
   };
 
@@ -100,7 +98,7 @@ export default function SettingsPage() {
       });
       setSources((values) => values.map((item) => (item.code === next.code ? next : item)));
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Falha ao atualizar fonte.");
+      notify({ message: exception instanceof Error ? exception.message : "Falha ao atualizar fonte." });
     }
   };
 
@@ -110,9 +108,6 @@ export default function SettingsPage() {
         title="Configurações"
         description="Ajuste suas preferências operacionais, credenciais do PJe e rotinas automáticas da banca."
       />
-
-      {error && <Feedback>{error}</Feedback>}
-      {message && <Feedback tone="success">{message}</Feedback>}
 
       {data && (
         <form onSubmit={save} className="grid gap-6 lg:grid-cols-2">

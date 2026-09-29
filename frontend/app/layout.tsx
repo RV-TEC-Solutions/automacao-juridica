@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { NotificationsProvider } from "./components/notifications";
 import { AuthProvider } from "./providers";
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" suppressHydrationWarning data-theme="light">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider><NotificationsProvider>{children}</NotificationsProvider></AuthProvider>
       </body>
     </html>
   );

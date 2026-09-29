@@ -3,13 +3,13 @@
 import { CalendarBlank, FolderSimple } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AppShell } from "../components/app-shell";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
 import { CollectionHistoryPanel } from "../components/collection-history";
-import { Panel, Feedback, LoadingRows, PageTitle, Pagination } from "../components/ui";
+import { Panel, LoadingRows, PageTitle, Pagination } from "../components/ui";
+import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 import type { Expediente, History } from "../lib/types";
 
@@ -28,13 +28,14 @@ export function HistoricoClient() {
   const search = useSearchParams();
   const [data, setData] = useState<History | null>(null);
   const [selected, setSelected] = useState<Expediente | null>(null);
+  const { notify } = useNotifications();
   const [error, setError] = useState("");
   const tab = search.get("tab") === "orquestracao" ? "orquestracao" : "expedientes";
   const page = Math.max(1, Number(search.get("page") ?? 1) || 1);
   const load = useCallback(async () => {
     try { setData(await api<History>("history/?page=" + page)); setError(""); }
-    catch (exception) { setError(exception instanceof Error ? exception.message : "Falha ao carregar o histórico."); }
-  }, [page]);
+    catch (exception) { const message = exception instanceof Error ? exception.message : "Falha ao carregar o histórico."; setError(message); notify({ message }); }
+  }, [page, notify]);
   useEffect(() => {
     if (tab !== "expedientes") return;
     queueMicrotask(() => { void load(); });
@@ -76,7 +77,7 @@ export function HistoricoClient() {
       <TabsList aria-label="Tipo de histórico"><TabsTrigger value="expedientes">Expedientes</TabsTrigger><TabsTrigger value="orquestracao">Orquestração de coletas</TabsTrigger></TabsList>
       <TabsContent value="orquestracao"><CollectionHistoryPanel /></TabsContent>
       <TabsContent value="expedientes">
-    {error && <Feedback action={<Button variant="outline" size="sm" onClick={load}>Tentar novamente</Button>}>{error}</Feedback>}
+
     {!data && !error && <LoadingRows />}
     {data && <div className="space-y-8">{data.days.map((day) => {
       const items = itemsForDay(day);

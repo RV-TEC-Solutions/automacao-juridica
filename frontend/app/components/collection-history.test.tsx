@@ -8,6 +8,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { CollectionHistoryPanel } from "./collection-history";
+import { NotificationsProvider } from "./notifications";
 
 describe("CollectionHistoryPanel", () => {
   it("renders grouped runs and expands an error log", async () => {
@@ -21,7 +22,7 @@ describe("CollectionHistoryPanel", () => {
         source: { code: "pje-tjrn", system: "PJe 1º Grau", tribunal: "TJRN" },
       }] }],
     });
-    render(<CollectionHistoryPanel />);
+    render(<NotificationsProvider><CollectionHistoryPanel /></NotificationsProvider>);
 
     expect(await screen.findByText("PJe 1º Grau")).toBeVisible();
     const details = screen.getByRole("button", { name: "Ver erro" });

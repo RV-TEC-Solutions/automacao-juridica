@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Sparkle, WarningCircle } from "@phosphor-icons/react";
-import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "./components/app-shell";
 import { Clock } from "./components/clock";
 import { CollectionPipeline } from "./components/collection-pipeline";
 import { DiscardCollectionDialog } from "./components/discard-collection-dialog";
 import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
-import { Feedback, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
+import { LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
+import { useNotifications } from "./components/notifications";
 import { api } from "./lib/api";
 import type { Dashboard, Expediente, ExpedientePage } from "./lib/types";
 
@@ -26,6 +26,8 @@ function greeting() {
 }
 
 type MetricKey = "new" | "updated" | "unread" | "urgent" | "next_week" | "calculating";
+
+type TokenStatus = { available: boolean; message: string };
 
 const metricFilters: Record<MetricKey, { title: string; description: string; params: Record<string, string> }> = {
   new: { title: "Expedientes de Hoje", description: "Todos os expedientes descobertos na coleta de hoje.", params: { event_kind: "new" } },
@@ -44,8 +46,11 @@ function localDate() {
   return `${values.year}-${values.month}-${values.day}`;
 }
 export default function Home() {
+  const { notify } = useNotifications();
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null);
+  const tokenStatusRef = useRef<TokenStatus | null>(null);
   const [data, setData] = useState<Dashboard | null>(null);
-  const [error, setError] = useState("");
+
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [running, setRunning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -53,20 +58,31 @@ export default function Home() {
   const [discarding, setDiscarding] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [discardTrigger, setDiscardTrigger] = useState<HTMLButtonElement | null>(null);
-  const [success, setSuccess] = useState("");
+
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
   const [listPage, setListPage] = useState(1);
   const [expedientes, setExpedientes] = useState<ExpedientePage | null>(null);
-  const [listError, setListError] = useState("");
+
 
   const load = useCallback(async () => {
     try {
       setData(await api<Dashboard>("dashboard/"));
-      setError("");
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Falha ao carregar.");
+      notify({ message: exception instanceof Error ? exception.message : "Falha ao carregar." });
     }
-  }, []);
+  }, [notify]);
+
+  const updateTokenStatus = useCallback((status: TokenStatus) => {
+    const wasUnavailable = tokenStatusRef.current?.available === false;
+    tokenStatusRef.current = status;
+    setTokenStatus(status);
+    if (!status.available && !wasUnavailable) notify({ tone: "warning", message: status.message || "Token não conectado." });
+  }, [notify]);
+
+  const loadTokenStatus = useCallback(async () => {
+    try { updateTokenStatus(await api<TokenStatus>("automation/token-status/")); }
+    catch { updateTokenStatus({ available: false, message: "Não foi possível verificar o token físico." }); }
+  }, [updateTokenStatus]);
 
   const loadExpedientes = useCallback(async () => {
     const filter = metricFilters[activeMetric];
@@ -78,11 +94,10 @@ export default function Home() {
     }
     try {
       setExpedientes(await api<ExpedientePage>(`expedientes/?${params}`));
-      setListError("");
     } catch (exception) {
-      setListError(exception instanceof Error ? exception.message : "Falha ao carregar expedientes.");
+      notify({ message: exception instanceof Error ? exception.message : "Falha ao carregar expedientes." });
     }
-  }, [activeMetric, listPage]);
+  }, [activeMetric, listPage, notify]);
 
   useEffect(() => {
     queueMicrotask(() => { void loadExpedientes(); });
@@ -99,7 +114,17 @@ export default function Home() {
     });
   }, [load]);
 
+  useEffect(() => {
+    queueMicrotask(() => { void loadTokenStatus(); });
+    const interval = window.setInterval(() => { void loadTokenStatus(); }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [loadTokenStatus]);
+
   const run = async (source = "pje-tjrn", rerun = false) => {
+    if (!tokenStatus?.available) {
+      await loadTokenStatus();
+      return;
+    }
     setRunning(true);
     try {
       await api("automation/runs/", {
@@ -108,7 +133,7 @@ export default function Home() {
       });
       await load();
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Não foi possível iniciar.");
+      notify({ message: exception instanceof Error ? exception.message : "Não foi possível iniciar." });
     } finally {
       setRunning(false);
     }
@@ -123,7 +148,7 @@ export default function Home() {
       await api(`automation/runs/${runId}/cancel/`, { method: "POST" });
       await load();
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Não foi possível interromper a coleta.");
+      notify({ message: exception instanceof Error ? exception.message : "Não foi possível interromper a coleta." });
     } finally {
       setCancelling(false);
     }
@@ -139,13 +164,12 @@ export default function Home() {
     setDiscarding(true);
     try {
       const result = await api<{ deleted_expedientes: number; reverted_updates: number; reactivated_expedientes: number }>("automation/collections/today/discard/", { method: "POST" });
-      setSuccess(`${result.deleted_expedientes} expediente${result.deleted_expedientes === 1 ? "" : "s"} excluído${result.deleted_expedientes === 1 ? "" : "s"}, ${result.reverted_updates} alteração${result.reverted_updates === 1 ? "" : "ões"} revertida${result.reverted_updates === 1 ? "" : "s"} e ${result.reactivated_expedientes} expediente${result.reactivated_expedientes === 1 ? "" : "s"} reativado${result.reactivated_expedientes === 1 ? "" : "s"}. Pipeline e histórico do dia limpos.`);
-      setError("");
+      notify({ tone: "success", message: `Coleta descartada: ${result.deleted_expedientes} expedientes excluídos, ${result.reverted_updates} alterações revertidas e ${result.reactivated_expedientes} reativados.` });
       setDiscardDialogOpen(false);
       discarded = true;
       await Promise.all([load(), loadExpedientes()]);
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Não foi possível descartar a coleta do dia.");
+      notify({ message: exception instanceof Error ? exception.message : "Não foi possível descartar a coleta do dia." });
     } finally {
       setDiscarding(false);
       if (discarded) window.requestAnimationFrame(() => discardTrigger?.focus());
@@ -155,9 +179,12 @@ export default function Home() {
   const pipeline = data?.collection_pipeline;
   const runStatus = data?.latest_run?.status;
   const collectionInProgress = pipeline?.active ?? ["pending", "running"].includes(runStatus ?? "");
+  const collectionRunning = pipeline
+    ? pipeline.steps.some((step) => step.status === "running")
+    : runStatus === "running";
   const canDiscard = Boolean(
     data
-    && !collectionInProgress
+    && !collectionRunning
     && !running
     && !discarding
     && data.today.discardable > 0
@@ -190,19 +217,6 @@ export default function Home() {
         actions={<Clock />}
       />
 
-      {error && (
-        <Feedback
-          action={
-            <Button variant="outline" size="sm" onClick={load}>
-              Tentar novamente
-            </Button>
-          }
-        >
-          {error}
-        </Feedback>
-      )}
-      {success && <Feedback tone="success">{success}</Feedback>}
-
       <div className="mb-8 grid min-w-0 gap-x-6 gap-y-4 xl:grid-cols-2">
         <section className="contents">
           <div className="order-2 flex items-center justify-between xl:order-none xl:col-start-1 xl:row-start-1">
@@ -226,7 +240,8 @@ export default function Home() {
             <CollectionPipeline pipeline={pipeline} refreshing={refreshing} starting={running} cancelling={cancelling}
               discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
-              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setSuccess(""); setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
+              tokenAvailable={tokenStatus?.available}
+              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
           </div>
         )}
       </div>
@@ -251,7 +266,6 @@ export default function Home() {
           </Link>
         </div>
 
-        {listError && <Feedback action={<Button variant="outline" size="sm" onClick={loadExpedientes}>Tentar novamente</Button>}>{listError}</Feedback>}
         {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : <LoadingRows />}
 
         {expedientes && <Pagination page={listPage} pages={Math.ceil(expedientes.count / 50)} onPageChange={setListPage} label="Paginação de expedientes" />}

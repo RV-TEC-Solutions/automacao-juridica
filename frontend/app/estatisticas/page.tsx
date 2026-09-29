@@ -4,7 +4,8 @@ import { ChartBar, CheckCircle, ClockCounterClockwise, Sparkle } from "@phosphor
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "../components/app-shell";
-import { Panel, Feedback, MetricCard, PageTitle } from "../components/ui";
+import { Panel, MetricCard, PageTitle } from "../components/ui";
+import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 
 type Stats = {
@@ -62,16 +63,15 @@ function formatChartDay(day: string) {
 export default function StatisticsPage() {
   const [period, setPeriod] = useState(7);
   const [data, setData] = useState<Stats | null>(null);
-  const [error, setError] = useState("");
+  const { notify } = useNotifications();
 
   useEffect(() => {
     api<Stats>(`statistics/?period=${period}`)
       .then((value) => {
         setData(value);
-        setError("");
       })
-      .catch((exception) => setError(exception.message));
-  }, [period]);
+      .catch((exception) => notify({ message: exception instanceof Error ? exception.message : "Não foi possível carregar as estatísticas." }));
+  }, [period, notify]);
 
   const timeline = groupTimeline(data?.timeline ?? []);
   const maxDailyTotal = Math.max(1, ...timeline.map((day) => day.new + day.updated + day.resolved));
@@ -100,8 +100,6 @@ export default function StatisticsPage() {
           </div>
         }
       />
-
-      {error && <Feedback>{error}</Feedback>}
 
       {data && (
         <>

@@ -56,6 +56,7 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
 
 export function CollectionPipeline({
   pipeline, refreshing, starting, cancelling, discarding, canDiscard,
+  tokenAvailable = true,
   onRefresh, onRun, onCancel, onDiscard, onRerun,
 }: {
   pipeline: Pipeline;
@@ -63,6 +64,7 @@ export function CollectionPipeline({
   starting: boolean;
   cancelling: boolean;
   discarding: boolean;
+  tokenAvailable?: boolean;
   canDiscard: boolean;
   onRefresh: () => void;
   onRun: () => void;
@@ -71,6 +73,7 @@ export function CollectionPipeline({
   onRerun: (code: string) => void;
 }) {
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
+  const canStart = tokenAvailable && !starting;
   const current = pipeline.steps.find((step) => step.code === pipeline.current_step);
   const statusDescription = pipeline.active
     ? current ? `${current.label}: ${statusMeta[current.status].label}.` : "Coleta em andamento."
@@ -95,7 +98,7 @@ export function CollectionPipeline({
           <Button type="button" variant="outline" size="icon" onClick={onRefresh} disabled={refreshing} aria-label="Atualizar status da coleta" title="Atualizar status da coleta">
             <ArrowClockwise size={15} weight="bold" className={refreshing ? "animate-spin motion-reduce:animate-none" : ""} />
           </Button>
-          <Button type="button" variant="outline" size="icon" className="text-destructive" onClick={(event) => onDiscard(event.currentTarget)} disabled={!canDiscard || discarding} aria-label="Descartar coleta do dia" title={canDiscard ? "Descartar coleta do dia" : "Disponível quando houver dados coletados e nenhuma coleta ativa"}>
+          <Button type="button" variant="outline" size="icon" className="text-destructive" onClick={(event) => onDiscard(event.currentTarget)} disabled={!canDiscard || discarding} aria-label="Descartar coleta do dia" title={canDiscard ? "Descartar coleta do dia" : "Disponível quando houver dados coletados e nenhuma fonte em execução"}>
             <Trash size={15} weight="fill" className={discarding ? "animate-pulse" : ""} />
           </Button>
           {pipeline.active ? (
@@ -103,7 +106,7 @@ export function CollectionPipeline({
               <Stop size={15} weight="fill" />
             </Button>
           ) : (
-            <Button type="button" size="icon" onClick={onRun} disabled={starting} aria-label="Executar coleta" title="Executar coleta">
+            <Button type="button" size="icon" onClick={onRun} disabled={!canStart} aria-label="Executar coleta" title={tokenAvailable ? "Executar coleta" : "Conecte o token físico para iniciar a coleta"}>
               <Play size={14} weight="fill" />
             </Button>
           )}

@@ -10,7 +10,8 @@ import { Select } from "@/components/ui/select";
 import { AppShell } from "../components/app-shell";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
-import { Feedback, LoadingRows, PageTitle, Pagination } from "../components/ui";
+import { LoadingRows, PageTitle, Pagination } from "../components/ui";
+import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 import type { Expediente } from "../lib/types";
 
@@ -25,13 +26,13 @@ export function ExpedientesClient() {
   const router = useRouter();
   const [data, setData] = useState<PageData | null>(null);
   const [selected, setSelected] = useState<Expediente | null>(null);
-  const [error, setError] = useState("");
+  const { notify } = useNotifications();
   const query = search.toString();
 
   const load = useCallback(async () => {
-    try { setData(await api<PageData>(`expedientes/?${query}`)); setError(""); }
-    catch (exception) { setError(exception instanceof Error ? exception.message : "Falha ao carregar."); }
-  }, [query]);
+    try { setData(await api<PageData>("expedientes/?" + query)); }
+    catch (exception) { notify({ message: exception instanceof Error ? exception.message : "Falha ao carregar." }); }
+  }, [query, notify]);
 
   useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
 
@@ -74,7 +75,7 @@ export function ExpedientesClient() {
       </details>
     </form>
 
-    {error && <Feedback action={<Button variant="outline" size="sm" onClick={load}>Tentar novamente</Button>}>{error}</Feedback>}
+
     <div className="mb-4 flex items-center justify-between text-xs text-muted-foreground"><span>{data ? `${data.count} expediente${data.count === 1 ? "" : "s"} encontrado${data.count === 1 ? "" : "s"}` : "Carregando consulta operacional…"}</span>{query && <Button variant="ghost" size="sm" onClick={clear}><X />Limpar filtros</Button>}</div>
     {data ? <ExpedienteList items={data.results} onSelect={setSelected} /> : <LoadingRows />}
     <Pagination page={page} pages={pages} onPageChange={go} />

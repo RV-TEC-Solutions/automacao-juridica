@@ -4,13 +4,15 @@ import { ArrowSquareOut, Check, SpinnerGap, Tray } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "../components/app-shell";
-import { Panel, Feedback, LoadingRows, PageTitle } from "../components/ui";
+import { Panel, LoadingRows, PageTitle } from "../components/ui";
+import { useNotifications } from "../components/notifications";
 import { api, formatDateTime } from "../lib/api";
 import type { Notice, NoticePage } from "../lib/types";
 
 export default function NoticesPage() {
   const [data, setData] = useState<NoticePage | null>(null);
   const [onlyUnread, setOnlyUnread] = useState(false);
+  const { notify } = useNotifications();
   const [error, setError] = useState("");
   const [reading, setReading] = useState<number | null>(null);
 
@@ -19,9 +21,9 @@ export default function NoticesPage() {
       setData(await api<NoticePage>(`notices/${onlyUnread ? "?read=unread" : ""}`));
       setError("");
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Não foi possível carregar os avisos.");
+      const message = exception instanceof Error ? exception.message : "Não foi possível carregar os avisos."; setError(message); notify({ message });
     }
-  }, [onlyUnread]);
+  }, [onlyUnread, notify]);
 
   useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
 
@@ -33,7 +35,7 @@ export default function NoticesPage() {
       setData((current) => current ? { ...current, results: current.results.map((item) => item.id === updated.id ? updated : item) } : current);
       window.dispatchEvent(new Event("notices:changed"));
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Não foi possível atualizar o aviso.");
+      const message = exception instanceof Error ? exception.message : "Não foi possível atualizar o aviso."; setError(message); notify({ message });
     } finally {
       setReading(null);
     }
@@ -55,7 +57,6 @@ export default function NoticesPage() {
         </Button>
       </div>
 
-      {error && <Feedback action={<Button variant="outline" size="sm" onClick={load}>Tentar novamente</Button>}>{error}</Feedback>}
       {!data && !error && <LoadingRows />}
 
       <div className="space-y-4">

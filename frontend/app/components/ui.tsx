@@ -1,6 +1,4 @@
 import type { ReactNode } from "react";
-import { CheckCircle, Info, WarningCircle } from "@phosphor-icons/react";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -19,12 +17,6 @@ export function MetricCard({ label, value, note, icon, tone = "blue", children, 
 
 export function PageTitle({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return <header className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>{description && <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>}</div>{actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}</header>;
-}
-
-export function Feedback({ children, tone = "danger", action }: { children: ReactNode; tone?: "danger" | "success" | "warning" | "info"; action?: ReactNode }) {
-  const config = { success: ["success", CheckCircle], warning: ["warning", WarningCircle], danger: ["destructive", WarningCircle], info: ["default", Info] }[tone] as ["success" | "warning" | "destructive" | "default", typeof Info];
-  const Icon = config[1];
-  return <Alert variant={config[0]} className="mb-4"><Icon size={18} className="shrink-0" /><div className="min-w-0 flex-1 text-sm font-medium">{children}</div>{action}</Alert>;
 }
 
 export function LoadingRows() { return <Panel innerClassName="space-y-2 p-4">{[1, 2, 3].map((row) => <Skeleton className="h-20 w-full" key={row} />)}</Panel>; }

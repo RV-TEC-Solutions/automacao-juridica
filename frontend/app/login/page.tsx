@@ -4,17 +4,17 @@ import { ArrowRight, CheckCircle, LockKey, ShieldCheck, User } from "@phosphor-i
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Brand } from "../components/app-shell";
+import { useNotifications } from "../components/notifications";
 import { useAuth } from "../providers";
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
-  const [error, setError] = useState("");
+  const { notify } = useNotifications();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -24,13 +24,12 @@ export default function LoginPage() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
-    setError("");
     const form = new FormData(event.currentTarget);
     try {
       await login(String(form.get("username")), String(form.get("password")));
       router.replace("/");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Credenciais inválidas ou serviço indisponível.");
+      notify({ message: reason instanceof Error ? reason.message : "Credenciais inválidas ou serviço indisponível." });
     } finally {
       setBusy(false);
     }
@@ -132,13 +131,6 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <span className="size-2 rounded-full bg-destructive shrink-0" />
-                  {error}
-                </Alert>
-              )}
 
               <Button
                 type="submit"
