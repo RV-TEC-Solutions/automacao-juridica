@@ -20,5 +20,5 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export async function ensureCsrf() { await api("auth/csrf/"); }
 export const formatDateTime = (value: string | null, options?: Intl.DateTimeFormatOptions) => value
-  ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza", dateStyle: "medium", timeStyle: "short", ...options }).format(new Date(value))
+  ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza", dateStyle: "short", timeStyle: "short", ...options }).format(new Date(value))
   : "—";

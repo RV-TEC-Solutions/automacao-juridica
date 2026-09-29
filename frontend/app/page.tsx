@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Sparkle, WarningCircle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { AppShell } from "./components/app-shell";
 import { Clock } from "./components/clock";
 import { CollectionPipeline } from "./components/collection-pipeline";
 import { DiscardCollectionDialog } from "./components/discard-collection-dialog";
 import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
-import { Feedback, LoadingRows, MetricCard, PageTitle } from "./components/ui";
+import { Feedback, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
 import { api } from "./lib/api";
 import type { Dashboard, Expediente, ExpedientePage } from "./lib/types";
 
@@ -192,9 +193,9 @@ export default function Home() {
       {error && (
         <Feedback
           action={
-            <button className="button-secondary cursor-pointer px-3.5 py-1.5 text-xs font-bold" onClick={load}>
+            <Button variant="outline" size="sm" onClick={load}>
               Tentar novamente
-            </button>
+            </Button>
           }
         >
           {error}
@@ -202,16 +203,16 @@ export default function Home() {
       )}
       {success && <Feedback tone="success">{success}</Feedback>}
 
-      <div className="mb-8 grid min-w-0 gap-x-6 gap-y-3 xl:grid-cols-2 xl:grid-rows-[auto_1fr]">
+      <div className="mb-8 grid min-w-0 gap-x-6 gap-y-4 xl:grid-cols-2">
         <section className="contents">
           <div className="order-2 flex items-center justify-between xl:order-none xl:col-start-1 xl:row-start-1">
             <div>
-              <h2 className="mb-0.5 text-2xl font-extrabold tracking-tight leading-tight text-ink sm:text-3xl">Visão executiva</h2>
-              <p className="mb-0 text-xs font-medium text-quiet">Indicadores consolidados do ciclo de monitoramento atual.</p>
+              <h2 className="mb-2 text-2xl font-extrabold tracking-tight leading-tight text-foreground sm:text-3xl">Visão executiva</h2>
+              <p className="mb-0 text-xs font-medium text-muted-foreground">Indicadores consolidados do ciclo de monitoramento atual.</p>
             </div>
-            <div className="grid size-8 place-items-center rounded-xl border border-rule bg-panel text-quiet"><ChartLineUp size={18} weight="duotone" /></div>
+            <div className="grid size-8 place-items-center rounded-xl border border-border bg-card text-muted-foreground"><ChartLineUp size={18} weight="duotone" /></div>
           </div>
-          <div className="order-3 grid min-w-0 grid-cols-2 gap-3 xl:order-none xl:col-start-1 xl:row-start-2 lg:grid-cols-3">
+          <div className="order-3 grid min-w-0 grid-cols-2 gap-4 lg:grid-cols-3 xl:order-none xl:col-start-1 xl:row-start-2">
             <MetricCard label="Novos" value={data?.today.new ?? 0} note="expedientes descobertos" icon={<Sparkle size={18} weight="duotone" />} tone="green" onClick={() => selectMetric("new")} selected={activeMetric === "new"} />
             <MetricCard label="Alterados" value={data?.today.updated ?? 0} note="mudanças de prazo/teor" icon={<ClockCounterClockwise size={18} weight="duotone" />} tone="blue" onClick={() => selectMetric("updated")} selected={activeMetric === "updated"} />
             <MetricCard label="Não lidos" value={data?.today.unread ?? 0} note="aguardando leitura" icon={<Bell size={18} weight="duotone" />} tone="slate" onClick={() => selectMetric("unread")} selected={activeMetric === "unread"} />
@@ -232,34 +233,28 @@ export default function Home() {
 
       {/* Recent expedientes */}
       <section>
-        <div className="mb-3.5 flex items-end justify-between gap-4">
+        <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <h2 className="mb-0.5 text-2xl font-extrabold tracking-tight leading-tight text-ink sm:text-3xl">
+            <h2 className="mb-2 text-2xl font-extrabold tracking-tight leading-tight text-foreground sm:text-3xl">
               {metricFilters[activeMetric].title}{activeMetric === "new" ? " (" + formattedDate + ")" : ""}
             </h2>
-            <p className="mb-0 text-xs text-quiet font-medium">
+            <p className="mb-0 text-xs text-muted-foreground font-medium">
               {metricFilters[activeMetric].description}
             </p>
           </div>
           <Link
             href="/expedientes"
-            className="group inline-flex items-center gap-1.5 text-xs font-extrabold text-ink-soft no-underline hover:text-ink transition-colors"
+            className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline hover:text-foreground transition-colors"
           >
             Ver consulta completa
-            <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
           </Link>
         </div>
 
-        {listError && <Feedback action={<button className="button-secondary cursor-pointer px-3.5 py-1.5 text-xs font-bold" onClick={loadExpedientes}>Tentar novamente</button>}>{listError}</Feedback>}
+        {listError && <Feedback action={<Button variant="outline" size="sm" onClick={loadExpedientes}>Tentar novamente</Button>}>{listError}</Feedback>}
         {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : <LoadingRows />}
 
-        {expedientes && expedientes.count > 50 && (
-          <nav className="mt-6 flex items-center justify-center gap-3 text-xs text-quiet" aria-label="Paginação de expedientes">
-            <button className="button-secondary cursor-pointer px-3.5 py-2 text-xs font-bold disabled:pointer-events-none disabled:opacity-40" disabled={listPage <= 1} onClick={() => setListPage((page) => page - 1)}>← Anterior</button>
-            <span>Página <strong className="font-[family-name:var(--font-mono)] text-ink">{listPage}</strong> de {Math.ceil(expedientes.count / 50)}</span>
-            <button className="button-secondary cursor-pointer px-3.5 py-2 text-xs font-bold disabled:pointer-events-none disabled:opacity-40" disabled={listPage >= Math.ceil(expedientes.count / 50)} onClick={() => setListPage((page) => page + 1)}>Próxima →</button>
-          </nav>
-        )}
+        {expedientes && <Pagination page={listPage} pages={Math.ceil(expedientes.count / 50)} onPageChange={setListPage} label="Paginação de expedientes" />}
       </section>
 
       <ExpedienteDrawer

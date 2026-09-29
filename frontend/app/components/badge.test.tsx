@@ -20,27 +20,27 @@ describe("EventBadges", () => {
     render(<EventBadges item={item} />);
     const badge = screen.getByText("PJe 1º Grau · TRT21");
     expect(badge).toBeInTheDocument();
-    expect(badge.parentElement).toHaveClass("source-badge-trt21-1g");
+    expect(badge.parentElement).toHaveAttribute("data-source", "trt21");
   });
 
   it("uses the dedicated badge style for TRE-RN first degree", () => {
     const item = { unread: false, ativo: true, tipo_pendencia_label: "", latest_event: { kind: "new", kind_label: "Novo" }, source: { code: "tre-rn-1g", system: "PJe 1º Grau", tribunal: "TRE-RN" } } as Expediente;
     render(<EventBadges item={item} />);
     const badge = screen.getByText("PJe 1º Grau · TRE-RN");
-    expect(badge.parentElement).toHaveClass("source-badge-tre-rn-1g");
+    expect(badge.parentElement).toHaveAttribute("data-source", "tre-rn-1g");
   });
 
   it("uses the dedicated badge style for TRE-RN second degree", () => {
     const item = { unread: false, ativo: true, tipo_pendencia_label: "", latest_event: { kind: "new", kind_label: "Novo" }, source: { code: "tre-rn-2g", system: "PJe 2º Grau", tribunal: "TRE-RN" } } as Expediente;
     render(<EventBadges item={item} />);
     const badge = screen.getByText("PJe 2º Grau · TRE-RN");
-    expect(badge.parentElement).toHaveClass("source-badge-tre-rn-2g");
+    expect(badge.parentElement).toHaveAttribute("data-source", "tre-rn-2g");
   });
 
   it("uses the dedicated badge style for TSE third degree", () => {
     const item = { unread: false, ativo: true, tipo_pendencia_label: "", latest_event: { kind: "new", kind_label: "Novo" }, source: { code: "tse-3g", system: "PJe 3º Grau", tribunal: "TSE" } } as Expediente;
     render(<EventBadges item={item} />);
     const badge = screen.getByText("PJe 3º Grau · TSE");
-    expect(badge.parentElement).toHaveClass("source-badge-tse-3g");
+    expect(badge.parentElement).toHaveAttribute("data-source", "tse-3g");
   });
 });

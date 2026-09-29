@@ -1,19 +1,17 @@
 "use client";
 
 import { CaretDown, Clock, FolderSimple, WarningCircle } from "@phosphor-icons/react";
-import { useCallback, useEffect, useState } from "react";
-import { formatDateTime, api } from "../lib/api";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { api, formatDateTime } from "../lib/api";
 import type { CollectionHistory, CollectionRun } from "../lib/types";
-import { BezelCard, Feedback, LoadingRows } from "./ui";
+import { Feedback, LoadingRows, Panel } from "./ui";
 
-const statusClass: Record<CollectionRun["status"], string> = {
-  pending: "border-rule bg-panel-muted text-quiet",
-  running: "border-caution/35 bg-caution-soft text-caution",
-  success: "border-positive/30 bg-positive-soft text-positive",
-  failed: "border-danger/30 bg-danger-soft text-danger",
-  cancelled: "border-caution/30 bg-caution-soft text-caution",
-  disabled: "border-rule bg-panel-muted text-quiet",
-  skipped: "border-rule bg-panel-muted text-quiet",
+const statusVariant: Record<CollectionRun["status"], "outline" | "warning" | "success" | "destructive"> = {
+  pending: "outline", running: "warning", success: "success", failed: "destructive",
+  cancelled: "warning", disabled: "outline", skipped: "outline",
 };
 
 function formatDay(date: string) {
@@ -27,20 +25,20 @@ function formatDuration(seconds: number | null) {
   return minutes ? `${minutes} min ${remainder}s` : `${remainder}s`;
 }
 
-function RunRow({ run, expanded, onToggle }: { run: CollectionRun; expanded: boolean; onToggle: () => void }) {
+function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: boolean; onToggle: () => void }) {
   const errorId = `collection-run-error-${run.id}`;
-  return <>
-    <tr className="border-b border-rule last:border-0">
-      <td className="whitespace-nowrap px-4 py-3"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide ${statusClass[run.status]}`}>{run.status_label}</span></td>
-      <td className="px-4 py-3"><strong className="block text-xs font-bold text-ink">{run.source?.system ?? "Fonte indisponível"}</strong><span className="text-[11px] font-medium text-quiet">{run.source?.tribunal ?? "—"}</span></td>
-      <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-ink-soft">{run.trigger_label}</td>
-      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-quiet">{formatDateTime(run.started_at ?? run.created_at, { timeStyle: "short" })}</td>
-      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-quiet">{formatDuration(run.duration_seconds)}</td>
-      <td className="whitespace-nowrap px-4 py-3 text-[11px] font-semibold text-quiet"><span title="Encontrados">{run.found} encontrados</span><span className="mx-1.5 text-rule">·</span><span className="text-positive" title="Novos">+{run.created}</span><span className="mx-1.5 text-rule">·</span><span title="Alterados">{run.updated} alt.</span><span className="mx-1.5 text-rule">·</span><span title="Resolvidos">{run.resolved} res.</span></td>
-      <td className="px-4 py-3 text-right">{run.error ? <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-danger/30 bg-danger-soft px-2 py-1 text-[11px] font-bold text-danger transition-colors hover:border-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger" aria-expanded={expanded} aria-controls={errorId} onClick={onToggle}>Ver erro<CaretDown size={12} weight="bold" className={expanded ? "rotate-180" : ""} /></button> : <span className="text-xs text-quiet">—</span>}</td>
-    </tr>
-    {run.error && expanded && <tr id={errorId} className="border-b border-rule bg-danger-soft/40"><td colSpan={7} className="px-4 py-3"><div role="alert" className="flex gap-2 text-xs leading-relaxed text-danger"><WarningCircle size={16} weight="fill" className="mt-0.5 shrink-0" /><span className="whitespace-pre-wrap">{run.error}</span></div></td></tr>}
-  </>;
+  return <Fragment>
+    <TableRow>
+      <TableCell><Badge variant={statusVariant[run.status]}>{run.status_label}</Badge></TableCell>
+      <TableCell><strong className="block text-xs">{run.source?.system ?? "Fonte indisponível"}</strong><span className="text-xs text-muted-foreground">{run.source?.tribunal ?? "—"}</span></TableCell>
+      <TableCell>{run.trigger_label}</TableCell>
+      <TableCell>{formatDateTime(run.started_at ?? run.created_at, { timeStyle: "short" })}</TableCell>
+      <TableCell>{formatDuration(run.duration_seconds)}</TableCell>
+      <TableCell><span>{run.found} encontrados</span><span className="mx-2 text-border">·</span><span className="text-success">+{run.created}</span><span className="mx-2 text-border">·</span><span>{run.updated} alt.</span><span className="mx-2 text-border">·</span><span>{run.resolved} res.</span></TableCell>
+      <TableCell className="text-right">{run.error ? <Button variant="outline" size="sm" className="text-destructive" aria-expanded={expanded} aria-controls={errorId} onClick={onToggle}>Ver erro<CaretDown className={expanded ? "rotate-180" : ""} /></Button> : "—"}</TableCell>
+    </TableRow>
+    {run.error && expanded && <TableRow id={errorId} className="bg-destructive/10"><TableCell colSpan={7}><div role="alert" className="flex gap-2 whitespace-pre-wrap text-xs leading-6 text-destructive"><WarningCircle size={16} weight="fill" className="mt-2 shrink-0" />{run.error}</div></TableCell></TableRow>}
+  </Fragment>;
 }
 
 export function CollectionHistoryPanel() {
@@ -53,19 +51,14 @@ export function CollectionHistoryPanel() {
   }, []);
 
   useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
-
   if (!data && !error) return <LoadingRows />;
-  return <div className="space-y-7">
-    {error && <Feedback action={<button className="button-secondary px-3.5 py-1.5 text-xs font-bold" onClick={load}>Tentar novamente</button>}>{error}</Feedback>}
+
+  return <div className="space-y-8">
+    {error && <Feedback action={<Button variant="outline" size="sm" onClick={load}>Tentar novamente</Button>}>{error}</Feedback>}
     {data?.days.map((day) => <section key={day.date} aria-labelledby={`collection-day-${day.date}`}>
-      <header className="mb-3 flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl border border-rule bg-panel-muted text-quiet"><Clock size={18} weight="duotone" aria-hidden="true" /></span><h2 id={`collection-day-${day.date}`} className="text-sm font-extrabold tracking-tight text-ink sm:text-base">{formatDay(day.date)} <span className="font-medium text-quiet">({day.runs.length} fonte{day.runs.length === 1 ? "" : "s"})</span></h2></header>
-      <BezelCard className="overflow-hidden" innerClassName="overflow-x-auto">
-        <table className="min-w-[920px] w-full border-collapse text-left" aria-label={`Execuções de ${formatDay(day.date)}`}>
-          <thead className="border-b border-rule bg-panel-muted/60 text-[10px] font-extrabold uppercase tracking-[.12em] text-quiet"><tr><th className="px-4 py-3">Status</th><th className="px-4 py-3">Fonte</th><th className="px-4 py-3">Acionamento</th><th className="px-4 py-3">Início</th><th className="px-4 py-3">Duração</th><th className="px-4 py-3">Resultados</th><th className="px-4 py-3 text-right">Detalhes</th></tr></thead>
-          <tbody>{day.runs.map((run) => <RunRow key={run.id} run={run} expanded={expandedRun === run.id} onToggle={() => setExpandedRun((current) => current === run.id ? null : run.id)} />)}</tbody>
-        </table>
-      </BezelCard>
+      <header className="mb-4 flex items-center gap-4"><span className="grid size-10 place-items-center rounded-md border bg-muted text-muted-foreground"><Clock size={18} /></span><h2 id={`collection-day-${day.date}`} className="text-base font-semibold">{formatDay(day.date)} <span className="font-normal text-muted-foreground">({day.runs.length} fonte{day.runs.length === 1 ? "" : "s"})</span></h2></header>
+      <div className="overflow-hidden rounded-lg border bg-card"><Table className="min-w-5xl" aria-label={`Execuções de ${formatDay(day.date)}`}><TableHeader className="bg-muted/50"><TableRow><TableHead>Status</TableHead><TableHead>Fonte</TableHead><TableHead>Acionamento</TableHead><TableHead>Início</TableHead><TableHead>Duração</TableHead><TableHead>Resultados</TableHead><TableHead className="text-right">Detalhes</TableHead></TableRow></TableHeader><TableBody>{day.runs.map((run) => <RunRows key={run.id} run={run} expanded={expandedRun === run.id} onToggle={() => setExpandedRun((current) => current === run.id ? null : run.id)} />)}</TableBody></Table></div>
     </section>)}
-    {data && data.days.length === 0 && <BezelCard innerClassName="flex items-center gap-3 px-5 py-4 text-xs font-semibold text-quiet"><FolderSimple size={19} weight="duotone" className="shrink-0" />Nenhuma coleta executada nos últimos 30 dias.</BezelCard>}
+    {data && data.days.length === 0 && <Panel innerClassName="flex items-center gap-4 px-6 py-4 text-sm text-muted-foreground"><FolderSimple size={20} />Nenhuma coleta executada nos últimos 30 dias.</Panel>}
   </div>;
 }
