@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: automacao_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: automacao_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d automacao_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend-automacao
+      dockerfile: Dockerfile
+    container_name: automacao_backend
+    restart: always
+    shm_size: '2gb'
+    environment:
+      POSTGRES_DB: automacao_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      USE_POSTGRES: "true"
+      DEBUG: "True"
+      ALLOWED_HOSTS: "*"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3002,http://127.0.0.1:3002,http://frontend:3002"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:3002,http://127.0.0.1:3002,http://frontend:3002"
+      PJE_CERT_PIN: "${PJE_CERT_PIN:-}"
+      PJE_TOTP_SECRET: "${PJE_TOTP_SECRET:-}"
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./backend-automacao/respostas_expedientes:/app/respostas_expedientes
+      - ~/.config/pje-automacao:/root/.config/pje-automacao:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: automacao_frontend
+    restart: always
+    environment:
+      BACKEND_URL: "http://backend:8007"
+      PORT: 3002
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
