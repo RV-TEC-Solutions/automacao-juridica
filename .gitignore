@@ -19,6 +19,8 @@ test-results/
 __pycache__/
 *.py[cod]
 *.sqlite3
+backups/
+.postgres-import-incomplete
 *.log
 staticfiles/
 media/

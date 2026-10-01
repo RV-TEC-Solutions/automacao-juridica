@@ -11,14 +11,29 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   echo "Ambiente Python ausente. Execute os passos de instalação do README.md."
   exit 1
 fi
+if [[ "${1:-}" == "import-sqlite" ]]; then
+  "$PYTHON_BIN" "$ROOT_DIR/backend-automacao/manage.py" importar_sqlite
+  exit 0
+fi
+
+if [[ -e "$ROOT_DIR/.postgres-import-incomplete" ]]; then
+  echo "Importação PostgreSQL incompleta. Verifique o backup e restaure um banco vazio." >&2
+  exit 1
+fi
+
 if [[ ! -d "$ROOT_DIR/frontend/node_modules" ]]; then
   echo "Dependências do frontend ausentes. Execute npm install em frontend/."
   exit 1
 fi
 
+"$PYTHON_BIN" "$ROOT_DIR/backend-automacao/manage.py" shell -c "from django.db import connection; connection.ensure_connection()" >/dev/null 2>&1 || {
+  echo "PostgreSQL indisponível. Inicie-o com: docker compose up -d postgres" >&2
+  exit 1
+}
+
 if [[ "${1:-}" == "setup" ]]; then
   "$PYTHON_BIN" "$ROOT_DIR/backend-automacao/manage.py" migrate
-  "$PYTHON_BIN" "$ROOT_DIR/backend-automacao/manage.py" configurar_app
+  "$PYTHON_BIN" "$ROOT_DIR/backend-automacao/manage.py" configurar_app --if-empty
   exit 0
 fi
 

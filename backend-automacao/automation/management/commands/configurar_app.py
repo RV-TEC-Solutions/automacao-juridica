@@ -12,8 +12,13 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--username")
         parser.add_argument("--name")
+        parser.add_argument("--if-empty", action="store_true")
 
     def handle(self, *args, **options):
+        User = get_user_model()
+        if options["if_empty"] and User.objects.exists():
+            self.stdout.write("Conta existente preservada; configuração inicial ignorada.")
+            return
         username = options["username"] or input("Usuário: ").strip()
         name = options["name"] or input("Nome de exibição: ").strip()
         if not username or not name:
