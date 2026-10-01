@@ -65,6 +65,10 @@ em `127.0.0.1:8007`, o worker/agendador e o frontend em
 `http://localhost:3002`. A coleta diária usa `America/Fortaleza`, por
 padrão às 06:00.
 
+Para executar API e frontend em contêineres, use `docker compose up -d --build`.
+Esse modo usa o mesmo PostgreSQL configurado no `.env`. A coleta agendada
+continua disponível pelo `./run-local.sh`.
+
 ## Backup e restauração do PostgreSQL
 
 Pare a aplicação antes da restauração. Crie um backup manual em formato
