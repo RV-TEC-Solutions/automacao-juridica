@@ -12,6 +12,7 @@ GROUPS = {
     "tse-3g": "Justiça Eleitoral", "trt21": "TRT21", "trt21-2g": "TRT21",
     "trf5-2g-tru": "TRF5", "varas-justica-comum": "TRF5",
     "jef-5-regiao": "TRF5", "trs-5-regiao": "TRF5", "tru-5-regiao": "TRF5",
+    "djen": "DJEN",
 }
 
 LABELS = {
@@ -21,6 +22,7 @@ LABELS = {
     "trf5-2g-tru": "2º Grau / TRU", "varas-justica-comum": "Varas federais",
     "jef-5-regiao": "JEF · 5ª Região", "trs-5-regiao": "Turmas recursais",
     "tru-5-regiao": "TRU · perfil alternativo",
+    "djen": "Publicações nacionais",
 }
 
 
@@ -59,7 +61,7 @@ def _steps_for_cycle(sources, cycle_runs):
         steps.append({
             "code": code,
             "group": GROUPS[code],
-            "label": LABELS.get(code, get_source_profile(code).system),
+            "label": LABELS.get(code) or get_source_profile(code).system,
             "status": step_status,
             "run_id": run.id if run else None,
             "error": run.mensagem_erro if run else "",
@@ -96,7 +98,7 @@ def _cycle_status(cycle_runs, active):
 
 
 def collection_pipeline_payload():
-    latest_record = AutomationRun.objects.select_related("source").first()
+    latest_record = AutomationRun.objects.select_related("source").exclude(source__code="djen").first()
     latest = (
         None
         if latest_record and latest_record.descartada_em is not None
@@ -133,8 +135,10 @@ def collection_pipeline_payload():
     else:
         steps = _steps_for_cycle(sources, cycle_runs)
 
-    completed = sum(step["status"] == AutomationRun.Status.SUCCESS for step in steps)
-    relevant = sum(step["status"] != "disabled" for step in steps)
+    djen_step = _djen_step()
+    all_steps = steps + [djen_step]
+    completed = sum(step["status"] == AutomationRun.Status.SUCCESS for step in all_steps)
+    relevant = sum(step["status"] != "disabled" for step in all_steps)
     timestamps = AutomationRun.objects.filter(
         cycle_id=latest.cycle_id,
         descartada_em__isnull=True,
@@ -158,5 +162,17 @@ def collection_pipeline_payload():
         "started_at": timestamps["started_at"],
         "finished_at": None if active else timestamps["finished_at"],
         "current_step": current_code,
-        "steps": steps,
+        "steps": all_steps,
+    }
+
+
+def _djen_step():
+    source = AutomationSource.objects.filter(code="djen").first()
+    run = AutomationRun.objects.filter(source=source, descartada_em__isnull=True).first() if source else None
+    return {
+        "code": "djen", "group": "DJEN", "label": LABELS["djen"],
+        "status": "disabled" if source and not source.enabled else run.status if run else "pending",
+        "run_id": run.id if run else None,
+        "error": run.mensagem_erro if run else "",
+        "message": run.mensagem_info if run else "",
     }

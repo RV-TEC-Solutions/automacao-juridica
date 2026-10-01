@@ -64,7 +64,7 @@ class QueueTests(TestCase):
         user = get_user_model().objects.create_user("user")
         UserProfile.objects.create(user=user, display_name="User", collection_time=time(6))
         now = datetime(2026, 8, 25, 7, tzinfo=ZoneInfo("America/Fortaleza"))
-        self.assertEqual(len(enqueue_due_runs(now)), 1)
+        self.assertEqual(len(enqueue_due_runs(now)), 2)
         self.assertEqual(len(enqueue_due_runs(now)), 0)
 
     def test_scheduler_enqueues_only_the_first_degree_source(self):
@@ -75,7 +75,7 @@ class QueueTests(TestCase):
 
         runs = enqueue_due_runs(now)
 
-        self.assertEqual([run.source for run in runs], [self.source])
+        self.assertEqual([run.source.code for run in runs], [self.source.code, "djen"])
         self.assertFalse(second_degree.runs.exists())
 
     def test_scheduler_starts_with_the_first_enabled_source(self):
@@ -90,7 +90,15 @@ class QueueTests(TestCase):
 
         runs = enqueue_due_runs(now)
 
-        self.assertEqual([run.source.code for run in runs], ["tre-rn-1g"])
+        self.assertEqual([run.source.code for run in runs], ["tre-rn-1g", "djen"])
+
+    def test_djen_is_scheduled_even_after_pje_failure(self):
+        now = datetime(2026, 8, 25, 7, tzinfo=ZoneInfo("America/Fortaleza"))
+        AutomationRun.objects.create(source=self.source, status=AutomationRun.Status.FAILED)
+
+        runs = enqueue_due_runs(now)
+
+        self.assertEqual([run.source.code for run in runs], ["pje-tjrn", "djen"])
 
     def test_recovers_a_run_left_running_by_an_interrupted_worker(self):
         run = AutomationRun.objects.create(
@@ -432,6 +440,19 @@ class AutomationRunApiTests(TestCase):
             "Token físico não detectado. Conecte o token ao computador e tente novamente.",
         )
         self.assertFalse(AutomationRun.objects.exists())
+
+    def test_djen_run_starts_when_the_physical_token_is_absent(self):
+        with patch(
+            "automation.views.validar_token_fisico",
+            side_effect=TokenFisicoError("Token físico não detectado."),
+        ) as validator:
+            response = self.client.post(
+                "/api/automation/runs/", {"source": "djen", "rerun": True}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.data["source"], "djen")
+        validator.assert_not_called()
 
     def test_rerun_enqueues_only_the_requested_source(self):
         source = AutomationSource.objects.get(code="pje2g-tjrn")
@@ -1611,7 +1632,7 @@ class CollectionPipelinePayloadTests(TestCase):
 
         payload = collection_pipeline_payload()
 
-        self.assertEqual([step["code"] for step in payload["steps"]], list(PJE_SOURCE_ORDER))
+        self.assertEqual([step["code"] for step in payload["steps"]], [*PJE_SOURCE_ORDER, "djen"])
         self.assertEqual(payload["cycle_id"], str(first_run.cycle_id))
         self.assertEqual(payload["status"], "running")
         self.assertEqual(payload["current_step"], "pje2g-tjrn")
@@ -1619,6 +1640,23 @@ class CollectionPipelinePayloadTests(TestCase):
         self.assertEqual(payload["steps"][1]["status"], "running")
         self.assertEqual(payload["steps"][2]["status"], "pending")
         self.assertEqual(payload["steps"][4]["status"], "disabled")
+
+    def test_djen_completion_updates_card_and_completed_count(self):
+        source = AutomationSource.objects.get(code="djen")
+        run = AutomationRun.objects.create(source=source, status=AutomationRun.Status.RUNNING)
+
+        running = collection_pipeline_payload()
+        self.assertEqual(running["steps"][-1]["status"], "running")
+        self.assertEqual(running["completed"], 0)
+
+        run.status = AutomationRun.Status.SUCCESS
+        run.finalizada_em = timezone.now()
+        run.save(update_fields=("status", "finalizada_em"))
+
+        completed = collection_pipeline_payload()
+        self.assertEqual(completed["steps"][-1]["status"], "success")
+        self.assertEqual(completed["steps"][-1]["run_id"], run.id)
+        self.assertEqual(completed["completed"], 1)
 
     def test_marks_unreached_steps_skipped_after_cancellation(self):
         AutomationRun.objects.create(

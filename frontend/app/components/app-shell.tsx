@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChartBar, ClockCounterClockwise, FileText, GearSix, House, Moon, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
+import { Bell, ChartBar, ClockCounterClockwise, FileText, GearSix, House, Moon, Newspaper, SignOut, SpinnerGap, Sun } from "@phosphor-icons/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import { useAuth } from "../providers";
 const links = [
   ["/", "Visão geral", House],
   ["/expedientes", "Expedientes", FileText],
+  ["/djen", "Publicações DJEN", Newspaper],
   ["/historico", "Histórico", ClockCounterClockwise],
   ["/avisos", "Avisos", Bell],
   ["/estatisticas", "Estatísticas", ChartBar],
@@ -94,6 +95,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </header>
 
     <main className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
-    <footer className="border-t px-6 py-8 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · Automação de Expedientes PJe</footer>
+    <footer className="border-t px-6 py-8 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · Automação de Expedientes e DJEN</footer>
   </div>;
 }

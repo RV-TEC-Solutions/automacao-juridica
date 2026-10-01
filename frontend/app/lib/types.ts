@@ -113,6 +113,37 @@ export type NoticePage = {
   results: Notice[];
 };
 
+export type DjenCommunication = {
+  id: number;
+  api_id: number | null;
+  numero_comunicacao: number;
+  hash: string;
+  data_disponibilizacao: string;
+  tribunal: string;
+  orgao: string;
+  tipo_comunicacao: string;
+  meio: string;
+  link_inteiro_teor: string;
+  tipo_documento: string;
+  nome_classe: string;
+  codigo_classe: string;
+  texto: string;
+  read_at: string | null;
+  collected_at: string;
+  updated_at: string;
+  unread: boolean;
+  processo: { id: number; numero: string };
+  recipients: { name: string; pole: string }[];
+  attorneys: { name: string; oab_number: string; oab_state: string }[];
+};
+
+export type DjenCommunicationPage = {
+  count: number;
+  next: number | null;
+  previous: number | null;
+  results: DjenCommunication[];
+};
+
 export type Dashboard = {
   display_name: string;
   today: {

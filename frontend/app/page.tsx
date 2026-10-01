@@ -9,10 +9,12 @@ import { CollectionPipeline } from "./components/collection-pipeline";
 import { DiscardCollectionDialog } from "./components/discard-collection-dialog";
 import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
+import { DjenDrawer } from "./components/djen-drawer";
 import { LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNotifications } from "./components/notifications";
 import { api } from "./lib/api";
-import type { Dashboard, Expediente, ExpedientePage } from "./lib/types";
+import type { Dashboard, DjenCommunication, DjenCommunicationPage, Expediente, ExpedientePage } from "./lib/types";
 
 function greeting() {
   const hour = Number(
@@ -50,6 +52,7 @@ export default function Home() {
   const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null);
   const tokenStatusRef = useRef<TokenStatus | null>(null);
   const [data, setData] = useState<Dashboard | null>(null);
+  const previousDjenRun = useRef<{ id: number; status: string } | null>(null);
 
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [running, setRunning] = useState(false);
@@ -62,6 +65,10 @@ export default function Home() {
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
   const [listPage, setListPage] = useState(1);
   const [expedientes, setExpedientes] = useState<ExpedientePage | null>(null);
+  const [todayTab, setTodayTab] = useState("expedientes");
+  const [publications, setPublications] = useState<DjenCommunicationPage | null>(null);
+  const [publicationPage, setPublicationPage] = useState(1);
+  const [selectedPublication, setSelectedPublication] = useState<DjenCommunication | null>(null);
 
 
   const load = useCallback(async () => {
@@ -103,7 +110,21 @@ export default function Home() {
     queueMicrotask(() => { void loadExpedientes(); });
   }, [loadExpedientes]);
 
+  const loadPublications = useCallback(async () => {
+    const params = new URLSearchParams({ page: String(publicationPage), date_from: localDate(), date_to: localDate() });
+    try {
+      setPublications(await api<DjenCommunicationPage>(`djen/communications/?${params}`));
+    } catch (exception) {
+      notify({ message: exception instanceof Error ? exception.message : "Falha ao carregar publicações processuais." });
+    }
+  }, [publicationPage, notify]);
+
+  useEffect(() => {
+    if (todayTab === "publicacoes") queueMicrotask(() => { void loadPublications(); });
+  }, [todayTab, loadPublications]);
+
   const selectMetric = (metric: MetricKey) => {
+    setTodayTab("expedientes");
     setActiveMetric(metric);
     setListPage(1);
   };
@@ -121,16 +142,17 @@ export default function Home() {
   }, [loadTokenStatus]);
 
   const run = async (source = "pje-tjrn", rerun = false) => {
-    if (!tokenStatus?.available) {
+    if (source !== "djen" && !tokenStatus?.available) {
       await loadTokenStatus();
       return;
     }
     setRunning(true);
     try {
-      await api("automation/runs/", {
+      const started = await api<{ id: number; status: string }>("automation/runs/", {
         method: "POST",
         body: JSON.stringify({ source, ...(rerun ? { rerun: true } : {}) }),
       });
+      if (source === "djen") previousDjenRun.current = { id: started.id, status: started.status };
       await load();
     } catch (exception) {
       notify({ message: exception instanceof Error ? exception.message : "Não foi possível iniciar." });
@@ -167,7 +189,7 @@ export default function Home() {
       notify({ tone: "success", message: `Coleta descartada: ${result.deleted_expedientes} expedientes excluídos, ${result.reverted_updates} alterações revertidas e ${result.reactivated_expedientes} reativados.` });
       setDiscardDialogOpen(false);
       discarded = true;
-      await Promise.all([load(), loadExpedientes()]);
+      await Promise.all([load(), loadExpedientes(), loadPublications()]);
     } catch (exception) {
       notify({ message: exception instanceof Error ? exception.message : "Não foi possível descartar a coleta do dia." });
     } finally {
@@ -177,8 +199,22 @@ export default function Home() {
   };
 
   const pipeline = data?.collection_pipeline;
+  const djenStep = pipeline?.steps.find((step) => step.code === "djen");
+  useEffect(() => {
+    if (!djenStep?.run_id) return;
+    const previous = previousDjenRun.current;
+    if (previous && djenStep.status === "success" && (
+      previous.id === djenStep.run_id && previous.status !== "success"
+      || previous.id !== djenStep.run_id && previous.status === "success"
+    )) {
+      notify({ tone: "success", message: "Coleta do DJEN finalizada. Visualize as publicações na aba Publicações DJEN." });
+    }
+    previousDjenRun.current = { id: djenStep.run_id, status: djenStep.status };
+  }, [djenStep?.run_id, djenStep?.status, notify]);
   const runStatus = data?.latest_run?.status;
-  const collectionInProgress = pipeline?.active ?? ["pending", "running"].includes(runStatus ?? "");
+  const collectionInProgress = (pipeline?.active ?? ["pending", "running"].includes(runStatus ?? ""))
+    || djenStep?.status === "pending" && djenStep.run_id !== null
+    || djenStep?.status === "running";
   const collectionRunning = pipeline
     ? pipeline.steps.some((step) => step.status === "running")
     : runStatus === "running";
@@ -191,11 +227,9 @@ export default function Home() {
   );
 
   useEffect(() => {
-    if (!collectionInProgress) return;
-
     const interval = window.setInterval(() => {
       void load();
-    }, 1_500);
+    }, collectionInProgress ? 1_500 : 10_000);
 
     return () => window.clearInterval(interval);
   }, [collectionInProgress, load]);
@@ -246,19 +280,19 @@ export default function Home() {
         )}
       </div>
 
-      {/* Recent expedientes */}
+      <Tabs value={todayTab} onValueChange={setTodayTab} className="gap-0">
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <h2 className="mb-2 text-2xl font-extrabold tracking-tight leading-tight text-foreground sm:text-3xl">
-              {metricFilters[activeMetric].title}{activeMetric === "new" ? " (" + formattedDate + ")" : ""}
+              {todayTab === "publicacoes" || activeMetric === "new" ? `Hoje (${formattedDate})` : metricFilters[activeMetric].title}
             </h2>
             <p className="mb-0 text-xs text-muted-foreground font-medium">
-              {metricFilters[activeMetric].description}
+              {todayTab === "publicacoes" ? "Publicações processuais disponibilizadas hoje no DJEN." : metricFilters[activeMetric].description}
             </p>
           </div>
           <Link
-            href="/expedientes"
+            href={todayTab === "publicacoes" ? "/djen" : "/expedientes"}
             className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline hover:text-foreground transition-colors"
           >
             Ver consulta completa
@@ -266,10 +300,27 @@ export default function Home() {
           </Link>
         </div>
 
-        {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : <LoadingRows />}
+        <TabsList aria-label="Tipo de coleta de hoje" className="mb-5 h-auto w-full gap-1 rounded-lg border-0 bg-muted p-1 sm:w-fit">
+          <TabsTrigger value="expedientes" className="min-h-10 flex-1 rounded-md px-5 text-xs data-active:bg-card data-active:shadow-sm data-active:after:hidden sm:flex-none">Expedientes</TabsTrigger>
+          <TabsTrigger value="publicacoes" className="min-h-10 flex-1 rounded-md px-5 text-xs data-active:bg-card data-active:shadow-sm data-active:after:hidden sm:flex-none">Publicações Processuais</TabsTrigger>
+        </TabsList>
 
-        {expedientes && <Pagination page={listPage} pages={Math.ceil(expedientes.count / 50)} onPageChange={setListPage} label="Paginação de expedientes" />}
+        <TabsContent value="expedientes">
+          {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : <LoadingRows />}
+          {expedientes && <Pagination page={listPage} pages={Math.ceil(expedientes.count / 50)} onPageChange={setListPage} label="Paginação de expedientes" />}
+        </TabsContent>
+
+        <TabsContent value="publicacoes">
+          {publications ? <div className="space-y-3">
+            {publications.results.map((item) => <button key={item.id} type="button" onClick={() => setSelectedPublication(item)} className="block w-full rounded-xl border bg-card p-5 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-md border bg-muted px-2 py-1 text-xs font-extrabold">{item.tribunal}</span>{item.unread && <span className="rounded-full bg-warning-soft px-2 py-1 text-xs font-extrabold text-warning">NOVA</span>}</div><strong className="font-mono text-sm sm:text-base">{item.processo.numero}</strong><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{item.texto || item.tipo_comunicacao}</p></div><span className="shrink-0 text-xs font-semibold text-muted-foreground">{item.tipo_comunicacao || "Comunicação"}</span></div>
+            </button>)}
+            {publications.results.length === 0 && <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">Nenhuma publicação processual disponibilizada hoje.</div>}
+          </div> : <LoadingRows />}
+          {publications && <Pagination page={publicationPage} pages={Math.ceil(publications.count / 20)} onPageChange={setPublicationPage} label="Paginação de publicações processuais" />}
+        </TabsContent>
       </section>
+      </Tabs>
 
       <ExpedienteDrawer
         item={selected}
@@ -280,6 +331,10 @@ export default function Home() {
           loadExpedientes();
         }}
       />
+      <DjenDrawer item={selectedPublication} onClose={() => setSelectedPublication(null)} onRead={(updated) => {
+        setSelectedPublication(updated);
+        setPublications((current) => current ? { ...current, results: current.results.map((item) => item.id === updated.id ? updated : item) } : current);
+      }} />
       <DiscardCollectionDialog open={discardDialogOpen} busy={discarding} onClose={closeDiscardDialog} onConfirm={() => { void discardToday(); }} />
     </AppShell>
   );

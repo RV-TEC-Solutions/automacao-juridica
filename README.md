@@ -1,6 +1,7 @@
 # Painel de Expedientes
 
-Aplicação local para acompanhar expedientes coletados do PJe/TJRN.
+Aplicação local para acompanhar expedientes coletados do PJe e publicações do
+Diário de Justiça Eletrônico Nacional (DJEN).
 
 ## Instalação inicial
 
@@ -29,6 +30,12 @@ Para uma instalação nova, sem SQLite a importar:
 Configure `PJE_CERT_PIN` e `PJE_TOTP_SECRET` em
 `~/.config/pje-automacao/.env`. Esse arquivo permanece fora do repositório
 e os valores nunca são devolvidos pela API.
+
+A consulta pública do DJEN usa por padrão a OAB `5691/RN`. Para outra
+inscrição, configure `DJEN_OAB_NUMBER` e `DJEN_OAB_STATE` no `.env`. O DJEN
+consulta as publicações do Diário dos últimos sete dias, incluindo o dia
+atual, e é agendado diariamente no horário configurado, independentemente
+das fontes PJe e do token físico. Reexecuções manuais usam a mesma janela.
 
 ## Migrar o SQLite existente
 

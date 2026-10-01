@@ -57,4 +57,15 @@ describe("CollectionPipeline", () => {
     expect(callbacks.onDiscard).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Executar coleta" })).toBeEnabled();
   });
+
+  it("allows a DJEN rerun while the token is unavailable", () => {
+    const callbacks = handlers();
+    const value = pipeline(false);
+    value.steps.push({ code: "djen", group: "DJEN", label: "Publicações nacionais", status: "pending", run_id: null, error: "", message: "" });
+    render(<CollectionPipeline pipeline={value} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} tokenAvailable={false} {...callbacks} />);
+
+    expect(screen.getByRole("button", { name: "Executar coleta" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Reexecutar somente Publicações nacionais" }));
+    expect(callbacks.onRerun).toHaveBeenCalledWith("djen");
+  });
 });

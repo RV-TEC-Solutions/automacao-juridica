@@ -188,3 +188,6 @@ LOGGING = {
         },
     },
 }
+# Consulta pública do DJEN. Podem ser sobrescritos no ambiente local.
+DJEN_OAB_NUMBER = os.environ.get("DJEN_OAB_NUMBER", "5691")
+DJEN_OAB_STATE = os.environ.get("DJEN_OAB_STATE", "RN")

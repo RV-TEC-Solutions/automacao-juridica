@@ -56,19 +56,23 @@ def enqueue_due_runs(now=None):
         return []
 
     day_start = datetime.combine(local_now.date(), datetime.min.time(), tzinfo=LOCAL_TZ)
-    source = first_enabled_source(PJE_1G_SOURCE_CODE)
-    if source is None or source.runs.filter(criada_em__gte=day_start).exists():
-        return []
-
-    try:
-        trigger = (
-            AutomationRun.Trigger.SCHEDULED
-            if local_now - due_at <= timedelta(minutes=5)
-            else AutomationRun.Trigger.CATCH_UP
-        )
-        return [enqueue_run(source, trigger, scheduled_for=due_at)]
-    except ValueError:
-        return []
+    trigger = (
+        AutomationRun.Trigger.SCHEDULED
+        if local_now - due_at <= timedelta(minutes=5)
+        else AutomationRun.Trigger.CATCH_UP
+    )
+    queued = []
+    for source in (first_enabled_source(PJE_1G_SOURCE_CODE), AutomationSource.objects.filter(code="djen", enabled=True).first()):
+        if source is None or source.runs.filter(
+            trigger__in=(AutomationRun.Trigger.SCHEDULED, AutomationRun.Trigger.CATCH_UP),
+            scheduled_for=due_at,
+        ).exists():
+            continue
+        try:
+            queued.append(enqueue_run(source, trigger, scheduled_for=due_at))
+        except ValueError:
+            pass
+    return queued
 
 
 def recover_interrupted_runs():
@@ -85,14 +89,18 @@ def recover_interrupted_runs():
     )
 
 
-def claim_next_run():
+def claim_next_run(source_code=None):
     with transaction.atomic():
-        run = (
+        pending = (
             AutomationRun.objects.select_for_update(skip_locked=True)
             .filter(status=AutomationRun.Status.PENDING, source__enabled=True)
-            .order_by("criada_em")
-            .first()
         )
+        if source_code is not None:
+            pending = pending.filter(source__code=source_code)
+        run = pending.order_by("criada_em").first()
+        if source_code is None:
+            djen = pending.filter(source__code="djen").order_by("criada_em").first()
+            run = djen or run
         if run:
             run.status = AutomationRun.Status.RUNNING
             run.iniciada_em = timezone.now()
