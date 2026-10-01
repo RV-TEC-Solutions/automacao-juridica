@@ -122,7 +122,7 @@ export function CollectionPipeline({
                 <h4 id={`pipeline-group-${index}`} className="mb-2 text-xs font-extrabold uppercase tracking-wide text-foreground">{group}</h4>
                 <ol className="space-y-2">
                   {pipeline.steps.filter((step) => step.group === group).map((step) => (
-                    <Step key={step.code} step={step} canRerun={!pipeline.active && !starting && step.status !== "disabled"} onRerun={onRerun} />
+                  <Step key={step.code} step={step} canRerun={!pipeline.active && !starting && step.status !== "disabled" && step.status !== "running" && !(step.code === "djen" && step.run_id !== null && step.status === "pending")} onRerun={onRerun} />
                   ))}
                 </ol>
               </section>

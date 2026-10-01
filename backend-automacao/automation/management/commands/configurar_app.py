@@ -74,4 +74,8 @@ class Command(BaseCommand):
                 code=code,
                 defaults={"system": system, "tribunal": "TRF5", "enabled": True},
             )
+        AutomationSource.objects.update_or_create(
+            code="djen",
+            defaults={"system": "DJEN", "tribunal": "Nacional", "enabled": True},
+        )
         self.stdout.write(self.style.SUCCESS("Conta configurada com sucesso."))

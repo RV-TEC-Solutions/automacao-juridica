@@ -58,6 +58,77 @@ class NoticeSource(models.Model):
         ]
 
 
+class DjenCommunication(models.Model):
+    """Publicação imutável consultada na API pública do DJEN."""
+
+    source = models.ForeignKey(
+        AutomationSource, on_delete=models.PROTECT, related_name="djen_communications"
+    )
+    run = models.ForeignKey(
+        "AutomationRun", on_delete=models.SET_NULL, related_name="djen_communications",
+        null=True, blank=True,
+    )
+    processo = models.ForeignKey(
+        "expedientes.Processo", on_delete=models.PROTECT,
+        related_name="djen_communications",
+    )
+    api_id = models.BigIntegerField(null=True, blank=True)
+    numero_comunicacao = models.BigIntegerField()
+    hash = models.CharField(max_length=128, blank=True)
+    data_disponibilizacao = models.DateField()
+    tribunal = models.CharField(max_length=30)
+    orgao = models.CharField(max_length=255, blank=True)
+    tipo_comunicacao = models.CharField(max_length=120, blank=True)
+    meio = models.CharField(max_length=120, blank=True)
+    link_inteiro_teor = models.URLField(max_length=1000, blank=True)
+    tipo_documento = models.CharField(max_length=120, blank=True)
+    nome_classe = models.CharField(max_length=255, blank=True)
+    codigo_classe = models.CharField(max_length=50, blank=True)
+    texto = models.TextField(blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    collected_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-data_disponibilizacao", "-numero_comunicacao")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("source", "numero_comunicacao"),
+                name="unique_djen_communication_per_source",
+            )
+        ]
+        indexes = [
+            models.Index(fields=("data_disponibilizacao", "tribunal"), name="automation__data_di_98e3e9_idx"),
+            models.Index(fields=("read_at", "data_disponibilizacao"), name="automation__read_at_0b4038_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.processo.numero} — {self.tipo_comunicacao}"
+
+
+class DjenRecipient(models.Model):
+    communication = models.ForeignKey(
+        DjenCommunication, on_delete=models.CASCADE, related_name="recipients"
+    )
+    name = models.CharField(max_length=500)
+    pole = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+
+class DjenAttorney(models.Model):
+    communication = models.ForeignKey(
+        DjenCommunication, on_delete=models.CASCADE, related_name="attorneys"
+    )
+    name = models.CharField(max_length=500)
+    oab_number = models.CharField(max_length=30, blank=True)
+    oab_state = models.CharField(max_length=2, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+
 class UserProfile(models.Model):
     class Theme(models.TextChoices):
         LIGHT = "light", "Claro"

@@ -15,8 +15,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import AutomationRun, AutomationSource, Notice, UserProfile
-from .serializers import NoticeSerializer
+from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, UserProfile
+from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
 from .services.pjeoffice.token import TokenFisicoError, validar_token_fisico
 from expedientes.models import Expediente, ExpedienteEvent, Processo
@@ -255,6 +255,7 @@ def discard_today_collection(request):
             mensagem_info="Coleta descartada pelo usuário antes da execução.",
             finalizada_em=timezone.now(),
         )
+        deleted_djen = DjenCommunication.objects.filter(run__in=today_runs).delete()[0]
         events = list(
             ExpedienteEvent.objects.select_for_update()
             .filter(
@@ -306,6 +307,7 @@ def discard_today_collection(request):
         "reverted_updates": reverted_updates,
         "reactivated_expedientes": reactivated,
         "cleared_runs": cleared_runs,
+        "deleted_djen_communications": deleted_djen,
     })
 
 
@@ -372,15 +374,16 @@ def collection_history(request):
 @permission_classes([IsAuthenticated])
 def runs(request):
     if request.method == "POST":
-        try:
-            validar_token_fisico()
-        except TokenFisicoError as error:
-            return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
         requested_code = request.data.get("source", "pje-tjrn")
         rerun = request.data.get("rerun") is True
         requested_source = AutomationSource.objects.filter(code=requested_code).first()
         if not requested_source:
             return Response({"detail": "Fonte não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        if requested_code != "djen":
+            try:
+                validar_token_fisico()
+            except TokenFisicoError as error:
+                return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
         if rerun and not requested_source.enabled:
             return Response(
                 {"detail": "A fonte está desativada."},
@@ -477,3 +480,69 @@ def mark_notice_read(request, pk):
         notice.read_at = timezone.now()
         notice.save(update_fields=("read_at", "updated_at"))
     return Response(NoticeSerializer(Notice.objects.prefetch_related("source_links__source").get(pk=pk)).data)
+
+
+def _djen_queryset():
+    return DjenCommunication.objects.select_related("processo", "source").prefetch_related(
+        "recipients", "attorneys"
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def djen_communications(request):
+    queryset = _djen_queryset()
+    query = request.query_params.get("q", "").strip()
+    tribunal = request.query_params.get("tribunal", "").strip()
+    date_from = request.query_params.get("date_from", "").strip()
+    date_to = request.query_params.get("date_to", "").strip()
+    if date_from:
+        queryset = queryset.filter(data_disponibilizacao__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(data_disponibilizacao__lte=date_to)
+    if query:
+        queryset = queryset.filter(
+            Q(processo__numero__icontains=query)
+            | Q(texto__icontains=query)
+            | Q(recipients__name__icontains=query)
+            | Q(attorneys__name__icontains=query)
+        ).distinct()
+    if tribunal:
+        queryset = queryset.filter(tribunal=tribunal)
+    if request.query_params.get("read") == "unread":
+        queryset = queryset.filter(read_at__isnull=True)
+    try:
+        page = max(int(request.query_params.get("page", 1)), 1)
+    except ValueError:
+        return Response({"detail": "Página inválida."}, status=status.HTTP_400_BAD_REQUEST)
+    page_size = 20
+    total = queryset.count()
+    start = (page - 1) * page_size
+    items = queryset[start:start + page_size]
+    return Response({
+        "count": total,
+        "next": page + 1 if start + page_size < total else None,
+        "previous": page - 1 if page > 1 else None,
+        "results": DjenCommunicationSerializer(items, many=True).data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def djen_communication_detail(request, pk):
+    communication = _djen_queryset().filter(pk=pk).first()
+    if not communication:
+        return Response({"detail": "Publicação não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+    return Response(DjenCommunicationSerializer(communication).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_djen_read(request, pk):
+    communication = _djen_queryset().filter(pk=pk).first()
+    if not communication:
+        return Response({"detail": "Publicação não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+    if communication.read_at is None:
+        communication.read_at = timezone.now()
+        communication.save(update_fields=("read_at", "updated_at"))
+    return Response(DjenCommunicationSerializer(communication).data)

@@ -27,7 +27,7 @@ export function ExpedienteList({
 
   if (!items.length) {
     return (
-      <Panel innerClassName="px-6 py-16 text-center">
+      <div className="px-6 py-16 text-center">
         <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-muted border border-border text-muted-foreground">
           <FolderSimple size={26} weight="duotone" />
         </div>
@@ -37,7 +37,7 @@ export function ExpedienteList({
         <p className="mb-0 max-w-sm mx-auto text-xs sm:text-sm text-muted-foreground">
           Quando a coleta no PJe identificar novas intimações ou alterações, elas aparecerão nesta lista.
         </p>
-      </Panel>
+      </div>
     );
   }
 

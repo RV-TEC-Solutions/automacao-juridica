@@ -66,6 +66,24 @@ def executar_coleta(execucao=None):
         execucao.save(update_fields=("status", "iniciada_em", "mensagem_erro", "mensagem_info"))
 
     try:
+        if source.code == "djen":
+            from automation.services.djen.runner import collect_djen
+
+            resultado, mensagem_info = collect_djen(source=source, run=execucao)
+            if _was_cancelled(execucao):
+                return None
+            execucao.status = AutomationRun.Status.SUCCESS
+            execucao.capturas_html = 0
+            execucao.mensagem_info = mensagem_info
+            execucao.expedientes_encontrados = resultado["total"]
+            execucao.expedientes_criados = resultado["criados"]
+            execucao.expedientes_atualizados = resultado["atualizados"]
+            execucao.expedientes_resolvidos = 0
+            execucao.finalizada_em = timezone.now()
+            execucao.save()
+            _enqueue_next_source(execucao)
+            return resultado
+
         capture = abrir_pje(source.code, source=source)
         if _was_cancelled(execucao):
             return None
