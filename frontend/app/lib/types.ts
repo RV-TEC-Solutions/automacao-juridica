@@ -186,6 +186,13 @@ export type History = {
   days: HistoryDay[];
 };
 
+export type DjenHistory = {
+  count: number;
+  page: number;
+  page_size: number;
+  days: { date: string; items: DjenCommunication[] }[];
+};
+
 export type CollectionRun = {
   id: number;
   cycle_id: string;

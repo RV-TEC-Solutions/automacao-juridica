@@ -64,12 +64,15 @@ class ExpedienteViewSet(ReadOnlyModelViewSet):
             queryset = queryset.filter(tipo_pendencia=pending)
         if read := params.get("read"):
             queryset = queryset.filter(has_unread=(read == "unread"))
+        event_filters = {}
         if event_kind := params.get("event_kind"):
-            queryset = queryset.filter(events__kind=event_kind)
+            event_filters["kind"] = event_kind
         if date_from := params.get("date_from"):
-            queryset = queryset.filter(events__created_at__date__gte=date_from)
+            event_filters["created_at__date__gte"] = date_from
         if date_to := params.get("date_to"):
-            queryset = queryset.filter(events__created_at__date__lte=date_to)
+            event_filters["created_at__date__lte"] = date_to
+        if event_filters:
+            queryset = queryset.filter(pk__in=ExpedienteEvent.objects.filter(**event_filters).values("expediente_id"))
 
         now = timezone.now()
         urgent_limit = now + timedelta(hours=72)

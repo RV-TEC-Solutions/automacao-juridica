@@ -112,7 +112,7 @@ export default function Home() {
   }, [loadExpedientes]);
 
   const loadPublications = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(publicationPage), date_from: localDate(), date_to: localDate() });
+    const params = new URLSearchParams({ page: String(publicationPage), collected_from: localDate(), collected_to: localDate() });
     try {
       setPublications(await api<DjenCommunicationPage>(`djen/communications/?${params}`));
     } catch (exception) {
@@ -289,7 +289,7 @@ export default function Home() {
               {todayTab === "publicacoes" || activeMetric === "new" ? `Hoje (${formattedDate})` : metricFilters[activeMetric].title}
             </h2>
             <p className="mb-0 text-xs text-muted-foreground font-medium">
-              {todayTab === "publicacoes" ? "Publicações processuais disponibilizadas hoje no DJEN." : metricFilters[activeMetric].description}
+              {todayTab === "publicacoes" ? "Publicações processuais coletadas hoje no DJEN." : metricFilters[activeMetric].description}
             </p>
           </div>
         </div>
@@ -318,7 +318,7 @@ export default function Home() {
             </Link>
           </div>
           {publications ? <div>
-            <DjenList items={publications.results} onSelect={setSelectedPublication} home />
+            <DjenList items={publications.results} onSelect={setSelectedPublication} />
             {publications.results.length === 0 && <EmptyState icon={<Newspaper size={26} weight="duotone" />} title="Nenhuma publicação por aqui" description="Quando a coleta no DJEN identificar novas publicações processuais, elas aparecerão nesta lista." />}
           </div> : <LoadingRows />}
           {publications && <Pagination page={publicationPage} pages={Math.ceil(publications.count / 20)} onPageChange={setPublicationPage} label="Paginação de publicações processuais" />}

@@ -1,26 +1,30 @@
 "use client";
 
-import { CalendarBlank, FolderSimple } from "@phosphor-icons/react";
+import { CalendarBlank, FolderSimple, Newspaper } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AppShell } from "../components/app-shell";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
+import { DjenList } from "../components/djen-list";
+import { DjenDrawer } from "../components/djen-drawer";
 import { CollectionHistoryPanel } from "../components/collection-history";
 import { EmptyState, HistoryDayHeader, LoadingRows, PageTitle, Pagination } from "../components/ui";
 import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
-import type { Expediente, History } from "../lib/types";
+import type { DjenCommunication, DjenHistory, Expediente, History } from "../lib/types";
 
 export function HistoricoClient() {
   const router = useRouter();
   const search = useSearchParams();
   const [data, setData] = useState<History | null>(null);
   const [selected, setSelected] = useState<Expediente | null>(null);
+  const [publications, setPublications] = useState<DjenHistory | null>(null);
+  const [selectedPublication, setSelectedPublication] = useState<DjenCommunication | null>(null);
   const { notify } = useNotifications();
   const [error, setError] = useState("");
-  const tab = search.get("tab") === "orquestracao" ? "orquestracao" : "expedientes";
+  const tab = search.get("tab") === "orquestracao" ? "orquestracao" : search.get("tab") === "publicacoes" ? "publicacoes" : "expedientes";
   const page = Math.max(1, Number(search.get("page") ?? 1) || 1);
   const load = useCallback(async () => {
     try { setData(await api<History>("history/?page=" + page)); setError(""); }
@@ -30,6 +34,16 @@ export function HistoricoClient() {
     if (tab !== "expedientes") return;
     queueMicrotask(() => { void load(); });
   }, [load, tab]);
+  useEffect(() => {
+    if (tab !== "publicacoes") return;
+    queueMicrotask(() => {
+      void api<DjenHistory>("djen/history/?page=" + page).then(setPublications).catch((exception) => {
+        const message = exception instanceof Error ? exception.message : "Falha ao carregar publicações.";
+        setError(message);
+        notify({ message });
+      });
+    });
+  }, [page, tab, notify]);
 
   const markRead = () => {
     if (!selected) return;
@@ -52,7 +66,7 @@ export function HistoricoClient() {
     router.replace("/historico?" + params);
   };
 
-  const selectTab = (nextTab: "expedientes" | "orquestracao") => {
+  const selectTab = (nextTab: "expedientes" | "publicacoes" | "orquestracao") => {
     const params = new URLSearchParams(search);
     if (nextTab === "expedientes") params.delete("tab");
     else params.set("tab", nextTab);
@@ -62,10 +76,25 @@ export function HistoricoClient() {
   };
 
   return <AppShell>
-    <PageTitle title="Histórico" description="Consulte os expedientes identificados e a orquestração das fontes nos últimos 30 dias." />
-    <Tabs value={tab} onValueChange={(value) => selectTab(value as "expedientes" | "orquestracao")}>
-      <TabsList aria-label="Tipo de histórico"><TabsTrigger value="expedientes">Expedientes</TabsTrigger><TabsTrigger value="orquestracao">Orquestração de coletas</TabsTrigger></TabsList>
+    <PageTitle title="Histórico" description="Consulte expedientes, publicações processuais e coletas dos últimos 30 dias." />
+    <Tabs value={tab} onValueChange={(value) => selectTab(value as "expedientes" | "publicacoes" | "orquestracao")}>
+      <TabsList aria-label="Tipo de histórico"><TabsTrigger value="expedientes">Expedientes</TabsTrigger><TabsTrigger value="publicacoes">Publicações Processuais</TabsTrigger><TabsTrigger value="orquestracao">Orquestração de coletas</TabsTrigger></TabsList>
       <TabsContent value="orquestracao"><CollectionHistoryPanel /></TabsContent>
+      <TabsContent value="publicacoes">
+        {!publications && !error && <LoadingRows />}
+        {publications && <div className="space-y-8">
+          {publications.days.map((day) => <section key={day.date} aria-labelledby={`publication-day-${day.date}`}>
+            <HistoryDayHeader date={day.date} label={`${day.items.length} publicação${day.items.length === 1 ? "" : "ões"}`} icon={<Newspaper size={18} weight="duotone" aria-hidden="true" />} id={`publication-day-${day.date}`} />
+            <DjenList items={day.items} onSelect={setSelectedPublication} />
+          </section>)}
+          {publications.count === 0 && <EmptyState icon={<Newspaper size={26} weight="duotone" />} title="Nenhuma publicação encontrada" description="Não houve publicações processuais coletadas nos últimos 30 dias." />}
+          <Pagination page={page} pages={Math.max(1, Math.ceil(publications.count / publications.page_size))} onPageChange={go} label="Paginação do histórico de publicações" />
+        </div>}
+        <DjenDrawer item={selectedPublication} onClose={() => setSelectedPublication(null)} onRead={(updated) => {
+          setSelectedPublication(updated);
+          setPublications((current) => current && { ...current, days: current.days.map((day) => ({ ...day, items: day.items.map((item) => item.id === updated.id ? updated : item) })) });
+        }} />
+      </TabsContent>
       <TabsContent value="expedientes">
 
     {!data && !error && <LoadingRows />}

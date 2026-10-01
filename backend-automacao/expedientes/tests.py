@@ -6,7 +6,7 @@ from django.utils import timezone
 from zoneinfo import ZoneInfo
 from rest_framework.test import APIClient
 
-from automation.models import AutomationRun, AutomationSource
+from automation.models import AutomationRun, AutomationSource, DjenCommunication
 from automation.services.pje.persistence import salvar_expedientes
 from .models import Expediente, ExpedienteEvent
 
@@ -109,6 +109,37 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(len(response.data["results"]), 1)
+
+    def test_event_kind_and_date_must_match_the_same_event(self):
+        local_tz = ZoneInfo("America/Fortaleza")
+        today = timezone.localdate(timezone=local_tz)
+        expediente = Expediente.objects.get()
+        created = expediente.events.get(kind=ExpedienteEvent.Kind.NEW)
+        created.created_at = datetime.combine(today - timedelta(days=1), datetime.min.time(), tzinfo=local_tz)
+        created.save(update_fields=("created_at",))
+        ExpedienteEvent.objects.create(expediente=expediente, kind=ExpedienteEvent.Kind.UPDATED)
+
+        response = self.client.get(f"/api/expedientes/?event_kind=new&date_from={today}&date_to={today}")
+
+        self.assertEqual(response.data["count"], 0)
+
+    def test_djen_today_and_history_use_collection_date(self):
+        today = timezone.localdate(timezone=ZoneInfo("America/Fortaleza"))
+        yesterday = today - timedelta(days=1)
+        publication = DjenCommunication.objects.create(
+            source=AutomationSource.objects.get(code="djen"),
+            processo=Expediente.objects.get().processo,
+            numero_comunicacao=123456,
+            data_disponibilizacao=yesterday,
+            tribunal="TJRN",
+        )
+        today_list = self.client.get(f"/api/djen/communications/?collected_from={today}&collected_to={today}")
+        history = self.client.get("/api/djen/history/")
+
+        self.assertEqual(today_list.data["count"], 1)
+        self.assertEqual(today_list.data["results"][0]["id"], publication.id)
+        self.assertEqual(history.data["days"][0]["date"], today.isoformat())
+        self.assertEqual(history.data["days"][0]["items"][0]["id"], publication.id)
 
     def test_statistics_validates_period(self):
         self.assertEqual(self.client.get("/api/statistics/?period=10").status_code, 400)

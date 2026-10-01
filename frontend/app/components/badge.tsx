@@ -55,7 +55,7 @@ export function EventBadges({ item }: { item: Expediente }) {
       </Badge>
       {item.tipo_pendencia_label && (
         <span className="inline-flex items-center gap-1">
-          <Badge tone="neutral">{item.tipo_pendencia === "nao_identificada" ? "Tipo de pendência: não identificada" : item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
+          <Badge tone="neutral">{item.tipo_pendencia === "nao_identificada" ? "Tipo de pendência: Não identificada" : item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
           {item.tipo_pendencia === "nao_identificada" &&
             <span tabIndex={0} role="img" aria-label={unidentifiedPendingHelp} title={unidentifiedPendingHelp} className="cursor-help text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><Info size={14} weight="bold" aria-hidden="true" /></span>
           }
