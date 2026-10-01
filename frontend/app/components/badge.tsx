@@ -1,5 +1,15 @@
 import type { Expediente } from "../lib/types";
 
+const sourceBadgeClasses: Record<string, string> = {
+  "pje-tjrn": "source-badge-tjrn-1g", "pje2g-tjrn": "source-badge-tjrn-2g",
+  "tre-rn-1g": "source-badge-tre-rn-1g", "tre-rn-2g": "source-badge-tre-rn-2g",
+  "tse-3g": "source-badge-tse-3g",
+  trt21: "source-badge-trt21-1g", "trt21-2g": "source-badge-trt21-2g",
+  "trf5-2g-tru": "source-badge-trf5-tru", "varas-justica-comum": "source-badge-trf5-varas",
+  "jef-5-regiao": "source-badge-trf5-jef", "trs-5-regiao": "source-badge-trf5-trs",
+  "tru-5-regiao": "source-badge-trf5-tru-alt",
+};
+
 export function Badge({
   tone = "neutral",
   children,
@@ -29,7 +39,8 @@ export function Badge({
 }
 
 export function SourceBadge({ source }: { source: NonNullable<Expediente["source"]> }) {
-  return <span data-source={source.code} className="inline-flex w-max items-center gap-2 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium text-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground" /><span className="whitespace-nowrap">{source.system} · {source.tribunal}</span></span>;
+  const sourceClass = sourceBadgeClasses[source.code] ?? "source-badge-default";
+  return <span data-source={source.code} className={`source-badge ${sourceClass}`}><span aria-hidden="true" className="source-badge-dot" /><span className="whitespace-nowrap">{source.system} · {source.tribunal}</span></span>;
 }
 
 export function EventBadges({ item }: { item: Expediente }) {
@@ -40,7 +51,7 @@ export function EventBadges({ item }: { item: Expediente }) {
         {item.latest_event?.kind_label ?? (item.ativo ? "Ativo" : "Resolvido")}
       </Badge>
       {item.tipo_pendencia_label && (
-        <Badge tone="neutral">{item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
+        <Badge tone="neutral">{item.tipo_pendencia_label === "Não identificada" ? "Tipo de pendência: não identificada" : item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
       )}
       {item.source && <SourceBadge source={item.source} />}
     </div>

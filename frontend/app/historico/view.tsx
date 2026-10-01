@@ -8,20 +8,10 @@ import { AppShell } from "../components/app-shell";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
 import { CollectionHistoryPanel } from "../components/collection-history";
-import { Panel, LoadingRows, PageTitle, Pagination } from "../components/ui";
+import { EmptyState, HistoryDayHeader, LoadingRows, PageTitle, Pagination } from "../components/ui";
 import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 import type { Expediente, History } from "../lib/types";
-
-function formatDay(date: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Fortaleza", day: "numeric", month: "long", year: "numeric",
-  }).format(new Date(`${date}T12:00:00-03:00`));
-}
-
-function itemsForDay(day: History["days"][number]): Expediente[] {
-  return day.items.map(({ event, expediente }) => ({ ...expediente, latest_event: event }));
-}
 
 export function HistoricoClient() {
   const router = useRouter();
@@ -80,14 +70,12 @@ export function HistoricoClient() {
 
     {!data && !error && <LoadingRows />}
     {data && <div className="space-y-8">{data.days.map((day) => {
-      const items = itemsForDay(day);
-      const totalLabel = `${day.new_count} expediente${day.new_count === 1 ? "" : "s"}`;
       return <section key={day.date} aria-labelledby={`history-day-${day.date}`}>
-        <header className="mb-4 flex items-center gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-muted text-muted-foreground"><CalendarBlank size={18} weight="duotone" aria-hidden="true" /></span><h2 id={`history-day-${day.date}`} className="text-sm font-extrabold tracking-tight text-foreground sm:text-base">{formatDay(day.date)} <span className="font-medium text-muted-foreground">({totalLabel})</span></h2></header>
-        {items.length ? <ExpedienteList items={items} onSelect={setSelected} /> : <Panel innerClassName="flex items-center gap-4 px-6 py-4 text-xs font-semibold text-muted-foreground"><FolderSimple size={19} weight="duotone" className="shrink-0" />Nenhum expediente novo coletado neste dia.</Panel>}
+        <HistoryDayHeader date={day.date} label={`${day.new_count} expediente${day.new_count === 1 ? "" : "s"}`} icon={<CalendarBlank size={18} weight="duotone" aria-hidden="true" />} id={`history-day-${day.date}`} />
+        <ExpedienteList items={day.items.map(({ event, expediente }) => ({ ...expediente, latest_event: event }))} onSelect={setSelected} />
       </section>;
     })}
-    {data.count === 0 && <Panel innerClassName="flex items-center gap-4 px-6 py-4 text-xs font-semibold text-muted-foreground"><FolderSimple size={19} weight="duotone" className="shrink-0" />Nenhum expediente novo coletado nos últimos 30 dias.</Panel>}
+    {data.count === 0 && <EmptyState icon={<FolderSimple size={26} weight="duotone" />} title="Nenhum expediente encontrado" description="A consulta diária pode não ter expedientes para os filtros atuais." />}
     <Pagination page={page} pages={pages} onPageChange={go} label="Paginação do histórico" />
     </div>}
     <ExpedienteDrawer item={selected} onClose={() => setSelected(null)} onRead={markRead} />

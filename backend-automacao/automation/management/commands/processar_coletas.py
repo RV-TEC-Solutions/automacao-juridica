@@ -3,7 +3,7 @@ import time
 from django.core.management.base import BaseCommand
 
 from automation.queue import claim_next_run, enqueue_due_runs, recover_interrupted_runs
-from automation.services.pjeoffice.token import TokenFisicoError, validar_token_fisico
+from automation.services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
 from automation.services.pje.runner import executar_coleta
 
 
