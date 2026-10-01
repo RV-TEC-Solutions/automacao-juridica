@@ -1,4 +1,7 @@
+import { Info } from "@phosphor-icons/react";
 import type { Expediente } from "../lib/types";
+
+const unidentifiedPendingHelp = "O PJe não forneceu informações suficientes para distinguir se este expediente aguarda ciência ou resposta.";
 
 const sourceBadgeClasses: Record<string, string> = {
   "pje-tjrn": "source-badge-tjrn-1g", "pje2g-tjrn": "source-badge-tjrn-2g",
@@ -51,7 +54,12 @@ export function EventBadges({ item }: { item: Expediente }) {
         {item.latest_event?.kind_label ?? (item.ativo ? "Ativo" : "Resolvido")}
       </Badge>
       {item.tipo_pendencia_label && (
-        <Badge tone="neutral">{item.tipo_pendencia_label === "Não identificada" ? "Tipo de pendência: não identificada" : item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
+        <span className="inline-flex items-center gap-1">
+          <Badge tone="neutral">{item.tipo_pendencia === "nao_identificada" ? "Tipo de pendência: não identificada" : item.tipo_pendencia_label.replace("Pendente de ", "")}</Badge>
+          {item.tipo_pendencia === "nao_identificada" &&
+            <span tabIndex={0} role="img" aria-label={unidentifiedPendingHelp} title={unidentifiedPendingHelp} className="cursor-help text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><Info size={14} weight="bold" aria-hidden="true" /></span>
+          }
+        </span>
       )}
       {item.source && <SourceBadge source={item.source} />}
     </div>
