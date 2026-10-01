@@ -59,19 +59,33 @@ MIDDLEWARE = [
 cors_origins_env = os.environ.get('CORS_ALLOWED_ORIGINS')
 if cors_origins_env:
     CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+    if '*' in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:3002",
         "http://127.0.0.1:3002",
     ]
+    CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() in ('true', '1')
 
 CORS_ALLOW_CREDENTIALS = True
 
+default_csrf_origins = [
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+    "http://0.0.0.0:3002",
+    "http://10.0.2.15:3002",
+    "http://10.0.2.2:3002",
+]
 csrf_origins_env = os.environ.get('CSRF_TRUSTED_ORIGINS')
 if csrf_origins_env:
-    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins_env.split(',') if origin.strip()]
+    custom_origins = [
+        origin.strip() for origin in csrf_origins_env.split(',')
+        if origin.strip().startswith(('http://', 'https://'))
+    ]
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(default_csrf_origins + custom_origins))
 else:
-    CSRF_TRUSTED_ORIGINS = ["http://localhost:3002", "http://127.0.0.1:3002"]
+    CSRF_TRUSTED_ORIGINS = default_csrf_origins
 
 
 REST_FRAMEWORK = {

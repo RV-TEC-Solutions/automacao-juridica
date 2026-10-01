@@ -21,6 +21,18 @@ export GTK_MODULES=gail:atk-bridge
 export QT_ACCESSIBILITY=1
 export AT_SPI_CLIENT=1
 
+# Start PJeOffice Pro in background if installed
+if command -v pjeoffice-pro >/dev/null 2>&1; then
+    echo "Iniciando PJeOffice Pro..."
+    pjeoffice-pro &
+    sleep 2
+elif command -v pjeoffice >/dev/null 2>&1; then
+    echo "Iniciando PJeOffice..."
+    pjeoffice &
+    sleep 2
+fi
+
+
 # Run Django database migrations
 python manage.py migrate --noinput
 
