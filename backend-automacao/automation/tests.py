@@ -39,7 +39,7 @@ from .services.pje.browser import (
 )
 from .pipeline import collection_pipeline_payload
 from .services.pje.runner import executar_coleta
-from .services.pjeoffice.token import TokenFisicoError
+from .services.pjeoffice.token_fisico import TokenFisicoError
 from .services.pje.sources import (
     PJE_SOURCE_ORDER,
     TSE_PORTAL_URL,

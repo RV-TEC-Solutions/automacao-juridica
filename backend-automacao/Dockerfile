@@ -17,15 +17,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    unzip \
     xvfb \
     dbus-x11 \
     at-spi2-core \
     python3-pyatspi \
     default-jre \
+    pcsc-tools \
     pcscd \
     libpcsclite1 \
     procps \
     && rm -rf /var/lib/apt/lists/*
+
+
+
+# Download e configuracao oficial do PJeOffice Pro
+RUN curl -fsSL -o /tmp/pjeoffice-pro.zip "https://pje-office.pje.jus.br/pro/pjeoffice-pro-v2.5.16u-linux_x64.zip" \
+    && unzip -q /tmp/pjeoffice-pro.zip -d /opt/ \
+    && rm -f /tmp/pjeoffice-pro.zip \
+    && chmod +x /opt/pjeoffice-pro/pjeoffice-pro.sh \
+    && chmod +x /opt/pjeoffice-pro/jre/bin/* \
+    && printf '#!/bin/sh\ncd /opt/pjeoffice-pro && ./pjeoffice-pro.sh "$@"\n' > /usr/local/bin/pjeoffice-pro \
+    && chmod +x /usr/local/bin/pjeoffice-pro
+
+
 
 # Copy requirements and install Python packages
 COPY requirements.txt .
