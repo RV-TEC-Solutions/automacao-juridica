@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { AppShell } from "../components/app-shell";
+import { RecordList } from "../components/record-list";
 import { Panel, PageTitle } from "../components/ui";
 import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
@@ -33,6 +34,7 @@ export default function SettingsPage() {
   const { notify } = useNotifications();
   const [data, setData] = useState<Settings | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
+  const [updatingSources, setUpdatingSources] = useState(false);
 
   const load = useCallback(() =>
     Promise.all([api<Settings>("settings/"), api<Source[]>("sources/")])
@@ -90,15 +92,24 @@ export default function SettingsPage() {
     }
   };
 
-  const toggle = async (source: Source) => {
+  const updateSources = async (items: Source[], enabled: boolean) => {
+    const changed = items.filter((source) => source.enabled !== enabled);
+    if (!changed.length) return;
+    setUpdatingSources(true);
     try {
-      const next = await api<Source>(`sources/${source.code}/`, {
+      const results = await Promise.allSettled(changed.map((source) => api<Source>(`sources/${source.code}/`, {
         method: "PATCH",
-        body: JSON.stringify({ enabled: !source.enabled }),
+        body: JSON.stringify({ enabled }),
+      })));
+      const updated = new Map<string, Source>();
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") updated.set(changed[index].code, result.value);
       });
-      setSources((values) => values.map((item) => (item.code === next.code ? next : item)));
-    } catch (exception) {
-      notify({ message: exception instanceof Error ? exception.message : "Falha ao atualizar fonte." });
+      setSources((current) => current.map((source) => updated.get(source.code) ?? source));
+      const failed = results.filter((result) => result.status === "rejected").length;
+      if (failed) notify({ message: `${failed} fonte${failed === 1 ? " não pôde" : "s não puderam"} ser atualizada${failed === 1 ? "" : "s"}.` });
+    } finally {
+      setUpdatingSources(false);
     }
   };
 
@@ -194,13 +205,20 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <RecordList>
+            <li className="flex min-h-16 items-center gap-4 bg-muted/50 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <strong className="block text-xs font-bold text-foreground sm:text-sm">Todas as fontes</strong>
+                <small className="text-xs text-muted-foreground">Habilitar ou desabilitar a coleta em todas as fontes</small>
+              </div>
+              <Switch aria-label="Habilitar todas as fontes" checked={sources.length > 0 && sources.every((source) => source.enabled)} disabled={!sources.length || updatingSources} onCheckedChange={(checked) => { void updateSources(sources, checked); }} />
+            </li>
             {sources.map((source) => (
-              <div
-                className="flex items-center gap-4 rounded-xl border border-border bg-muted/50 p-4"
+              <li
+                className="flex min-h-16 items-center gap-4 px-4 py-3"
                 key={source.code}
               >
-                <span className="grid size-10 place-items-center rounded-lg border border-border bg-card text-xs font-extrabold text-foreground font-mono">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-border bg-card text-xs font-extrabold text-foreground font-mono">
                   PJe
                 </span>
                 <div className="min-w-0 flex-1">
@@ -214,11 +232,12 @@ export default function SettingsPage() {
                 <Switch
                   aria-label={`Coleta ${source.system} ${source.tribunal}`}
                   checked={source.enabled}
-                  onCheckedChange={() => { void toggle(source); }}
+                  disabled={updatingSources}
+                  onCheckedChange={(checked) => { void updateSources([source], checked); }}
                 />
-              </div>
+              </li>
             ))}
-          </div>
+          </RecordList>
         </Panel>
 
         {data && (
@@ -235,15 +254,15 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <RecordList>
               <Check ok={Boolean(data.credential_status.credential_file)} label="Arquivo de credenciais" />
               <Check ok={Boolean(data.credential_status.pin)} label="PIN do certificado digital A1/A3" />
               <Check ok={Boolean(data.credential_status.totp)} label="Segredo TOTP de dois fatores" />
               <Check ok label="PJeOffice Integrado" note="Verificado e autenticado a cada coleta" />
-              <code className="mt-2 block rounded-xl border border-border bg-muted/60 p-2 text-xs font-mono text-muted-foreground">
-                ~/.config/pje-automacao/.env
-              </code>
-            </div>
+            </RecordList>
+            <code className="mt-2 block rounded-xl border border-border bg-muted/60 p-2 text-xs font-mono text-muted-foreground">
+              ~/.config/pje-automacao/.env
+            </code>
           </Panel>
         )}
       </div>
@@ -310,7 +329,7 @@ export default function SettingsPage() {
 
 function Check({ ok, label, note }: { ok: boolean; label: string; note?: string }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-border bg-muted/50 p-4">
+    <li className="flex min-h-16 items-center gap-4 px-4 py-3">
       <span
         className={`grid size-6 place-items-center rounded-full text-xs font-bold ${
           ok ? "bg-success-soft text-success border border-success/30" : "bg-warning-soft text-warning border border-warning/30"
@@ -324,6 +343,6 @@ function Check({ ok, label, note }: { ok: boolean; label: string; note?: string 
           {note ?? (ok ? "Configurado e operacional" : "Configuração ausente")}
         </small>
       </div>
-    </div>
+    </li>
   );
 }

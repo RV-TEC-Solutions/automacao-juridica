@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, UserProfile
 from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
-from .services.pjeoffice.token import TokenFisicoError, validar_token_fisico
+from .services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
 from expedientes.models import Expediente, ExpedienteEvent, Processo
 
 

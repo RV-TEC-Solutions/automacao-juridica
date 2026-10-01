@@ -39,6 +39,7 @@ services:
     ports:
       - "8007:8007"
     volumes:
+      - /run/pcscd/pcscd.comm:/run/pcscd/pcscd.comm
       - ./backend-automacao/respostas_expedientes:/app/respostas_expedientes
       - ~/.config/pje-automacao:/root/.config/pje-automacao:ro
     depends_on:
@@ -63,6 +64,7 @@ services:
       DJEN_OAB_NUMBER: ${DJEN_OAB_NUMBER:-5691}
       DJEN_OAB_STATE: ${DJEN_OAB_STATE:-RN}
     volumes:
+      - /run/pcscd/pcscd.comm:/run/pcscd/pcscd.comm
       - ./backend-automacao/respostas_expedientes:/app/respostas_expedientes
       - ~/.config/pje-automacao:/root/.config/pje-automacao:ro
     depends_on:

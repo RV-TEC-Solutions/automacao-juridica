@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Sparkle, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, Bell, ChartLineUp, CalendarDots, ClockCounterClockwise, Newspaper, Sparkle, WarningCircle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "./components/app-shell";
 import { Clock } from "./components/clock";
@@ -10,7 +10,8 @@ import { DiscardCollectionDialog } from "./components/discard-collection-dialog"
 import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
 import { DjenDrawer } from "./components/djen-drawer";
-import { LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
+import { DjenList } from "./components/djen-list";
+import { EmptyState, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNotifications } from "./components/notifications";
 import { api } from "./lib/api";
@@ -291,13 +292,6 @@ export default function Home() {
               {todayTab === "publicacoes" ? "Publicações processuais disponibilizadas hoje no DJEN." : metricFilters[activeMetric].description}
             </p>
           </div>
-          <Link
-            href={todayTab === "publicacoes" ? "/djen" : "/expedientes"}
-            className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline hover:text-foreground transition-colors"
-          >
-            Ver consulta completa
-            <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
-          </Link>
         </div>
 
         <TabsList aria-label="Tipo de coleta de hoje" className="mb-5 h-auto w-full gap-1 rounded-lg border-0 bg-muted p-1 sm:w-fit">
@@ -306,16 +300,26 @@ export default function Home() {
         </TabsList>
 
         <TabsContent value="expedientes">
+          <div className="mb-4 flex justify-end">
+            <Link href="/expedientes" className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline transition-colors hover:text-foreground">
+              Ver consulta completa
+              <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
+            </Link>
+          </div>
           {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : <LoadingRows />}
           {expedientes && <Pagination page={listPage} pages={Math.ceil(expedientes.count / 50)} onPageChange={setListPage} label="Paginação de expedientes" />}
         </TabsContent>
 
         <TabsContent value="publicacoes">
-          {publications ? <div className="space-y-3">
-            {publications.results.map((item) => <button key={item.id} type="button" onClick={() => setSelectedPublication(item)} className="block w-full rounded-xl border bg-card p-5 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-md border bg-muted px-2 py-1 text-xs font-extrabold">{item.tribunal}</span>{item.unread && <span className="rounded-full bg-warning-soft px-2 py-1 text-xs font-extrabold text-warning">NOVA</span>}</div><strong className="font-mono text-sm sm:text-base">{item.processo.numero}</strong><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{item.texto || item.tipo_comunicacao}</p></div><span className="shrink-0 text-xs font-semibold text-muted-foreground">{item.tipo_comunicacao || "Comunicação"}</span></div>
-            </button>)}
-            {publications.results.length === 0 && <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">Nenhuma publicação processual disponibilizada hoje.</div>}
+          <div className="mb-4 flex justify-end">
+            <Link href="/djen" className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline transition-colors hover:text-foreground">
+              Ver consulta completa
+              <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
+            </Link>
+          </div>
+          {publications ? <div>
+            <DjenList items={publications.results} onSelect={setSelectedPublication} home />
+            {publications.results.length === 0 && <EmptyState icon={<Newspaper size={26} weight="duotone" />} title="Nenhuma publicação por aqui" description="Quando a coleta no DJEN identificar novas publicações processuais, elas aparecerão nesta lista." />}
           </div> : <LoadingRows />}
           {publications && <Pagination page={publicationPage} pages={Math.ceil(publications.count / 20)} onPageChange={setPublicationPage} label="Paginação de publicações processuais" />}
         </TabsContent>

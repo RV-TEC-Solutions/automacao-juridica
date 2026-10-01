@@ -15,6 +15,14 @@ describe("EventBadges", () => {
     expect(screen.getByText("resposta")).toBeInTheDocument();
   });
 
+  it("clarifies what is not identified in an expediente card", () => {
+    const item = {
+      unread: false, ativo: true, tipo_pendencia_label: "Não identificada",
+    } as Expediente;
+    render(<EventBadges item={item} />);
+    expect(screen.getByText("Tipo de pendência: não identificada")).toBeInTheDocument();
+  });
+
   it("always shows a distinct, labelled badge for the source", () => {
     const item = { unread: false, ativo: true, tipo_pendencia_label: "", latest_event: { kind: "new", kind_label: "Novo" }, source: { code: "trt21", system: "PJe 1º Grau", tribunal: "TRT21" } } as Expediente;
     render(<EventBadges item={item} />);

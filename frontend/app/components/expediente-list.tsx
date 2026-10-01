@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatDateTime } from "../lib/api";
 import type { Expediente } from "../lib/types";
 import { EventBadges } from "./badge";
-import { Panel } from "./ui";
+import { EmptyState, Panel } from "./ui";
 
 export function ExpedienteList({
   items,
@@ -25,21 +25,7 @@ export function ExpedienteList({
     }
   };
 
-  if (!items.length) {
-    return (
-      <div className="px-6 py-16 text-center">
-        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-muted border border-border text-muted-foreground">
-          <FolderSimple size={26} weight="duotone" />
-        </div>
-        <h3 className="mb-2 text-base font-extrabold text-foreground">
-          Nenhum expediente por aqui
-        </h3>
-        <p className="mb-0 max-w-sm mx-auto text-xs sm:text-sm text-muted-foreground">
-          Quando a coleta no PJe identificar novas intimações ou alterações, elas aparecerão nesta lista.
-        </p>
-      </div>
-    );
-  }
+  if (!items.length) return <EmptyState icon={<FolderSimple size={26} weight="duotone" />} title="Nenhum expediente por aqui" description="Quando a coleta no PJe identificar novas intimações ou alterações, elas aparecerão nesta lista." />;
 
   return (
     <Panel innerClassName="overflow-hidden">

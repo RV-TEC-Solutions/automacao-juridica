@@ -21,6 +21,15 @@ export function PageTitle({ title, description, actions }: { title: string; desc
 
 export function LoadingRows() { return <Panel innerClassName="space-y-2 p-4">{[1, 2, 3].map((row) => <Skeleton className="h-20 w-full" key={row} />)}</Panel>; }
 
+export function EmptyState({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return <div className="px-6 py-16 text-center"><div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl border border-border bg-muted text-muted-foreground">{icon}</div><h3 className="mb-2 text-base font-extrabold text-foreground">{title}</h3><p className="mx-auto mb-0 max-w-sm text-xs text-muted-foreground sm:text-sm">{description}</p></div>;
+}
+
+export function HistoryDayHeader({ date, label, icon, id }: { date: string; label: string; icon: ReactNode; id: string }) {
+  const formatted = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00-03:00`));
+  return <header className="mb-4 flex items-center gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-lg border border-border bg-muted text-muted-foreground">{icon}</span><h2 id={id} className="text-sm font-extrabold tracking-tight text-foreground sm:text-base">{formatted} <span className="font-medium text-muted-foreground">({label})</span></h2></header>;
+}
+
 export function Pagination({ page, pages, onPageChange, label = "Paginação" }: { page: number; pages: number; onPageChange: (page: number) => void; label?: string }) {
   if (pages <= 1) return null;
   return <nav className="mt-6 flex items-center justify-center gap-4 text-xs text-muted-foreground" aria-label={label}>
