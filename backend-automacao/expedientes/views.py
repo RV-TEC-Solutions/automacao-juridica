@@ -15,6 +15,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from automation.models import AutomationRun, Notice, UserProfile
 from automation.pipeline import collection_pipeline_payload
+from automation.time_saved import time_saved_summary
 from automation.serializers import NoticeSerializer
 from .models import Expediente, ExpedienteEvent
 from .serializers import EventSerializer, ExpedienteSerializer
@@ -269,6 +270,7 @@ def statistics(request):
     active = Expediente.objects.filter(ativo=True)
     return Response({
         "period": period,
+        "time_saved": time_saved_summary(),
         "totals": {"current": current_total, "previous": previous_total, "change_percent": comparison, **by_kind},
         "timeline": list(timeline_rows),
         "pending_distribution": list(active.values("tipo_pendencia").annotate(total=Count("id")).order_by("tipo_pendencia")),

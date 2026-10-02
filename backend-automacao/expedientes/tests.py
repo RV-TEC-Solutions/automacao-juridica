@@ -106,6 +106,59 @@ class ApiTests(TestCase):
 
         self.assertGreater(dashboard.data["today"]["discardable"], 0)
 
+    def test_time_saved_accumulates_successful_source_days_without_rerun_inflation(self):
+        now = timezone.now()
+        local_yesterday = timezone.localdate(now, timezone=ZoneInfo("America/Fortaleza")) - timedelta(days=1)
+        yesterday = datetime.combine(local_yesterday, datetime.min.time(), tzinfo=ZoneInfo("America/Fortaleza")) + timedelta(hours=12)
+        portal = AutomationSource.objects.get(code="tre-rn-1g")
+        djen = AutomationSource.objects.get(code="djen")
+        for source, finished_at, found, created, captures in (
+            (self.source, now, 2, 0, 2),
+            (self.source, now, 4, 0, 3),
+            (portal, yesterday, 2, 0, 1),
+            (djen, now, 3, 3, 0),
+            (djen, now, 1, 1, 0),
+        ):
+            AutomationRun.objects.create(
+                source=source, status=AutomationRun.Status.SUCCESS,
+                iniciada_em=finished_at - timedelta(minutes=1), finalizada_em=finished_at,
+                expedientes_encontrados=found, expedientes_criados=created,
+                capturas_html=captures,
+            )
+        AutomationRun.objects.create(
+            source=portal, status=AutomationRun.Status.FAILED,
+            finalizada_em=now, expedientes_encontrados=99,
+        )
+        AutomationRun.objects.create(
+            source=portal, status=AutomationRun.Status.SUCCESS,
+            finalizada_em=now, expedientes_encontrados=99, descartada_em=now,
+        )
+
+        saved = self.client.get("/api/statistics/").data["time_saved"]
+
+        self.assertEqual(saved, {
+            "total_seconds": 2550,
+            "today_seconds": 1875,
+            "source_days": 3,
+            "items": 10,
+            "tabs": 4,
+        })
+
+    def test_time_saved_caps_each_day_at_four_hours(self):
+        local_today = timezone.localdate(timezone=ZoneInfo("America/Fortaleza"))
+        for day, found in ((local_today, 300), (local_today - timedelta(days=1), 4)):
+            finished_at = datetime.combine(day, datetime.min.time(), tzinfo=ZoneInfo("America/Fortaleza")) + timedelta(hours=12)
+            AutomationRun.objects.create(
+                source=self.source, status=AutomationRun.Status.SUCCESS,
+                iniciada_em=finished_at - timedelta(minutes=1), finalizada_em=finished_at,
+                expedientes_encontrados=found,
+            )
+
+        saved = self.client.get("/api/statistics/").data["time_saved"]
+
+        self.assertEqual(saved["today_seconds"], 4 * 60 * 60)
+        self.assertEqual(saved["total_seconds"], 4 * 60 * 60 + 360 + 4 * 75)
+
     def test_search_filter_and_pagination_contract(self):
         response = self.client.get("/api/expedientes/?q=PARTE+A&read=unread")
         self.assertEqual(response.status_code, 200)
