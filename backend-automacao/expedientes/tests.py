@@ -4,7 +4,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 from zoneinfo import ZoneInfo
+from unittest.mock import patch
 from rest_framework.test import APIClient
+from rest_framework.response import Response
 
 from automation.models import AutomationRun, AutomationSource, DjenCommunication
 from automation.services.pje.persistence import salvar_expedientes
@@ -122,6 +124,69 @@ class ApiTests(TestCase):
         response = self.client.get(f"/api/expedientes/?event_kind=new&date_from={today}&date_to={today}")
 
         self.assertEqual(response.data["count"], 0)
+
+    def test_pdf_export_uses_all_filtered_results_and_consolidates_events(self):
+        second = payload(identifier="200", numero_processo="0800001-00.2026.8.20.0001", assunto="Outro assunto")
+        salvar_expedientes([second], source=self.source)
+        expediente = Expediente.objects.get(identificador_pje="100")
+        ExpedienteEvent.objects.create(expediente=expediente, kind=ExpedienteEvent.Kind.UPDATED,
+                                       changes={"prazo_texto": {"before": "3 dias", "after": "5 dias"}})
+        today = timezone.localdate(timezone=ZoneInfo("America/Fortaleza"))
+
+        with patch("expedientes.reports.pdf_response") as create_pdf:
+            create_pdf.side_effect = lambda **kwargs: Response({"count": kwargs["count"], "records": list(kwargs["records"])})
+            response = self.client.get(f"/api/expedientes/export.pdf/?scope=list&q=PARTE+A&date_from={today}&date_to={today}&page=2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(len(response.data["records"]), 2)
+        first = next(fields for title, fields in response.data["records"] if "0800000-" in title)
+        self.assertTrue(any(label.startswith("Prazo original · ") and "3 dias → 5 dias" in value for label, value in first))
+
+    def test_pdf_export_rejects_bad_dates_and_history_outside_30_days(self):
+        self.assertEqual(self.client.get("/api/expedientes/export.pdf/?date_from=invalid").status_code, 400)
+        old = timezone.localdate(timezone=ZoneInfo("America/Fortaleza")) - timedelta(days=30)
+        self.assertEqual(self.client.get(f"/api/expedientes/export.pdf/?scope=history&date_from={old}").status_code, 400)
+
+    def test_pdf_export_requires_authentication_and_generates_pdf(self):
+        self.assertIn(APIClient().get("/api/expedientes/export.pdf/").status_code, (401, 403))
+        response = self.client.get("/api/expedientes/export.pdf/?scope=overview&metric=new")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("expedientes-novos-", response["Content-Disposition"])
+        self.assertIn("-sintetico.pdf", response["Content-Disposition"])
+        self.assertTrue(b"".join(response.streaming_content).startswith(b"%PDF-"))
+
+    def test_pdf_list_without_dates_matches_unfiltered_list_in_both_formats(self):
+        event = Expediente.objects.get().events.get(kind=ExpedienteEvent.Kind.NEW)
+        event.created_at = timezone.now() - timedelta(days=2)
+        event.save(update_fields=("created_at",))
+
+        self.assertEqual(self.client.get("/api/expedientes/").data["count"], 1)
+        for mode in ("sintetico", "analitico"):
+            response = self.client.get(f"/api/expedientes/export.pdf/?scope=list&mode={mode}")
+            self.assertEqual(response.status_code, 200, getattr(response, "data", None))
+            self.assertIn(f"expedientes-consulta-todos-{mode}.pdf", response["Content-Disposition"])
+            self.assertTrue(b"".join(response.streaming_content).startswith(b"%PDF-"))
+
+    def test_pdf_history_uses_new_events_in_local_day_only(self):
+        today = timezone.localdate(timezone=ZoneInfo("America/Fortaleza"))
+        prior_day = today - timedelta(days=1)
+        second = payload(identifier="200", numero_processo="0800001-00.2026.8.20.0001")
+        salvar_expedientes([second], source=self.source)
+        other = Expediente.objects.get(identificador_pje="200")
+        original = other.events.get(kind="new")
+        original.created_at = datetime.combine(prior_day, datetime.max.time(), tzinfo=ZoneInfo("America/Fortaleza"))
+        original.save(update_fields=("created_at",))
+        ExpedienteEvent.objects.create(expediente=other, kind="updated")
+
+        with patch("expedientes.reports.pdf_response") as create_pdf:
+            create_pdf.side_effect = lambda **kwargs: Response({"records": list(kwargs["records"])})
+            response = self.client.get(f"/api/expedientes/export.pdf/?scope=history&date_from={today}&date_to={today}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["records"]), 1)
+        self.assertIn("0800000-", response.data["records"][0][0])
 
     def test_djen_today_and_history_use_collection_date(self):
         today = timezone.localdate(timezone=ZoneInfo("America/Fortaleza"))

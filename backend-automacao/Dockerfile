@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pcscd \
     libpcsclite1 \
     procps \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python packages

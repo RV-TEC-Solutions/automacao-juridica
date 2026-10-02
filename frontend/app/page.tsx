@@ -11,6 +11,7 @@ import { ExpedienteDrawer } from "./components/expediente-drawer";
 import { ExpedienteList } from "./components/expediente-list";
 import { DjenDrawer } from "./components/djen-drawer";
 import { DjenList } from "./components/djen-list";
+import { PdfExportButton } from "./components/pdf-export-button";
 import { EmptyState, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNotifications } from "./components/notifications";
@@ -128,6 +129,7 @@ export default function Home() {
     setTodayTab("expedientes");
     setActiveMetric(metric);
     setListPage(1);
+    setExpedientes(null);
   };
 
   useEffect(() => {
@@ -300,7 +302,10 @@ export default function Home() {
         </TabsList>
 
         <TabsContent value="expedientes">
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <PdfExportButton path={`expedientes/export.pdf/?scope=overview&metric=${activeMetric}`} analytical
+              label="Exportar expedientes em PDF" count={expedientes?.count}
+              summary={`Expedientes · ${metricFilters[activeMetric].title}. ${activeMetric === "new" || activeMetric === "updated" ? "Eventos coletados hoje." : "Este filtro representa o estado atual e pode incluir expedientes coletados antes de hoje. O PDF mostrará apenas alterações registradas hoje."}`} />
             <Link href="/expedientes" className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline transition-colors hover:text-foreground">
               Ver consulta completa
               <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
@@ -311,7 +316,10 @@ export default function Home() {
         </TabsContent>
 
         <TabsContent value="publicacoes">
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <PdfExportButton path="djen/communications/export.pdf/?scope=overview"
+              label="Exportar publicações em PDF" count={publications?.count}
+              summary="Publicações Processuais · comunicações coletadas hoje no DJEN." />
             <Link href="/djen" className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline transition-colors hover:text-foreground">
               Ver consulta completa
               <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
