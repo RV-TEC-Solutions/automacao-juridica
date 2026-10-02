@@ -94,7 +94,7 @@ export function LoginCard({ busy, error, help, onSubmit, onHelp }: LoginCardProp
         {help && <p className={styles.helpText}>Peça ao administrador do escritório para redefinir sua senha.</p>}
       </div>
 
-      <footer className={styles.footer}>BMR <span aria-hidden="true">·</span> RYVTEC Soluções e Consultoria</footer>
+      <footer className={styles.footer}>BMR · Céleri Comunicações · © 2026 RYVTEC Soluções e Consultoria. Todos os direitos reservados.</footer>
     </section>
   );
 }
