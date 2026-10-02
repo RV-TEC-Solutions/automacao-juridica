@@ -772,7 +772,8 @@ def abrir_pje(source_code, source=None):
     pje_url = obter_url_pje(source_code)
     with sync_playwright() as playwright:
         navegador = playwright.chromium.launch(
-            headless=False
+            headless=False,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
 
         contexto = navegador.new_context()
