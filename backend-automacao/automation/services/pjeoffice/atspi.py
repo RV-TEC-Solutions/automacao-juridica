@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,21 @@ NOMES_APLICACAO = (
 NOME_JANELA_PIN = ("informe a senha")
 NOMES_BOTAO_CONFIRMAR = ("ok", "confirmar", "prosseguir", "entrar")
 KEYSYM_RETURN = 0xFF0D
+
+
+def obter_geometria_janela(wid: str):
+    """Obtém coordenadas (x, y, largura, altura) de uma janela X11."""
+    try:
+        res = subprocess.run(["xdotool", "getwindowgeometry", wid], capture_output=True, text=True, timeout=2, check=False)
+        pos_match = re.search(r"Position:\s*(\d+),(\d+)", res.stdout)
+        geo_match = re.search(r"Geometry:\s*(\d+)x(\d+)", res.stdout)
+        if pos_match and geo_match:
+            x, y = int(pos_match.group(1)), int(pos_match.group(2))
+            w, h = int(geo_match.group(1)), int(geo_match.group(2))
+            return x, y, w, h
+    except Exception:
+        pass
+    return None
 
 
 def percorrer(no):
@@ -262,19 +278,39 @@ def preencher_pin_x11(pin: str) -> bool:
                     name_res = subprocess.run(["xdotool", "getwindowname", wid], capture_output=True, text=True, check=False)
                     janelas_ativas.append((wid, name_res.stdout.strip()))
 
+    # Descarta popup xmessage se estiver bloqueando
+    for wid, titulo in janelas_ativas:
+        if "xmessage" in titulo.lower():
+            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowkill", wid], capture_output=True, check=False)
+
     # 0. Trata janela de autorização de site do PJeOffice (ex: "Autorização de site")
     for wid, titulo in janelas_ativas:
         tit_lower = titulo.lower()
         if any(aut in tit_lower for aut in titulos_autorizacao):
-            subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
-            subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
-            time.sleep(0.3)
-            # Envia atalhos para autorizar
-            subprocess.run(["xdotool", "key", "--window", wid, "alt+s"], capture_output=True, check=False)
-            subprocess.run(["xdotool", "key", "--window", wid, "alt+a"], capture_output=True, check=False)
-            subprocess.run(["xdotool", "key", "--window", wid, "space"], capture_output=True, check=False)
-            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            geo = obter_geometria_janela(wid)
+            if geo:
+                gx, gy, gw, gh = geo
+                # Clica no centro da janela para garantir foco de entrada
+                subprocess.run(["xdotool", "mousemove", str(gx + gw // 2), str(gy + gh // 2), "click", "1"], capture_output=True, check=False)
+                time.sleep(0.1)
+                # Clica no botão "Sempre" (geralmente à esquerda na barra inferior de botões do diálogo)
+                btn_y = str(gy + gh - 35)
+                btn_sempre_x = str(gx + int(gw * 0.28))
+                subprocess.run(["xdotool", "mousemove", btn_sempre_x, btn_y, "click", "1"], capture_output=True, check=False)
+                time.sleep(0.1)
+                # Clica no botão "Autorizar" (ao centro da barra inferior)
+                btn_autorizar_x = str(gx + int(gw * 0.50))
+                subprocess.run(["xdotool", "mousemove", btn_autorizar_x, btn_y, "click", "1"], capture_output=True, check=False)
+                time.sleep(0.1)
+
+            # Envia também atalhos de teclado nativos (Alt+S para Sempre, Alt+A para Autorizar, Return, Space)
+            subprocess.run(["xdotool", "windowactivate", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowfocus", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "alt+s"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "alt+a"], capture_output=True, check=False)
             subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "space"], capture_output=True, check=False)
             time.sleep(0.8)
             break
 
@@ -282,11 +318,13 @@ def preencher_pin_x11(pin: str) -> bool:
     for wid, titulo in janelas_ativas:
         tit_lower = titulo.lower()
         if any(sel in tit_lower for sel in titulos_selecao):
-            # Foca e confirma seleção com Enter
-            subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
-            subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
-            time.sleep(0.3)
-            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            geo = obter_geometria_janela(wid)
+            if geo:
+                gx, gy, gw, gh = geo
+                subprocess.run(["xdotool", "mousemove", str(gx + gw // 2), str(gy + gh // 2), "click", "1"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowactivate", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowfocus", wid], capture_output=True, check=False)
+            time.sleep(0.2)
             subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
             time.sleep(0.8)
             break
@@ -296,7 +334,7 @@ def preencher_pin_x11(pin: str) -> bool:
         tit_lower = titulo.lower()
 
         # Ignora janelas do sistema ou a janela estática de fundo do PJeOffice
-        if any(ign in tit_lower for ign in ("chromium", "chrome", "firefox", "bash", "terminal")):
+        if any(ign in tit_lower for ign in ("chromium", "chrome", "firefox", "bash", "terminal", "xmessage")):
             continue
         if tit_lower.startswith("pjeoffice pro") and not any(k in tit_lower for k in ("senha", "pin", "password")):
             continue
@@ -310,17 +348,18 @@ def preencher_pin_x11(pin: str) -> bool:
         )
 
         if eh_janela_senha:
-            # Ativa e foca a janela de senha
-            subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
-            subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
-            time.sleep(0.4)
+            geo = obter_geometria_janela(wid)
+            if geo:
+                gx, gy, gw, gh = geo
+                # Clica no centro (onde fica o campo de entrada da senha)
+                subprocess.run(["xdotool", "mousemove", str(gx + gw // 2), str(gy + gh // 2), "click", "1"], capture_output=True, check=False)
+                time.sleep(0.2)
+
+            subprocess.run(["xdotool", "windowactivate", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowfocus", wid], capture_output=True, check=False)
+            time.sleep(0.2)
 
             # Digita o PIN com precisão
-            subprocess.run(
-                ["xdotool", "type", "--window", wid, "--delay", "50", "--", pin],
-                capture_output=True,
-                check=False,
-            )
             subprocess.run(
                 ["xdotool", "type", "--delay", "50", "--", pin],
                 capture_output=True,
@@ -329,8 +368,13 @@ def preencher_pin_x11(pin: str) -> bool:
             time.sleep(0.1)
 
             # Envia Return para submeter o diálogo modal
-            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
             subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+
+            # Clica no botão OK na barra inferior se a janela foi mapeada
+            if geo:
+                btn_ok_y = str(gy + gh - 35)
+                btn_ok_x = str(gx + gw // 2)
+                subprocess.run(["xdotool", "mousemove", btn_ok_x, btn_ok_y, "click", "1"], capture_output=True, check=False)
 
             # Aguarda a submissão e confirmação de fechamento
             time.sleep(1.0)
