@@ -281,6 +281,14 @@ def preencher_pin_x11(pin: str) -> bool:
     # Descarta popup xmessage se estiver bloqueando
     for wid, titulo in janelas_ativas:
         if "xmessage" in titulo.lower():
+            print(f"[pjeoffice-gui] Fechando popup do sistema: '{titulo}' (ID: {wid})", flush=True)
+            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowkill", wid], capture_output=True, check=False)
+
+    # Descarta popup de cancelamento anterior se estiver na tela
+    for wid, titulo in janelas_ativas:
+        if "cancelamento" in titulo.lower():
+            print(f"[pjeoffice-gui] Fechando diálogo de cancelamento: '{titulo}' (ID: {wid})", flush=True)
             subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
             subprocess.run(["xdotool", "windowkill", wid], capture_output=True, check=False)
 
@@ -288,6 +296,7 @@ def preencher_pin_x11(pin: str) -> bool:
     for wid, titulo in janelas_ativas:
         tit_lower = titulo.lower()
         if any(aut in tit_lower for aut in titulos_autorizacao):
+            print(f"[pjeoffice-gui] Janela de AUTORIZAÇÃO detectada: '{titulo}' (ID: {wid}). Autorizando site...", flush=True)
             geo = obter_geometria_janela(wid)
             if geo:
                 gx, gy, gw, gh = geo
@@ -318,14 +327,28 @@ def preencher_pin_x11(pin: str) -> bool:
     for wid, titulo in janelas_ativas:
         tit_lower = titulo.lower()
         if any(sel in tit_lower for sel in titulos_selecao):
+            print(f"[pjeoffice-gui] Janela de SELEÇÃO DE CERTIFICADO detectada: '{titulo}' (ID: {wid})", flush=True)
             geo = obter_geometria_janela(wid)
             if geo:
                 gx, gy, gw, gh = geo
-                subprocess.run(["xdotool", "mousemove", str(gx + gw // 2), str(gy + gh // 2), "click", "1"], capture_output=True, check=False)
+                # 1.1 Duplo-clique no primeiro certificado da lista/tabela para selecioná-lo e confirmar
+                cert_row_y = str(gy + int(gh * 0.40))
+                cert_row_x = str(gx + gw // 2)
+                print(f"[pjeoffice-gui] Selecionando certificado na tabela (duplo-clique em {cert_row_x},{cert_row_y})...", flush=True)
+                subprocess.run(["xdotool", "mousemove", cert_row_x, cert_row_y, "click", "--repeat", "2", "1"], capture_output=True, check=False)
+                time.sleep(0.3)
+
+                # 1.2 Clica no botão "Selecionar" / "OK" (normalmente na barra inferior)
+                btn_sel_y = str(gy + gh - 35)
+                btn_sel_x = str(gx + int(gw * 0.35))
+                subprocess.run(["xdotool", "mousemove", btn_sel_x, btn_sel_y, "click", "1"], capture_output=True, check=False)
+                time.sleep(0.1)
+
             subprocess.run(["xdotool", "windowactivate", wid], capture_output=True, check=False)
             subprocess.run(["xdotool", "windowfocus", wid], capture_output=True, check=False)
-            time.sleep(0.2)
-            subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+            # Envia atalho Alt+S (Selecionar) ou Alt+O (OK)
+            subprocess.run(["xdotool", "key", "alt+s"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "alt+o"], capture_output=True, check=False)
             time.sleep(0.8)
             break
 
@@ -348,6 +371,7 @@ def preencher_pin_x11(pin: str) -> bool:
         )
 
         if eh_janela_senha:
+            print(f"[pjeoffice-gui] >>> JANELA DE PIN/SENHA DETECTADA: '{titulo}' (ID: {wid})! <<<", flush=True)
             geo = obter_geometria_janela(wid)
             if geo:
                 gx, gy, gw, gh = geo
@@ -359,6 +383,7 @@ def preencher_pin_x11(pin: str) -> bool:
             subprocess.run(["xdotool", "windowfocus", wid], capture_output=True, check=False)
             time.sleep(0.2)
 
+            print("[pjeoffice-gui] Preenchendo PIN e enviando confirmação...", flush=True)
             # Digita o PIN com precisão
             subprocess.run(
                 ["xdotool", "type", "--delay", "50", "--", pin],
@@ -378,6 +403,7 @@ def preencher_pin_x11(pin: str) -> bool:
 
             # Aguarda a submissão e confirmação de fechamento
             time.sleep(1.0)
+            print("[pjeoffice-gui] Submissão do PIN concluída!", flush=True)
             return True
 
     return False
@@ -412,31 +438,40 @@ def preencher_pin():
     if not pin:
         raise RuntimeError("PJE_CERT_PIN não foi configurado.")
 
-    limite = time.monotonic() + 45
+    inicio = time.monotonic()
+    limite = inicio + 45
     ultimo_erro = None
     todas_janelas = set()
+    segundo_anterior = -1
+
+    print("[pjeoffice-gui] Monitor de interface X11 iniciado. Aguardando diálogos do PJeOffice...", flush=True)
 
     while time.monotonic() < limite:
+        tempo_decorrido = int(time.monotonic() - inicio)
+
+        # Loga a cada segundo as janelas presentes na tela virtual
+        if tempo_decorrido != segundo_anterior:
+            segundo_anterior = tempo_decorrido
+            janelas_atuais = []
+            if shutil.which("wmctrl"):
+                res = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
+                for l in res.stdout.strip().splitlines():
+                    p = l.split(None, 3)
+                    if len(p) >= 4:
+                        janelas_atuais.append(p[3].strip())
+                        todas_janelas.add(p[3].strip())
+            print(f"[pjeoffice-gui] T+{tempo_decorrido:02d}s | Janelas ativas: {janelas_atuais}", flush=True)
+
         # Tenta autorizar site via acessibilidade se o diálogo modal estiver na árvore AT-SPI
         try:
             dispensar_autorizacao_atspi()
         except Exception:
             pass
 
-        # Coleta nomes de janelas para diagnóstico caso ocorra timeout
-        try:
-            if shutil.which("wmctrl"):
-                res = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
-                for l in res.stdout.strip().splitlines():
-                    p = l.split(None, 3)
-                    if len(p) >= 4:
-                        todas_janelas.add(p[3].strip())
-        except Exception:
-            pass
-
         # 1. Tenta método nativo X11 (rápido e determinístico no Xvfb do container)
         try:
             if preencher_pin_x11(pin):
+                print(f"[pjeoffice-gui] >>> PIN preenchido e confirmado com sucesso em T+{tempo_decorrido}s! <<<", flush=True)
                 return
         except Exception as erro:
             ultimo_erro = f"X11: {erro}"
@@ -444,16 +479,23 @@ def preencher_pin():
         # 2. Tenta método AT-SPI (acessibilidade GNOME / Java ATK)
         try:
             if preencher_pin_atspi(pin):
+                print(f"[pjeoffice-gui] >>> PIN preenchido via AT-SPI em T+{tempo_decorrido}s! <<<", flush=True)
                 return
         except Exception as erro:
             ultimo_erro = f"AT-SPI: {erro}"
 
         time.sleep(0.5)
 
+    dump_x11 = ""
+    if shutil.which("xwininfo"):
+        dump_res = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True, text=True, check=False)
+        dump_x11 = "\n".join(dump_res.stdout.splitlines()[:60])
+
     raise RuntimeError(
-        "Não foi possível concluir o PIN em 45 segundos. "
-        f"Janelas vistas no X11: {list(todas_janelas)}. "
-        f"Último erro: {ultimo_erro}"
+        f"Não foi possível concluir o PIN em 45 segundos.\n"
+        f"Janelas vistas no X11: {list(todas_janelas)}\n"
+        f"Último erro: {ultimo_erro}\n"
+        f"Árvore X11:\n{dump_x11}"
     )
 
 

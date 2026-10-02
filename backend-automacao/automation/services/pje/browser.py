@@ -555,21 +555,33 @@ def preencher_pin_pjeoffice_atspi():
     ambiente = os.environ.copy()
     ambiente["PJE_CERT_PIN"] = pin
 
-    resultado = subprocess.run(
-        [
-            PYTHON_ATSPI,
-            str(helper),
-        ],
+    processo = subprocess.Popen(
+        [PYTHON_ATSPI, str(helper)],
         env=ambiente,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        timeout=60,
+        bufsize=1,
     )
 
-    if resultado.returncode != 0:
+    saida_completa = []
+    try:
+        for linha in iter(processo.stdout.readline, ''):
+            if linha:
+                linha_str = linha.rstrip()
+                print(linha_str, flush=True)
+                saida_completa.append(linha_str)
+        processo.stdout.close()
+        returncode = processo.wait(timeout=10)
+    except Exception as erro:
+        processo.kill()
+        raise RuntimeError(f"Erro na execução do helper de PIN: {erro}") from erro
+
+    if returncode != 0:
+        ultimas_linhas = "\n".join(saida_completa[-15:])
         raise RuntimeError(
-            "O helper AT-SPI não concluiu o PIN. "
-            f"Diagnóstico: {resultado.stderr.strip()}"
+            "O helper de automação de interface não concluiu o PIN. "
+            f"Diagnóstico recente:\n{ultimas_linhas}"
         )
 
 def obter_url_pje(source_code):
