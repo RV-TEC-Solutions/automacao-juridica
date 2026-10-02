@@ -72,6 +72,42 @@ em `127.0.0.1:8007`, o worker/agendador e o frontend em
 `http://localhost:3002`. A coleta diária usa `America/Fortaleza`, por
 padrão às 06:00.
 
+## Estimativa de tempo economizado
+
+O card da tela de estatísticas simula o trabalho operacional de uma pessoa em ritmo
+normal, sem cronometragem real. Para cada fonte e dia, considera abrir o site,
+autenticar com certificado/PIN e código quando aplicável, verificar avisos,
+percorrer as caixas, conferir campos dos registros e organizar o resultado.
+O tempo fixo líquido já desconta cerca de **2 minutos** para conferir a
+automação. A leitura jurídica do teor e as providências posteriores não entram
+na estimativa.
+
+| Fontes | Passos específicos | Tempo fixo líquido por dia | Por registro |
+| --- | --- | ---: | ---: |
+| TJRN 1º e 2º grau | Entrar direto no PJe, autenticar, confirmar avisos e abrir as abas de expedientes | 6 min cada | 45 s por aba + 1 min 15 s por expediente encontrado |
+| TRE-RN 1º e 2º grau; TSE 3º grau | Navegar pelo portal, selecionar o PJe, autenticar, passar pelos avisos e abrir as abas | 8 min cada | 45 s por aba + 1 min 15 s por expediente encontrado |
+| TRT21 1º e 2º grau | Entrar pelo PDPJ, autenticar, conferir avisos, abrir a tabela de expedientes | 6 min cada | 2 min por expediente, incluindo abrir e fechar os detalhes |
+| TRF5 2º grau/TRU; Varas da Justiça Comum; JEF 5ª Região; Turmas Recursais; TRU 5ª Região | Navegar pelo portal TRF5, escolher o destino, autenticar, confirmar avisos e abrir as abas | 8 min cada | 45 s por aba + 1 min 15 s por expediente encontrado |
+| DJEN | Consultar cada uma das sete datas para a OAB configurada, percorrer páginas e organizar publicações | 12 min por coleta diária | 1 min 30 s por publicação nova |
+
+No PJe, cada expediente encontrado exige conferir processo, destinatário,
+documento, tipo de pendência, meio de comunicação e prazo, mesmo quando nada
+mudou desde a coleta anterior. No DJEN, o valor variável considera apenas
+publicações inéditas, pois a janela de sete dias retorna publicações já
+consultadas em dias anteriores. O tempo fixo do DJEN representa cerca de
+2 minutos por data, com o desconto de conferência descrito acima.
+O número de avisos não é salvo por execução; seu tempo fica dentro da parcela
+fixa, que pode subestimar um dia com muitos avisos.
+
+O total soma as estimativas diárias das execuções **concluídas e não descartadas** desde o início
+do histórico, com limite de **4 horas por dia** para o conjunto das fontes consultadas.
+Esse acumulado não muda com o filtro de 7 ou 30 dias da tela de estatísticas.
+Reexecuções da mesma fonte no mesmo dia contam o tempo fixo uma
+vez. Para o PJe, conta o maior número de expedientes encontrado naquele dia;
+para o DJEN, soma as publicações novas de cada execução. Falhas, execuções em
+andamento e descartes não geram tempo economizado. A estimativa pode ser
+calibrada após cronometrar uma amostra de consultas manuais por fonte.
+
 Para executar API e frontend em contêineres, use `docker compose up -d --build`.
 Esse modo usa o mesmo PostgreSQL configurado no `.env`. A coleta agendada
 continua disponível pelo `./run-local.sh`.

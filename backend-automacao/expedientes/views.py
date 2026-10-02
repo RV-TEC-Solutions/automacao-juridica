@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db.models import Count, Exists, Max, OuterRef, Q
@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import ParseError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -14,6 +15,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from automation.models import AutomationRun, Notice, UserProfile
 from automation.pipeline import collection_pipeline_payload
+from automation.time_saved import time_saved_summary
 from automation.serializers import NoticeSerializer
 from .models import Expediente, ExpedienteEvent
 from .serializers import EventSerializer, ExpedienteSerializer
@@ -46,59 +48,76 @@ class ExpedienteViewSet(ReadOnlyModelViewSet):
     pagination_class = ExpedientePagination
 
     def get_queryset(self):
-        params = self.request.query_params
-        queryset = _base_queryset().annotate(
-            has_unread=Exists(ExpedienteEvent.objects.filter(expediente=OuterRef("pk"), read_at__isnull=True)),
-            latest_event_at=Max("events__created_at"),
+        return expediente_queryset(self.request.query_params)
+
+
+def expediente_queryset(params):
+    queryset = _base_queryset().annotate(
+        has_unread=Exists(ExpedienteEvent.objects.filter(expediente=OuterRef("pk"), read_at__isnull=True)),
+        latest_event_at=Max("events__created_at"),
+    )
+    query = params.get("q", "").strip()
+    if query:
+        queryset = queryset.filter(
+            Q(processo__numero__icontains=query)
+            | Q(processo__partes_texto__icontains=query)
+            | Q(processo__assunto__icontains=query)
         )
-        query = params.get("q", "").strip()
-        if query:
-            queryset = queryset.filter(
-                Q(processo__numero__icontains=query)
-                | Q(processo__partes_texto__icontains=query)
-                | Q(processo__assunto__icontains=query)
-            )
-        if source := params.get("source"):
-            queryset = queryset.filter(source__code=source)
-        if pending := params.get("pending_type"):
-            queryset = queryset.filter(tipo_pendencia=pending)
-        if read := params.get("read"):
-            queryset = queryset.filter(has_unread=(read == "unread"))
-        if event_kind := params.get("event_kind"):
-            queryset = queryset.filter(events__kind=event_kind)
-        if date_from := params.get("date_from"):
-            queryset = queryset.filter(events__created_at__date__gte=date_from)
-        if date_to := params.get("date_to"):
-            queryset = queryset.filter(events__created_at__date__lte=date_to)
+    if source := params.get("source"):
+        queryset = queryset.filter(source__code=source)
+    if pending := params.get("pending_type"):
+        queryset = queryset.filter(tipo_pendencia=pending)
+    if read := params.get("read"):
+        queryset = queryset.filter(has_unread=(read == "unread"))
+    event_filters = {}
+    if event_kind := params.get("event_kind"):
+        event_filters["kind"] = event_kind
+    try:
+        date_from = date.fromisoformat(params["date_from"]) if params.get("date_from") else None
+        date_to = date.fromisoformat(params["date_to"]) if params.get("date_to") else None
+    except ValueError as exc:
+        raise ParseError("Informe datas válidas no formato AAAA-MM-DD.") from exc
+    if date_from and date_to and date_from > date_to:
+        raise ParseError("A data inicial não pode ser posterior à data final.")
+    if date_from:
+        event_filters["created_at__gte"] = datetime.combine(date_from, datetime.min.time(), tzinfo=LOCAL_TZ)
+    if date_to:
+        try:
+            end_exclusive = date_to + timedelta(days=1)
+        except OverflowError as exc:
+            raise ParseError("Data final inválida.") from exc
+        event_filters["created_at__lt"] = datetime.combine(end_exclusive, datetime.min.time(), tzinfo=LOCAL_TZ)
+    if event_filters:
+        queryset = queryset.filter(pk__in=ExpedienteEvent.objects.filter(**event_filters).values("expediente_id"))
 
-        now = timezone.now()
-        urgent_limit = now + timedelta(hours=72)
-        deadline = params.get("deadline")
-        if deadline == "urgent":
-            queryset = queryset.filter(ativo=True, status_prazo_fatal="calculado", prazo_fatal__lte=urgent_limit)
-        elif deadline == "overdue":
-            queryset = queryset.filter(ativo=True, status_prazo_fatal="calculado", prazo_fatal__lt=now)
-        elif deadline == "future":
-            queryset = queryset.filter(ativo=True, prazo_fatal__gt=urgent_limit)
-        elif deadline == "next_week":
-            queryset = queryset.filter(
-                ativo=True,
-                status_prazo_fatal="calculado",
-                prazo_fatal__gte=now,
-                prazo_fatal__lt=_next_week_end(now),
-            )
-        elif deadline == "calculating":
-            queryset = queryset.filter(ativo=True, status_prazo_fatal="em_calculo")
-        elif deadline == "none":
-            queryset = queryset.filter(ativo=True, status_prazo_fatal="sem_prazo")
-        elif deadline == "resolved":
-            queryset = queryset.filter(ativo=False)
+    now = timezone.now()
+    urgent_limit = now + timedelta(hours=72)
+    deadline = params.get("deadline")
+    if deadline == "urgent":
+        queryset = queryset.filter(ativo=True, status_prazo_fatal="calculado", prazo_fatal__lte=urgent_limit)
+    elif deadline == "overdue":
+        queryset = queryset.filter(ativo=True, status_prazo_fatal="calculado", prazo_fatal__lt=now)
+    elif deadline == "future":
+        queryset = queryset.filter(ativo=True, prazo_fatal__gt=urgent_limit)
+    elif deadline == "next_week":
+        queryset = queryset.filter(
+            ativo=True,
+            status_prazo_fatal="calculado",
+            prazo_fatal__gte=now,
+            prazo_fatal__lt=_next_week_end(now),
+        )
+    elif deadline == "calculating":
+        queryset = queryset.filter(ativo=True, status_prazo_fatal="em_calculo")
+    elif deadline == "none":
+        queryset = queryset.filter(ativo=True, status_prazo_fatal="sem_prazo")
+    elif deadline == "resolved":
+        queryset = queryset.filter(ativo=False)
 
-        orderings = {
-            "recent": "-latest_event_at", "deadline": "prazo_fatal",
-            "expedition": "-data_expedicao", "process": "processo__numero",
-        }
-        return queryset.order_by(orderings.get(params.get("ordering", "recent"), "-latest_event_at")).distinct()
+    orderings = {
+        "recent": "-latest_event_at", "deadline": "prazo_fatal",
+        "expedition": "-data_expedicao", "process": "processo__numero",
+    }
+    return queryset.order_by(orderings.get(params.get("ordering", "recent"), "-latest_event_at")).distinct()
 
 
 @api_view(["POST"])
@@ -114,10 +133,11 @@ def mark_read(request, pk):
 @permission_classes([IsAuthenticated])
 def history(request):
     """Paginated new expedientes grouped by local collection date."""
-    local_today = timezone.localdate(timezone=LOCAL_TZ)
-    dates = [local_today - timedelta(days=offset) for offset in range(30)]
-    window_start = datetime.combine(dates[-1], datetime.min.time(), tzinfo=LOCAL_TZ)
-    window_end = datetime.combine(local_today + timedelta(days=1), datetime.min.time(), tzinfo=LOCAL_TZ)
+    from automation.reporting import collection_range
+    try:
+        first_day, last_day, window_start, window_end = collection_range(request.query_params, history=True)
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     events = (
         ExpedienteEvent.objects.filter(kind=ExpedienteEvent.Kind.NEW, created_at__gte=window_start, created_at__lt=window_end)
         .select_related("expediente__processo", "expediente__source")
@@ -145,7 +165,7 @@ def history(request):
             "expediente": ExpedienteSerializer(event.expediente).data,
         })
     return Response({
-        "period_start": dates[-1].isoformat(), "period_end": local_today.isoformat(),
+        "period_start": first_day.isoformat(), "period_end": last_day.isoformat(),
         "count": total,
         "page": page,
         "page_size": HISTORY_PAGE_SIZE,
@@ -250,6 +270,7 @@ def statistics(request):
     active = Expediente.objects.filter(ativo=True)
     return Response({
         "period": period,
+        "time_saved": time_saved_summary(),
         "totals": {"current": current_total, "previous": previous_total, "change_percent": comparison, **by_kind},
         "timeline": list(timeline_rows),
         "pending_distribution": list(active.values("tipo_pendencia").annotate(total=Count("id")).order_by("tipo_pendencia")),

@@ -4,8 +4,9 @@ from .views import (
     cancel_run, change_password, collection_history, csrf, discard_today_collection,
     login_view, logout_view, me, runs,
     settings_view, source_detail, sources, notices, notice_detail, mark_notice_read, token_status,
-    djen_communications, djen_communication_detail, mark_djen_read,
+    djen_communications, djen_communication_detail, djen_history, mark_djen_read,
 )
+from .reports import export_publications
 
 urlpatterns = [
     path("auth/csrf/", csrf), path("auth/login/", login_view),
@@ -21,6 +22,8 @@ urlpatterns = [
     path("notices/<int:pk>/", notice_detail),
     path("notices/<int:pk>/read/", mark_notice_read),
     path("djen/communications/", djen_communications),
+    path("djen/communications/export.pdf/", export_publications),
+    path("djen/history/", djen_history),
     path("djen/communications/<int:pk>/", djen_communication_detail),
     path("djen/communications/<int:pk>/read/", mark_djen_read),
 ]

@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -488,18 +488,20 @@ def _djen_queryset():
     )
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def djen_communications(request):
+def filtered_djen_queryset(params):
     queryset = _djen_queryset()
-    query = request.query_params.get("q", "").strip()
-    tribunal = request.query_params.get("tribunal", "").strip()
-    date_from = request.query_params.get("date_from", "").strip()
-    date_to = request.query_params.get("date_to", "").strip()
+    query = params.get("q", "").strip()
+    tribunal = params.get("tribunal", "").strip()
+    date_from = params.get("date_from", "").strip()
+    date_to = params.get("date_to", "").strip()
     if date_from:
         queryset = queryset.filter(data_disponibilizacao__gte=date_from)
     if date_to:
         queryset = queryset.filter(data_disponibilizacao__lte=date_to)
+    if collected_from := params.get("collected_from", "").strip():
+        queryset = queryset.filter(collected_at__gte=datetime.combine(date.fromisoformat(collected_from), datetime.min.time(), tzinfo=LOCAL_TZ))
+    if collected_to := params.get("collected_to", "").strip():
+        queryset = queryset.filter(collected_at__lt=datetime.combine(date.fromisoformat(collected_to) + timedelta(days=1), datetime.min.time(), tzinfo=LOCAL_TZ))
     if query:
         queryset = queryset.filter(
             Q(processo__numero__icontains=query)
@@ -509,8 +511,18 @@ def djen_communications(request):
         ).distinct()
     if tribunal:
         queryset = queryset.filter(tribunal=tribunal)
-    if request.query_params.get("read") == "unread":
+    if params.get("read") == "unread":
         queryset = queryset.filter(read_at__isnull=True)
+    return queryset
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def djen_communications(request):
+    try:
+        queryset = filtered_djen_queryset(request.query_params)
+    except (ValueError, OverflowError):
+        return Response({"detail": "Data de coleta inválida."}, status=status.HTTP_400_BAD_REQUEST)
     try:
         page = max(int(request.query_params.get("page", 1)), 1)
     except ValueError:
@@ -524,6 +536,32 @@ def djen_communications(request):
         "next": page + 1 if start + page_size < total else None,
         "previous": page - 1 if page > 1 else None,
         "results": DjenCommunicationSerializer(items, many=True).data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def djen_history(request):
+    try:
+        from .reporting import collection_range
+        _, _, start, end = collection_range(request.query_params, history=True,
+                                           from_key="collected_from", to_key="collected_to")
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    queryset = _djen_queryset().filter(collected_at__gte=start, collected_at__lt=end).order_by("-collected_at", "-id")
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        return Response({"detail": "Página inválida."}, status=status.HTTP_400_BAD_REQUEST)
+    page_size = 50
+    total = queryset.count()
+    days = {}
+    for item in queryset[(page - 1) * page_size:page * page_size]:
+        day = timezone.localtime(item.collected_at, LOCAL_TZ).date().isoformat()
+        days.setdefault(day, []).append(item)
+    return Response({
+        "count": total, "page": page, "page_size": page_size,
+        "days": [{"date": day, "items": DjenCommunicationSerializer(items, many=True).data} for day, items in days.items()],
     })
 
 

@@ -74,6 +74,7 @@ export function ExpedienteDrawer({ item, onClose, onRead }: { item: Expediente |
       <div className="space-y-4 p-6">
         <section className="rounded-lg border bg-card p-6">
           <EventBadges item={item} />
+          {item.tipo_pendencia === "nao_identificada" && <p className="mt-2 text-xs leading-5 text-muted-foreground">O PJe não forneceu informações suficientes para distinguir se este expediente aguarda ciência ou resposta.</p>}
           <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{item.tipo_documento || "Expediente"}</span>
           <strong className="mt-2 block text-xl font-semibold leading-6">{item.processo.assunto || "Assunto não informado"}</strong>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.processo.partes_texto || "Partes não informadas"}</p>

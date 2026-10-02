@@ -144,6 +144,14 @@ export type DjenCommunicationPage = {
   results: DjenCommunication[];
 };
 
+export type TimeSaved = {
+  total_seconds: number;
+  today_seconds: number;
+  source_days: number;
+  items: number;
+  tabs: number;
+};
+
 export type Dashboard = {
   display_name: string;
   today: {
@@ -184,6 +192,13 @@ export type History = {
   page: number;
   page_size: number;
   days: HistoryDay[];
+};
+
+export type DjenHistory = {
+  count: number;
+  page: number;
+  page_size: number;
+  days: { date: string; items: DjenCommunication[] }[];
 };
 
 export type CollectionRun = {

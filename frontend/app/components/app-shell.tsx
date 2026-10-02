@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import type { NoticePage } from "../lib/types";
 import { useAuth } from "../providers";
+import celeriLogo from "../../public/images/celeri-logo.png";
+import bmrLogoLight from "../../public/brand/logo-light@2x.png";
+import bmrLogoDark from "../../public/brand/logo-dark@2x.png";
 
 const links = [
   ["/", "Visão geral", House],
@@ -22,11 +25,12 @@ const links = [
 ] as const;
 
 export function Brand({ compact = false }: { compact?: boolean }) {
-  const size = compact ? { width: 66, light: "/brand/logo-mark-light@2x.png", dark: "/brand/logo-mark-dark@2x.png" } : { width: 159, light: "/brand/logo-light@2x.png", dark: "/brand/logo-dark@2x.png" };
-  return <Link href="/" className="flex items-center gap-4" title="Barros, Mariz & Rebouças Advogados">
-    <Image src={size.light} alt="BMR Advogados" width={size.width} height={64} className="block h-10 w-auto object-contain dark:hidden" priority />
-    <Image src={size.dark} alt="BMR Advogados" width={size.width} height={64} className="hidden h-10 w-auto object-contain dark:block" priority />
-    {!compact && <span className="border-l pl-4"><strong className="block text-sm font-semibold">Automação PJe</strong><small className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><i className="size-2 rounded-full bg-success" />Operação local</small></span>}
+  return <Link href="/" className="flex items-center gap-4" title={compact ? "Céleri" : "Céleri e Barros, Mariz & Rebouças"}>
+    <Image src={celeriLogo} alt="Céleri" width={56} height={56} unoptimized draggable={false} className="h-14 w-14 object-contain dark:brightness-0 dark:invert" priority />
+    {!compact && <span className="border-l pl-4">
+      <Image src={bmrLogoLight} alt="Barros, Mariz & Rebouças Advogados" width={90} height={36} unoptimized draggable={false} className="h-9 w-auto object-contain dark:hidden" priority />
+      <Image src={bmrLogoDark} alt="" width={90} height={36} unoptimized draggable={false} className="hidden h-9 w-auto object-contain dark:block" priority />
+    </span>}
   </Link>;
 }
 
@@ -95,6 +99,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </header>
 
     <main className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
-    <footer className="border-t px-6 py-8 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · Automação de Expedientes e DJEN</footer>
+    <footer className="border-t px-6 py-8 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · Céleri Comunicações · © 2026 RYVTEC Soluções e Consultoria. Todos os direitos reservados.</footer>
   </div>;
 }

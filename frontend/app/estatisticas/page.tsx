@@ -4,12 +4,15 @@ import { ChartBar, CheckCircle, ClockCounterClockwise, Sparkle } from "@phosphor
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "../components/app-shell";
+import { TimeSavedCard } from "../components/time-saved-card";
 import { Panel, MetricCard, PageTitle } from "../components/ui";
 import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
+import type { TimeSaved } from "../lib/types";
 
 type Stats = {
   period: number;
+  time_saved: TimeSaved;
   totals: {
     current: number;
     previous: number;
@@ -139,6 +142,8 @@ export default function StatisticsPage() {
               tone="blue"
             />
           </div>
+
+          <TimeSavedCard value={data.time_saved} />
 
           <Panel className="mb-6" innerClassName="p-6 sm:p-6">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-4">
