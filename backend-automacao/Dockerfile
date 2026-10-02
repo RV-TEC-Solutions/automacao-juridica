@@ -35,6 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pcsc-tools \
     pcscd \
     libpcsclite1 \
+    libccid \
+    opensc \
+    opensc-pkcs11 \
     procps \
     && rm -rf /var/lib/apt/lists/*
 

@@ -178,83 +178,108 @@ def preencher_pin_x11(pin: str) -> bool:
     if not (shutil.which("xdotool") or shutil.which("wmctrl")) or not os.environ.get("DISPLAY"):
         return False
 
-    termos_busca = [
+    titulos_senha = [
         "informe a senha",
+        "informe sua senha",
         "informe a sua senha",
         "informe o pin",
-        "pjeoffice",
-        "senha",
-        "pin",
+        "informe seu pin",
+        "senha do certificado",
+        "pin do certificado",
+        "digite a senha",
+        "digite o pin",
     ]
 
-    candidatos = []
+    titulos_selecao = [
+        "selecione o certificado",
+        "selecao de certificado",
+        "seleção de certificado",
+        "escolha o certificado",
+        "escolha de certificado",
+        "certificados",
+    ]
 
-    # 1. Busca via wmctrl se disponível
+    # Obter lista de janelas atuais via wmctrl
+    janelas_ativas = []
     if shutil.which("wmctrl"):
         res = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
         for linha in res.stdout.strip().splitlines():
             partes = linha.split(None, 3)
             if len(partes) >= 4:
                 hex_id, _, _, titulo = partes
-                titulo_lower = titulo.lower()
-                if any(ign in titulo_lower for ign in ("chromium", "chrome", "firefox", "bash", "terminal")):
-                    continue
-                if any(termo in titulo_lower for termo in termos_busca):
-                    try:
-                        int_wid = str(int(hex_id, 16))
-                        candidatos.append((int_wid, titulo))
-                    except ValueError:
-                        pass
+                try:
+                    int_wid = str(int(hex_id, 16))
+                    janelas_ativas.append((int_wid, titulo.strip()))
+                except ValueError:
+                    pass
 
-    # 2. Busca complementar via xdotool search
-    if shutil.which("xdotool"):
-        for termo in ["Informe a senha", "senha", "pjeoffice", "PIN"]:
-            res = subprocess.run(
-                ["xdotool", "search", "--onlyvisible", "--name", termo],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+    # Se wmctrl não achou ou não está instalado, usa xdotool
+    if not janelas_ativas and shutil.which("xdotool"):
+        for t in titulos_senha + titulos_selecao:
+            res = subprocess.run(["xdotool", "search", "--name", t], capture_output=True, text=True, check=False)
             for wid in res.stdout.strip().splitlines():
                 wid = wid.strip()
-                if wid and not any(c[0] == wid for c in candidatos):
-                    name_res = subprocess.run(
-                        ["xdotool", "getwindowname", wid],
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    win_name = name_res.stdout.strip().lower()
-                    if any(ign in win_name for ign in ("chromium", "chrome", "firefox", "bash", "terminal")):
-                        continue
-                    candidatos.append((wid, win_name))
+                if wid:
+                    name_res = subprocess.run(["xdotool", "getwindowname", wid], capture_output=True, text=True, check=False)
+                    janelas_ativas.append((wid, name_res.stdout.strip()))
 
-    for wid, win_title in candidatos:
-        # Ativa e foca a janela
-        subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
-        subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
-        time.sleep(0.3)
+    # 1. Trata janela intermediária de seleção de múltiplos certificados (caso haja mais de um token USB plugado)
+    for wid, titulo in janelas_ativas:
+        tit_lower = titulo.lower()
+        if any(sel in tit_lower for sel in titulos_selecao):
+            # Foca e confirma seleção com Enter
+            subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
+            time.sleep(0.3)
+            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+            time.sleep(0.8)
+            break
 
-        # Digita o PIN no campo em foco
-        subprocess.run(
-            ["xdotool", "type", "--window", wid, "--delay", "50", "--", pin],
-            capture_output=True,
-            check=False,
+    # 2. Busca e preenche estritamente a janela de PIN / Senha
+    for wid, titulo in janelas_ativas:
+        tit_lower = titulo.lower()
+
+        # Ignora janelas do sistema ou a janela estática de fundo do PJeOffice
+        if any(ign in tit_lower for ign in ("chromium", "chrome", "firefox", "bash", "terminal")):
+            continue
+        if tit_lower.startswith("pjeoffice pro") and not any(k in tit_lower for k in ("senha", "pin", "password")):
+            continue
+        if tit_lower == "pjeoffice" or tit_lower.startswith("br-jus-cnj"):
+            continue
+
+        # Verifica se corresponde a um diálogo de senha
+        eh_janela_senha = (
+            any(alvo in tit_lower for alvo in titulos_senha)
+            or (("senha" in tit_lower or "pin" in tit_lower) and "informe" in tit_lower)
         )
-        subprocess.run(
-            ["xdotool", "type", "--delay", "50", "--", pin],
-            capture_output=True,
-            check=False,
-        )
-        time.sleep(0.1)
 
-        # Envia Return para submeter o diálogo modal
-        subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
-        subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+        if eh_janela_senha:
+            # Ativa e foca a janela de senha
+            subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
+            time.sleep(0.4)
 
-        # Aguarda estabilização da submissão
-        time.sleep(0.5)
-        return True
+            # Digita o PIN com precisão
+            subprocess.run(
+                ["xdotool", "type", "--window", wid, "--delay", "50", "--", pin],
+                capture_output=True,
+                check=False,
+            )
+            subprocess.run(
+                ["xdotool", "type", "--delay", "50", "--", pin],
+                capture_output=True,
+                check=False,
+            )
+            time.sleep(0.1)
+
+            # Envia Return para submeter o diálogo modal
+            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+
+            # Aguarda a submissão e confirmação de fechamento
+            time.sleep(1.0)
+            return True
 
     return False
 
@@ -288,7 +313,7 @@ def preencher_pin():
     if not pin:
         raise RuntimeError("PJE_CERT_PIN não foi configurado.")
 
-    limite = time.monotonic() + 30
+    limite = time.monotonic() + 45
     ultimo_erro = None
 
     while time.monotonic() < limite:

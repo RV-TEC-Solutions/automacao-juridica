@@ -757,13 +757,14 @@ def autenticar_pje(pagina, source_code):
     if get_source_profile(source_code).collector == "trt21":
         entrar_com_pdpj(pagina)
     clicar_certificado(pagina, source_code)
+    time.sleep(1.0)
     preencher_pin_pjeoffice_atspi()
 
     campo_otp = pagina.get_by_label(
         "Entre no seu aplicativo de autenticação e digite abaixo o código apresentado:",
         exact=True,
     )
-    campo_otp.wait_for(state="visible")
+    campo_otp.wait_for(state="visible", timeout=45000)
     campo_otp.fill(gerar_codigo_totp(segredo_totp))
     pagina.get_by_text("Validar", exact=True).click()
 
@@ -773,15 +774,27 @@ def abrir_pje(source_code, source=None):
     with sync_playwright() as playwright:
         navegador = playwright.chromium.launch(
             headless=False,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--allow-running-insecure-content",
+                "--ignore-certificate-errors",
+                "--disable-web-security",
+                "--disable-features=BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults",
+            ],
         )
 
-        contexto = navegador.new_context()
-
-        contexto.grant_permissions(
-            ["local-network-access"],
-            origin="https://sso.cloud.pje.jus.br",
+        contexto = navegador.new_context(
+            ignore_https_errors=True,
         )
+
+        try:
+            contexto.grant_permissions(
+                ["local-network-access"],
+                origin="https://sso.cloud.pje.jus.br",
+            )
+        except Exception:
+            pass
 
         pagina = contexto.new_page()
 

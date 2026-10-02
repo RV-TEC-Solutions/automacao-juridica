@@ -43,10 +43,17 @@ elif [ -x /usr/lib/at-spi2-core/at-spi-bus-launcher ]; then
     /usr/lib/at-spi2-core/at-spi-bus-launcher --launch-immediately &
 fi
 
-# Iniciar daemon PC/SC apenas se socket compartilhado do host nao existir
-if [ ! -e /run/pcscd/pcscd.comm ] && command -v pcscd >/dev/null 2>&1 && ! pgrep -x "pcscd" > /dev/null; then
-    mkdir -p /run/pcscd
-    pcscd || true
+# Iniciar daemon PC/SC apenas se socket ativo compartilhado do host nao existir
+if command -v pcscd >/dev/null 2>&1 && ! pgrep -x "pcscd" > /dev/null; then
+    if [ ! -S /run/pcscd/pcscd.comm ]; then
+        echo "Iniciando daemon PC/SC local..."
+        mkdir -p /run/pcscd
+        rm -f /run/pcscd/pcscd.comm /run/pcscd/pcscd.pid
+        pcscd || true
+        sleep 1
+    else
+        echo "Socket PC/SC do host detectado em /run/pcscd/pcscd.comm."
+    fi
 fi
 
 # Iniciar PJeOffice Pro em background se instalado
