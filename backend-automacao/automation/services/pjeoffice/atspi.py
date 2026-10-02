@@ -188,6 +188,15 @@ def preencher_pin_x11(pin: str) -> bool:
         "pin do certificado",
         "digite a senha",
         "digite o pin",
+        "digite sua senha",
+        "digite seu pin",
+        "digite o seu pin",
+        "autenticação",
+        "autenticacao",
+        "inserir pin",
+        "inserir senha",
+        "pin",
+        "senha",
     ]
 
     titulos_selecao = [
@@ -251,7 +260,7 @@ def preencher_pin_x11(pin: str) -> bool:
         # Verifica se corresponde a um diálogo de senha
         eh_janela_senha = (
             any(alvo in tit_lower for alvo in titulos_senha)
-            or (("senha" in tit_lower or "pin" in tit_lower) and "informe" in tit_lower)
+            or ("senha" in tit_lower or "pin" in tit_lower or "password" in tit_lower)
         )
 
         if eh_janela_senha:
@@ -313,10 +322,22 @@ def preencher_pin():
     if not pin:
         raise RuntimeError("PJE_CERT_PIN não foi configurado.")
 
-    limite = time.monotonic() + 45
+    limite = time.monotonic() + 35
     ultimo_erro = None
+    todas_janelas = set()
 
     while time.monotonic() < limite:
+        # Coleta nomes de janelas para diagnóstico caso ocorra timeout
+        try:
+            if shutil.which("wmctrl"):
+                res = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, check=False)
+                for l in res.stdout.strip().splitlines():
+                    p = l.split(None, 3)
+                    if len(p) >= 4:
+                        todas_janelas.add(p[3].strip())
+        except Exception:
+            pass
+
         # 1. Tenta método nativo X11 (rápido e determinístico no Xvfb do container)
         try:
             if preencher_pin_x11(pin):
@@ -334,8 +355,9 @@ def preencher_pin():
         time.sleep(0.5)
 
     raise RuntimeError(
-        "Não foi possível concluir o PIN em 30 segundos. "
-        f"Último diagnóstico: {ultimo_erro}"
+        "Não foi possível concluir o PIN em 35 segundos. "
+        f"Janelas vistas no X11: {list(todas_janelas)}. "
+        f"Último erro: {ultimo_erro}"
     )
 
 

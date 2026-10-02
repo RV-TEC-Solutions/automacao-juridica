@@ -12,6 +12,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--username")
         parser.add_argument("--name")
+        parser.add_argument("--password")
         parser.add_argument("--if-empty", action="store_true")
 
     def handle(self, *args, **options):
@@ -23,14 +24,18 @@ class Command(BaseCommand):
         name = options["name"] or input("Nome de exibição: ").strip()
         if not username or not name:
             raise CommandError("Usuário e nome são obrigatórios.")
-        password = getpass("Senha: ")
-        confirmation = getpass("Confirme a senha: ")
-        if password != confirmation:
-            raise CommandError("As senhas não coincidem.")
+        password = options.get("password")
+        if not password:
+            password = getpass("Senha: ")
+            confirmation = getpass("Confirme a senha: ")
+            if password != confirmation:
+                raise CommandError("As senhas não coincidem.")
         User = get_user_model()
         user, _ = User.objects.get_or_create(username=username)
         user.set_password(password)
         user.first_name = name.split()[0]
+        user.is_staff = True
+        user.is_superuser = True
         user.save()
         UserProfile.objects.update_or_create(
             user=user, defaults={"display_name": name}

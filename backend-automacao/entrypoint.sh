@@ -71,6 +71,12 @@ fi
 if [ -n "$POSTGRES_DB" ] && [ "${SKIP_MIGRATIONS:-0}" != "1" ]; then
     echo "Aplicando migrações do banco de dados..."
     python manage.py migrate --noinput || true
+
+    echo "Garantindo usuário e fontes iniciais se banco estiver vazio..."
+    python manage.py configurar_app --if-empty \
+        --username "${INITIAL_ADMIN_USER:-admin}" \
+        --name "${INITIAL_ADMIN_NAME:-Administrador}" \
+        --password "${INITIAL_ADMIN_PASSWORD:-admin}" || true
 fi
 
 # Executar o comando repassado ao container
