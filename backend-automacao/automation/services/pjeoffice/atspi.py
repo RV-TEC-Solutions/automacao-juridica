@@ -173,10 +173,40 @@ def confirmar_com_enter(campo_pin):
     )
 
 
+def dispensar_autorizacao_atspi() -> bool:
+    """Tenta clicar no botão de autorizar/sempre via AT-SPI se a janela de autorização estiver aberta."""
+    if not pyatspi:
+        return False
+    try:
+        desktop = pyatspi.Registry.getDesktop(0)
+        for app in desktop:
+            for no in percorrer(app):
+                if no.getRole() == pyatspi.ROLE_PUSH_BUTTON:
+                    nome = (no.name or "").strip().lower()
+                    if any(alvo in nome for alvo in ("sempre", "autorizar", "permitir", "sim")):
+                        if no.getState().contains(pyatspi.STATE_SHOWING) and no.getState().contains(pyatspi.STATE_SENSITIVE):
+                            acoes = no.queryAction()
+                            if acoes.nActions > 0 and acoes.doAction(0):
+                                return True
+    except Exception:
+        pass
+    return False
+
+
 def preencher_pin_x11(pin: str) -> bool:
     """Preenche a senha no diálogo do PJeOffice diretamente via eventos de janela X11 (wmctrl/xdotool)."""
     if not (shutil.which("xdotool") or shutil.which("wmctrl")) or not os.environ.get("DISPLAY"):
         return False
+
+    titulos_autorizacao = [
+        "autorização de site",
+        "autorizacao de site",
+        "autorização",
+        "autorizacao",
+        "autorizar site",
+        "permissão de acesso",
+        "permissao de acesso",
+    ]
 
     titulos_senha = [
         "informe a senha",
@@ -224,13 +254,29 @@ def preencher_pin_x11(pin: str) -> bool:
 
     # Se wmctrl não achou ou não está instalado, usa xdotool
     if not janelas_ativas and shutil.which("xdotool"):
-        for t in titulos_senha + titulos_selecao:
+        for t in titulos_senha + titulos_selecao + titulos_autorizacao:
             res = subprocess.run(["xdotool", "search", "--name", t], capture_output=True, text=True, check=False)
             for wid in res.stdout.strip().splitlines():
                 wid = wid.strip()
                 if wid:
                     name_res = subprocess.run(["xdotool", "getwindowname", wid], capture_output=True, text=True, check=False)
                     janelas_ativas.append((wid, name_res.stdout.strip()))
+
+    # 0. Trata janela de autorização de site do PJeOffice (ex: "Autorização de site")
+    for wid, titulo in janelas_ativas:
+        tit_lower = titulo.lower()
+        if any(aut in tit_lower for aut in titulos_autorizacao):
+            subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, check=False)
+            subprocess.run(["xdotool", "windowfocus", "--sync", wid], capture_output=True, check=False)
+            time.sleep(0.3)
+            # Envia atalhos para autorizar
+            subprocess.run(["xdotool", "key", "--window", wid, "alt+s"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "--window", wid, "alt+a"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "--window", wid, "space"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "--window", wid, "Return"], capture_output=True, check=False)
+            subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
+            time.sleep(0.8)
+            break
 
     # 1. Trata janela intermediária de seleção de múltiplos certificados (caso haja mais de um token USB plugado)
     for wid, titulo in janelas_ativas:
@@ -322,11 +368,17 @@ def preencher_pin():
     if not pin:
         raise RuntimeError("PJE_CERT_PIN não foi configurado.")
 
-    limite = time.monotonic() + 35
+    limite = time.monotonic() + 45
     ultimo_erro = None
     todas_janelas = set()
 
     while time.monotonic() < limite:
+        # Tenta autorizar site via acessibilidade se o diálogo modal estiver na árvore AT-SPI
+        try:
+            dispensar_autorizacao_atspi()
+        except Exception:
+            pass
+
         # Coleta nomes de janelas para diagnóstico caso ocorra timeout
         try:
             if shutil.which("wmctrl"):
@@ -355,7 +407,7 @@ def preencher_pin():
         time.sleep(0.5)
 
     raise RuntimeError(
-        "Não foi possível concluir o PIN em 35 segundos. "
+        "Não foi possível concluir o PIN em 45 segundos. "
         f"Janelas vistas no X11: {list(todas_janelas)}. "
         f"Último erro: {ultimo_erro}"
     )

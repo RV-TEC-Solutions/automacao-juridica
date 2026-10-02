@@ -563,7 +563,7 @@ def preencher_pin_pjeoffice_atspi():
         env=ambiente,
         capture_output=True,
         text=True,
-        timeout=50,
+        timeout=60,
     )
 
     if resultado.returncode != 0:
