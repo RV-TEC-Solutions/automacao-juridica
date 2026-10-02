@@ -18,10 +18,20 @@ fi
 
 # Iniciar servidor virtual de tela Xvfb em DISPLAY=:99 se nao estiver rodando
 export DISPLAY="${DISPLAY:-:99}"
-if ! pgrep -x "Xvfb" > /dev/null; then
+if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+    display_number="${DISPLAY#:}"
+    display_number="${display_number%%.*}"
+    rm -f "/tmp/.X${display_number}-lock" "/tmp/.X11-unix/X${display_number}"
     echo "Iniciando servidor de tela virtual Xvfb em $DISPLAY..."
     Xvfb "$DISPLAY" -screen 0 1280x1024x24 -ac +extension RANDR +render -noreset &
-    sleep 1
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        xdpyinfo -display "$DISPLAY" >/dev/null 2>&1 && break
+        sleep 1
+    done
+    if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+        echo "Xvfb não ficou disponível em $DISPLAY." >&2
+        exit 1
+    fi
 fi
 
 # Iniciar gerenciador de janelas leve fluxbox para gerenciar foco X11
@@ -57,6 +67,15 @@ if command -v pcscd >/dev/null 2>&1 && ! pgrep -x "pcscd" > /dev/null; then
 fi
 
 # Iniciar PJeOffice Pro em background se instalado
+if [ -n "${PJE_PKCS11_MODULES:-}" ]; then
+    mkdir -p /root/.pjeoffice-pro
+    pje_config=/root/.pjeoffice-pro/pjeoffice-pro.config
+    if [ -f "$pje_config" ]; then
+        sed -i '/^list\.a3=/d' "$pje_config"
+    fi
+    printf 'list.a3=%s\n' "$PJE_PKCS11_MODULES" >> "$pje_config"
+fi
+
 if command -v pjeoffice-pro >/dev/null 2>&1 && ! pgrep -f "pjeoffice" > /dev/null; then
     echo "Iniciando PJeOffice Pro em background..."
     pjeoffice-pro &

@@ -12,6 +12,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--once", action="store_true")
+        parser.add_argument("--no-schedule", action="store_true")
 
     def handle(self, *args, **options):
         self.stdout.write("Worker de coletas iniciado.")
@@ -23,7 +24,8 @@ class Command(BaseCommand):
                 )
             )
         while True:
-            enqueue_due_runs()
+            if not options["no_schedule"]:
+                enqueue_due_runs()
             run = claim_next_run()
             if run:
                 if run.source.code != "djen":

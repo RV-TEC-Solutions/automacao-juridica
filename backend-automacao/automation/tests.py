@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, time, timedelta
 import importlib.util
+from io import StringIO
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,6 +10,7 @@ from unittest.mock import Mock, call, patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.exceptions import SynchronousOnlyOperation
 from django.test import TestCase
 from django.utils import timezone
@@ -59,6 +61,21 @@ class QueueTests(TestCase):
         enqueue_run(self.source, AutomationRun.Trigger.MANUAL)
         with self.assertRaisesMessage(ValueError, "Já existe"):
             enqueue_run(self.source, AutomationRun.Trigger.MANUAL)
+
+    def test_worker_processes_manual_run_without_daily_schedule(self):
+        run = enqueue_run(self.source, AutomationRun.Trigger.MANUAL)
+        output = StringIO()
+
+        with (
+            patch("automation.management.commands.processar_coletas.enqueue_due_runs") as schedule,
+            patch("automation.management.commands.processar_coletas.executar_coleta") as collect,
+        ):
+            call_command("processar_coletas", "--once", "--no-schedule", stdout=output)
+
+        schedule.assert_not_called()
+        collect.assert_called_once()
+        self.assertEqual(collect.call_args.args[0].pk, run.pk)
+        self.assertIn(f"Executando coleta #{run.pk}", output.getvalue())
 
     def test_catch_up_is_enqueued_after_configured_time_once(self):
         user = get_user_model().objects.create_user("user")
@@ -1530,19 +1547,45 @@ class AuthApiTests(TestCase):
 
 
 class PJeOfficeTests(TestCase):
+    def test_pin_dialog_clicks_input_and_ok_only_once(self):
+        from .services.pjeoffice import atspi
+
+        def command_result(args, **kwargs):
+            if args[:2] == ["wmctrl", "-l"]:
+                return SimpleNamespace(stdout="0x00100001  0 host Informe a senha\n", returncode=0)
+            if args[:2] == ["xdotool", "getwindowname"]:
+                return SimpleNamespace(stdout="", returncode=1)
+            return SimpleNamespace(stdout="", returncode=0)
+
+        with (
+            patch.dict("os.environ", {"DISPLAY": ":99"}),
+            patch.object(atspi.shutil, "which", return_value="/usr/bin/tool"),
+            patch.object(atspi, "obter_geometria_janela", return_value=(354, 442, 565, 168)),
+            patch.object(atspi.subprocess, "run", side_effect=command_result) as run,
+            patch.object(atspi.time, "sleep"),
+        ):
+            self.assertTrue(atspi.preencher_pin_x11("1234"))
+
+        commands = [entry.args[0] for entry in run.call_args_list]
+        self.assertIn(["xdotool", "mousemove", "636", "526", "click", "1"], commands)
+        self.assertIn(["xdotool", "mousemove", "755", "559", "click", "1"], commands)
+        self.assertEqual(sum(command[:2] == ["xdotool", "type"] for command in commands), 1)
+        self.assertNotIn(["xdotool", "key", "Return"], commands)
+
     def test_pin_helper_uses_system_python_with_pyatspi(self):
         from .services.pje.browser import preencher_pin_pjeoffice_atspi
 
         with (
             patch.dict("os.environ", {"PJE_CERT_PIN": "1234"}, clear=True),
             patch(
-                "automation.services.pje.browser.subprocess.run",
-                return_value=SimpleNamespace(returncode=0, stderr=""),
-            ) as run,
+                "automation.services.pje.browser.subprocess.Popen",
+            ) as popen,
         ):
+            popen.return_value.stdout = StringIO("")
+            popen.return_value.wait.return_value = 0
             preencher_pin_pjeoffice_atspi()
 
-        self.assertEqual(run.call_args.args[0][0], "/usr/bin/python3")
+        self.assertEqual(popen.call_args.args[0][0], "/usr/bin/python3")
 
     def test_pin_helper_confirms_with_enter_when_no_known_button_exists(self):
         helper_path = (

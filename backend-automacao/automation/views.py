@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, UserProfile
 from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
-from .services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
+from .services.pjeoffice.physical_token import TokenFisicoError, require_hardware_token, validar_token_fisico
 from expedientes.models import Expediente, ExpedienteEvent, Processo
 
 
@@ -415,11 +415,19 @@ def runs(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def token_status(request):
+    if not require_hardware_token():
+        return Response({
+            "available": True,
+            "message": "Verificação do token físico desativada; a autenticação será validada durante a coleta.",
+        })
     try:
         validar_token_fisico()
     except TokenFisicoError as error:
         return Response({"available": False, "message": str(error)})
-    return Response({"available": True, "message": "Token físico conectado."})
+    return Response({
+        "available": True,
+        "message": "Cartão detectado pelo PC/SC; o certificado será validado durante a coleta.",
+    })
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

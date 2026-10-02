@@ -1,0 +1,89 @@
+name: bmr-isolado
+
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_DB: bmr_test
+      POSTGRES_USER: bmr_test
+      POSTGRES_PASSWORD: bmr_test
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend-automacao
+      dockerfile: Dockerfile.isolated
+    environment:
+      POSTGRES_DB: bmr_test
+      POSTGRES_USER: bmr_test
+      POSTGRES_PASSWORD: bmr_test
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DEBUG: "True"
+      ALLOWED_HOSTS: localhost,127.0.0.1,backend
+      CSRF_TRUSTED_ORIGINS: http://localhost:3003,http://127.0.0.1:3003
+      PJE_REQUIRE_HARDWARE_TOKEN: "true"
+    volumes:
+      - /run/pcscd:/run/pcscd
+    command:
+      - sh
+      - -c
+      - >-
+        python manage.py migrate --noinput &&
+        python manage.py configurar_app --if-empty --username admin --name Administrador --password admin &&
+        exec python manage.py runserver 0.0.0.0:8007
+    ports:
+      - "127.0.0.1:8008:8007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: ./backend-automacao
+    command: python manage.py processar_coletas --no-schedule
+    restart: unless-stopped
+    shm_size: '2gb'
+    environment:
+      POSTGRES_DB: bmr_test
+      POSTGRES_USER: bmr_test
+      POSTGRES_PASSWORD: bmr_test
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      SKIP_MIGRATIONS: "1"
+      PJE_REQUIRE_HARDWARE_TOKEN: "true"
+      PJE_PKCS11_MODULES: /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so|/usr/lib/libaetpkss.so.3.9.34.1
+      LD_LIBRARY_PATH: /opt/token-libs
+    volumes:
+      - /run/pcscd:/run/pcscd
+      - /usr/lib/libaetpkss.so.3.9.34.1:/usr/lib/libaetpkss.so.3.9.34.1:ro
+      - /usr/lib/x86_64-linux-gnu/libpcsclite.so.1.0.0:/opt/token-libs/libpcsclite.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.33:/opt/token-libs/libstdc++.so.6:ro
+      - ~/.config/pje-automacao:/root/.config/pje-automacao:ro
+      - ./backend-automacao/respostas_expedientes:/app/respostas_expedientes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8007
+    environment:
+      BACKEND_URL: http://backend:8007
+      PORT: 3002
+    ports:
+      - "127.0.0.1:3003:3002"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

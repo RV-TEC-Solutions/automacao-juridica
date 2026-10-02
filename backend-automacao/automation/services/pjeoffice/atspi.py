@@ -373,15 +373,13 @@ def preencher_pin_x11(pin: str) -> bool:
         if eh_janela_senha:
             print(f"[pjeoffice-gui] >>> JANELA DE PIN/SENHA DETECTADA: '{titulo}' (ID: {wid})! <<<", flush=True)
             geo = obter_geometria_janela(wid)
-            if geo:
-                gx, gy, gw, gh = geo
-                # Clica no centro (onde fica o campo de entrada da senha)
-                subprocess.run(["xdotool", "mousemove", str(gx + gw // 2), str(gy + gh // 2), "click", "1"], capture_output=True, check=False)
-                time.sleep(0.2)
-
             subprocess.run(["xdotool", "windowactivate", wid], capture_output=True, check=False)
             subprocess.run(["xdotool", "windowfocus", wid], capture_output=True, check=False)
-            time.sleep(0.2)
+            if geo:
+                gx, gy, gw, gh = geo
+                # O campo de PIN fica abaixo dos dados do token.
+                subprocess.run(["xdotool", "mousemove", str(gx + gw // 2), str(gy + gh // 2), "click", "1"], capture_output=True, check=False)
+                time.sleep(0.2)
 
             print("[pjeoffice-gui] Preenchendo PIN e enviando confirmação...", flush=True)
             # Digita o PIN com precisão
@@ -392,17 +390,21 @@ def preencher_pin_x11(pin: str) -> bool:
             )
             time.sleep(0.1)
 
-            # Envia Return para submeter o diálogo modal
-            subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
-
-            # Clica no botão OK na barra inferior se a janela foi mapeada
+            # Clica uma única vez no botão OK, à direita do campo de senha.
             if geo:
-                btn_ok_y = str(gy + gh - 35)
-                btn_ok_x = str(gx + gw // 2)
+                btn_ok_y = str(gy + int(gh * 0.70))
+                btn_ok_x = str(gx + int(gw * 0.71))
                 subprocess.run(["xdotool", "mousemove", btn_ok_x, btn_ok_y, "click", "1"], capture_output=True, check=False)
+            else:
+                subprocess.run(["xdotool", "key", "Return"], capture_output=True, check=False)
 
-            # Aguarda a submissão e confirmação de fechamento
-            time.sleep(1.0)
+            time.sleep(2.0)
+            janela = subprocess.run(
+                ["xdotool", "getwindowname", wid],
+                capture_output=True, text=True, check=False,
+            )
+            if janela.returncode == 0 and "senha" in janela.stdout.lower():
+                raise ValueError("A janela de PIN permaneceu aberta após a confirmação; confira o foco e o PIN antes de tentar novamente.")
             print("[pjeoffice-gui] Submissão do PIN concluída!", flush=True)
             return True
 
@@ -473,6 +475,8 @@ def preencher_pin():
             if preencher_pin_x11(pin):
                 print(f"[pjeoffice-gui] >>> PIN preenchido e confirmado com sucesso em T+{tempo_decorrido}s! <<<", flush=True)
                 return
+        except ValueError:
+            raise
         except Exception as erro:
             ultimo_erro = f"X11: {erro}"
 

@@ -76,6 +76,52 @@ Para executar API e frontend em contêineres, use `docker compose up -d --build`
 Esse modo usa o mesmo PostgreSQL configurado no `.env`. A coleta agendada
 continua disponível pelo `./run-local.sh`.
 
+### Teste isolado com coleta PJe
+
+Esta pilha usa banco próprio e instala Chromium e PJeOffice no contêiner do
+worker. O PJeOffice instalado no notebook não é usado. Para autenticar no PJe,
+o worker lê `PJE_CERT_PIN` e `PJE_TOTP_SECRET` de
+`~/.config/pje-automacao/.env` e acessa o token pelo serviço PC/SC do host,
+compartilhado em `/run/pcscd`. O token precisa estar conectado e o serviço
+PC/SC ativo no computador.
+Para o token StarSign CUT S, esta configuração também monta, somente para
+leitura, o driver PKCS#11 `/usr/lib/libaetpkss.so.3.9.34.1` instalado no host.
+A biblioteca cliente PC/SC do host também é montada em
+`/opt/token-libs/libpcsclite.so.1` para manter a mesma versão do protocolo.
+A versão de `libstdc++` exigida pelo driver é montada em
+`/opt/token-libs/libstdc++.so.6`.
+As demais fontes podem ser desativadas na interface para testar apenas o
+PJe 1º Grau.
+
+```bash
+docker compose -f docker-compose.isolated.yml up -d --build
+docker compose -f docker-compose.isolated.yml ps
+```
+
+Acesse `http://localhost:3003` com usuário `admin` e senha `admin`. A API fica
+em `127.0.0.1:8008`. O projeto Compose `bmr-isolado` tem rede e volume de banco
+próprios; o banco `bmr-postgres-1` continua separado. O worker processa as
+coletas acionadas na interface e registra `Executando coleta #...` em
+`docker compose -f docker-compose.isolated.yml logs -f worker`. O agendamento
+diário fica desligado nesta pilha de testes.
+
+Se a coleta parar antes do PIN, confira o token no worker:
+
+```bash
+docker compose -f docker-compose.isolated.yml exec worker pcsc_scan -c -t 1
+docker compose -f docker-compose.isolated.yml exec worker pkcs11-tool --module /usr/lib/libaetpkss.so.3.9.34.1 -L
+```
+
+`Card inserted` confirma apenas a presença do cartão. Se o segundo comando
+mostrar `token not recognized`, o driver ainda não consegue ler o certificado;
+retire e recoloque o token antes de tentar outra coleta.
+
+Para parar os serviços, preservando os dados de teste:
+
+```bash
+docker compose -f docker-compose.isolated.yml down
+```
+
 ## Backup e restauração do PostgreSQL
 
 Pare a aplicação antes da restauração. Crie um backup manual em formato
