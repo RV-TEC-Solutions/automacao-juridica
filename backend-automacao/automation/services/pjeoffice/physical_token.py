@@ -1,6 +1,8 @@
-"""Verificação local da presença de token A3 via PC/SC."""
+"""Verificação de disponibilidade do certificado digital (A1 em memória ou A3 físico)."""
 
+import os
 import subprocess
+from pathlib import Path
 
 
 TOKEN_AUSENTE_MENSAGEM = (
@@ -13,15 +15,36 @@ TOKEN_INDISPONIVEL_MENSAGEM = (
 
 
 class TokenFisicoError(RuntimeError):
-    """Erro conhecido durante a pré-verificação do certificado A3."""
+    """Erro conhecido durante a pré-verificação do certificado digital."""
+
+
+def is_a1_configured() -> bool:
+    """Verifica se há configuração ativa para certificado A1."""
+    return bool(
+        os.environ.get("PJE_CERT_A1_BASE64")
+        or os.environ.get("PJE_CERT_A1_PATH")
+        or os.environ.get("PJE_AUTH_MODE", "").lower() == "a1"
+    )
 
 
 def validar_token_fisico():
-    """Garante que o PC/SC enxerga um cartão inserido antes da coleta.
+    """Garante que há um certificado digital válido e disponível antes da coleta.
 
-    ``pcsc_scan`` é fornecido pelo pacote usado pelo PJeOffice e consulta o
-    leitor sem abrir a janela de autenticação nem enviar o PIN.
+    - Modo A1: Valida o carregamento do par de chaves e a expiração do certificado X.509.
+    - Modo A3 (Legado): Consulta o leitor PC/SC local sem abrir a janela de autenticação.
     """
+    if is_a1_configured():
+        from .crypto import A1CryptoEngine, A1CryptoError
+        try:
+            engine = A1CryptoEngine.from_env()
+            if engine.cert_info.is_expired:
+                raise TokenFisicoError(
+                    f"Certificado digital A1 expirado em {engine.cert_info.not_valid_after.strftime('%d/%m/%Y')}."
+                )
+            return
+        except A1CryptoError as error:
+            raise TokenFisicoError(f"Falha na validação do certificado A1: {error}") from error
+
     try:
         resultado = subprocess.run(
             ["pcsc_scan", "-c", "-t", "1"],

@@ -20,6 +20,8 @@ from playwright.sync_api import (
 from .sources import get_source_profile
 from .trt21 import collect_trt21_expedientes
 from .notices import mark_confirmed, persist_notices
+from ..pjeoffice.mock_server import ensure_pjeoffice_mock_running
+from ..pjeoffice.physical_token import is_a1_configured
 
 PYTHON_ATSPI = "/usr/bin/python3"
 
@@ -754,33 +756,57 @@ def autenticar_pje(pagina, source_code):
     if not segredo_totp:
         raise RuntimeError("PJE_TOTP_SECRET não foi configurado.")
 
+    usando_a1 = is_a1_configured()
+    if usando_a1:
+        ensure_pjeoffice_mock_running()
+
     if get_source_profile(source_code).collector == "trt21":
         entrar_com_pdpj(pagina)
     clicar_certificado(pagina, source_code)
-    preencher_pin_pjeoffice_atspi()
+
+    if not usando_a1:
+        preencher_pin_pjeoffice_atspi()
 
     campo_otp = pagina.get_by_label(
         "Entre no seu aplicativo de autenticação e digite abaixo o código apresentado:",
         exact=True,
     )
-    campo_otp.wait_for(state="visible")
+    campo_otp.wait_for(state="visible", timeout=30000)
     campo_otp.fill(gerar_codigo_totp(segredo_totp))
     pagina.get_by_text("Validar", exact=True).click()
 
 
 def abrir_pje(source_code, source=None):
     pje_url = obter_url_pje(source_code)
+    usando_a1 = is_a1_configured()
+    if usando_a1:
+        ensure_pjeoffice_mock_running()
+
+    modo_headless = os.environ.get(
+        "PJE_BROWSER_HEADLESS", "true" if usando_a1 else "false"
+    ).lower() in ("true", "1", "yes")
+
     with sync_playwright() as playwright:
         navegador = playwright.chromium.launch(
-            headless=False
+            headless=modo_headless,
+            args=[
+                "--disable-web-security",
+                "--allow-running-insecure-content",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+            ],
         )
 
         contexto = navegador.new_context()
 
-        contexto.grant_permissions(
-            ["local-network-access"],
-            origin="https://sso.cloud.pje.jus.br",
-        )
+        # Concessão de permissões de rede privada para acesso ao Mock PJeOffice na porta 8800
+        parsed_url = urlparse(pje_url)
+        origem = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        for org in ("https://sso.cloud.pje.jus.br", "https://pje.csjt.jus.br", origem):
+            try:
+                contexto.grant_permissions(["local-network-access"], origin=org)
+            except Exception:
+                pass
 
         pagina = contexto.new_page()
 

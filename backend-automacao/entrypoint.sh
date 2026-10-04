@@ -21,13 +21,17 @@ export GTK_MODULES=gail:atk-bridge
 export QT_ACCESSIBILITY=1
 export AT_SPI_CLIENT=1
 
-# Start PJeOffice Pro in background if installed
-if command -v pjeoffice-pro >/dev/null 2>&1; then
-    echo "Iniciando PJeOffice Pro..."
+# Start PJeOffice Mock Server (A1 mode) or native PJeOffice (A3 mode)
+if [ -n "$PJE_CERT_A1_BASE64" ] || [ -n "$PJE_CERT_A1_PATH" ] || [ "$PJE_AUTH_MODE" = "a1" ]; then
+    echo "Iniciando PJeOffice Mock Server (Modo Certificado A1 na porta 8800)..."
+    python -m automation.services.pjeoffice.mock_server &
+    sleep 1
+elif command -v pjeoffice-pro >/dev/null 2>&1; then
+    echo "Iniciando PJeOffice Pro (Modo Legado A3)..."
     pjeoffice-pro &
     sleep 2
 elif command -v pjeoffice >/dev/null 2>&1; then
-    echo "Iniciando PJeOffice..."
+    echo "Iniciando PJeOffice (Modo Legado A3)..."
     pjeoffice &
     sleep 2
 fi
