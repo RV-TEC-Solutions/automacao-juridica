@@ -179,6 +179,15 @@ export default function Home() {
     }
   };
 
+  const advanceDemo = async (finish = false) => {
+    try {
+      await api("demo/advance/", { method: "POST", body: JSON.stringify({ finish }) });
+      await Promise.all([load(), loadExpedientes(), loadPublications()]);
+    } catch (exception) {
+      notify({ message: exception instanceof Error ? exception.message : "Não foi possível avançar a coleta." });
+    }
+  };
+
   const closeDiscardDialog = () => {
     setDiscardDialogOpen(false);
     window.requestAnimationFrame(() => discardTrigger?.focus());
@@ -278,7 +287,8 @@ export default function Home() {
               discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
               tokenAvailable={tokenStatus?.available}
-              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
+              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }}
+              onAdvance={() => { void advanceDemo(); }} onFinish={() => { void advanceDemo(true); }} />
           </div>
         )}
       </div>
@@ -305,7 +315,7 @@ export default function Home() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
             <PdfExportButton path={`expedientes/export.pdf/?scope=overview&metric=${activeMetric}`} analytical
               label="Exportar expedientes em PDF" count={expedientes?.count}
-              summary={`Expedientes · ${metricFilters[activeMetric].title}. ${activeMetric === "new" || activeMetric === "updated" ? "Eventos coletados hoje." : "Este filtro representa o estado atual e pode incluir expedientes coletados antes de hoje. O PDF mostrará apenas alterações registradas hoje."}`} />
+              summary={`Expedientes · ${metricFilters[activeMetric].title}. O PDF contém os mesmos expedientes deste filtro, inclusive registros de dias anteriores quando aplicável.`} />
             <Link href="/expedientes" className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline transition-colors hover:text-foreground">
               Ver consulta completa
               <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />

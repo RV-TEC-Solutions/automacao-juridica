@@ -1,5 +1,5 @@
 import {
-  ArrowClockwise, ChartBar, CheckCircle, Clock, MinusCircle, Play, Prohibit, Trash,
+  ArrowClockwise, ChartBar, CheckCircle, Clock, MinusCircle, Play, Prohibit,
   SpinnerGap, Stop, XCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -55,9 +55,9 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
 }
 
 export function CollectionPipeline({
-  pipeline, refreshing, starting, cancelling, discarding, canDiscard,
+  pipeline, refreshing, starting,
   tokenAvailable = true,
-  onRefresh, onRun, onCancel, onDiscard, onRerun,
+  onRefresh, onRun, onRerun, onAdvance, onFinish,
 }: {
   pipeline: Pipeline;
   refreshing: boolean;
@@ -71,6 +71,8 @@ export function CollectionPipeline({
   onCancel: () => void;
   onDiscard: (trigger: HTMLButtonElement) => void;
   onRerun: (code: string) => void;
+  onAdvance: () => void;
+  onFinish: () => void;
 }) {
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
   const canStart = tokenAvailable && !starting;
@@ -98,20 +100,18 @@ export function CollectionPipeline({
           <Button type="button" variant="outline" size="icon" onClick={onRefresh} disabled={refreshing} aria-label="Atualizar status da coleta" title="Atualizar status da coleta">
             <ArrowClockwise size={15} weight="bold" className={refreshing ? "animate-spin motion-reduce:animate-none" : ""} />
           </Button>
-          <Button type="button" variant="outline" size="icon" className="text-destructive" onClick={(event) => onDiscard(event.currentTarget)} disabled={!canDiscard || discarding} aria-label="Descartar coleta do dia" title={canDiscard ? "Descartar coleta do dia" : "Disponível quando houver dados coletados e nenhuma fonte em execução"}>
-            <Trash size={15} weight="fill" className={discarding ? "animate-pulse" : ""} />
-          </Button>
-          {pipeline.active ? (
-            <Button type="button" variant="outline" size="icon" className="text-destructive" onClick={onCancel} disabled={cancelling} aria-label="Interromper coleta" title="Interromper coleta">
-              <Stop size={15} weight="fill" />
-            </Button>
-          ) : (
+          {!pipeline.active && (
             <Button type="button" size="icon" onClick={onRun} disabled={!canStart} aria-label="Executar coleta" title={tokenAvailable ? "Executar coleta" : "Conecte o token físico para iniciar a coleta"}>
               <Play size={14} weight="fill" />
             </Button>
           )}
         </div>
       </div>
+      {pipeline.active && <div className="mt-4 flex flex-wrap gap-2 rounded-lg border bg-muted/40 p-3">
+        <span className="w-full text-xs font-semibold text-muted-foreground">Controle da gravação</span>
+        <Button type="button" size="sm" variant="outline" onClick={onAdvance}>Próxima fonte</Button>
+        <Button type="button" size="sm" onClick={onFinish}>Concluir coleta</Button>
+      </div>}
 
       <div className="mt-4 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
         <div className="flex min-w-max items-start">

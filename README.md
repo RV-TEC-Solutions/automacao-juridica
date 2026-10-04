@@ -1,5 +1,7 @@
 # Painel de Expedientes
 
+> **Branch `demo/video`:** para gravar a demonstração com dados fictícios, siga [frontend/README.md](frontend/README.md). Esta branch inicia apenas o Next.js e não depende de backend, banco ou token. As instruções operacionais abaixo descrevem a aplicação original.
+
 Aplicação local para acompanhar expedientes coletados do PJe e publicações do
 Diário de Justiça Eletrônico Nacional (DJEN).
 

@@ -22,7 +22,7 @@ function pipeline(active = true): Pipeline {
 }
 
 const handlers = () => ({
-  onRefresh: vi.fn(), onRun: vi.fn(), onCancel: vi.fn(), onDiscard: vi.fn(), onRerun: vi.fn(),
+  onRefresh: vi.fn(), onRun: vi.fn(), onCancel: vi.fn(), onDiscard: vi.fn(), onRerun: vi.fn(), onAdvance: vi.fn(), onFinish: vi.fn(),
 });
 
 describe("CollectionPipeline", () => {
@@ -37,11 +37,14 @@ describe("CollectionPipeline", () => {
     expect(screen.getByText("Falha de autenticação no tribunal")).toBeVisible();
   });
 
-  it("disables every rerun while the cycle is active and preserves cancel", () => {
-    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
+  it("disables reruns while active and offers manual demo controls", () => {
+    const callbacks = handlers();
+    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
     screen.getAllByRole("button", { name: /Reexecutar somente/ }).forEach((button) => expect(button).toBeDisabled());
-    expect(screen.getByRole("button", { name: "Descartar coleta do dia" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Interromper coleta" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Próxima fonte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Concluir coleta" }));
+    expect(callbacks.onAdvance).toHaveBeenCalledOnce();
+    expect(callbacks.onFinish).toHaveBeenCalledOnce();
   });
 
   it("enables valid actions after completion and calls rerun with the source", () => {
@@ -53,8 +56,6 @@ describe("CollectionPipeline", () => {
     fireEvent.click(reruns[0]);
     expect(callbacks.onRerun).toHaveBeenCalledWith("step-0");
     expect(screen.getByRole("link", { name: "Ver relatório de coletas" })).toHaveAttribute("href", "/historico?tab=orquestracao");
-    fireEvent.click(screen.getByRole("button", { name: "Descartar coleta do dia" }));
-    expect(callbacks.onDiscard).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Executar coleta" })).toBeEnabled();
   });
 

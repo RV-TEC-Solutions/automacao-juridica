@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, ensureCsrf } from "./lib/api";
+import { api } from "./lib/api";
 import type { User } from "./lib/types";
 
-type AuthValue = { user: User | null; loading: boolean; login: (username: string, password: string) => Promise<void>; logout: () => Promise<void>; refresh: () => Promise<void>; setTheme: (theme: User["theme"]) => Promise<void> };
+type AuthValue = { user: User | null; loading: boolean; refresh: () => Promise<void>; setTheme: (theme: User["theme"]) => Promise<void> };
 const AuthContext = createContext<AuthValue | null>(null);
 
 function applyTheme(theme: User["theme"]) {
@@ -22,13 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     catch { setUser(null); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { ensureCsrf().then(refresh).catch(() => setLoading(false)); }, [refresh]);
-  const login = async (username: string, password: string) => {
-    await ensureCsrf();
-    const value = await api<User>("auth/login/", { method: "POST", body: JSON.stringify({ username, password }) });
-    setUser(value); applyTheme(value.theme);
-  };
-  const logout = async () => { await api("auth/logout/", { method: "POST" }); setUser(null); };
+  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
   const setTheme = async (theme: User["theme"]) => {
     await api("settings/", { method: "PATCH", body: JSON.stringify({ theme }) });
     setUser((current) => current ? { ...current, theme } : current);
@@ -41,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     media.addEventListener("change", syncTheme);
     return () => media.removeEventListener("change", syncTheme);
   }, [user]);
-  return <AuthContext.Provider value={{ user, loading, login, logout, refresh, setTheme }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, refresh, setTheme }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

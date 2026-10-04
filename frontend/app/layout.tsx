@@ -5,7 +5,7 @@ import { AuthProvider } from "./providers";
 
 export const metadata: Metadata = {
   title: "Céleri Comunicações",
-  description: "Painel operacional para monitoramento de expedientes e prazos do PJe para Barros, Mariz & Rebouças Advogados.",
+  description: "Ambiente de demonstração com dados fictícios para monitoramento de expedientes e prazos.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

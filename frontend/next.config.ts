@@ -3,13 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: { useTypeScriptCli: false },
   output: "standalone",
-  // A API Django usa rotas com barra final. Sem isto, o Next remove a barra,
-  // Django a recoloca e o navegador entra em loop de redirecionamentos.
+  // O cliente da aplicação chama as rotas locais com barra final.
   skipTrailingSlashRedirect: true,
-  async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8007";
-    return [{ source: "/api/:path*", destination: `${backendUrl}/api/:path*/` }];
-  },
 };
 
 
