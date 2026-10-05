@@ -1,5 +1,23 @@
 import { expect, test } from "@playwright/test";
 
+test("desktop navigation keeps labels on one line without page overflow", async ({ page }) => {
+  for (const width of [1536, 1735, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const navigation = page.locator("header nav").first();
+    await expect(navigation).toBeVisible();
+    for (const label of ["Visão geral", "Publicações DJEN"]) {
+      const text = navigation.getByRole("link", { name: label }).locator("span").first();
+      await expect(text).toHaveCSS("white-space", "nowrap");
+      expect(await text.evaluate((element) => element.getClientRects().length)).toBe(1);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test("demo runs without backend and keeps state across pages", async ({ page, request }) => {
   await page.goto("/");
   await expect(page.getByText("Ambiente de demonstração").first()).toBeVisible();

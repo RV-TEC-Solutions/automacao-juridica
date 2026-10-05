@@ -23,20 +23,20 @@ const links = [
 ] as const;
 
 export function Brand({ compact = false }: { compact?: boolean }) {
-  return <Link href="/" className="flex items-center gap-4" title="Céleri · Ambiente de demonstração">
+  return <Link href="/" className="flex shrink-0 items-center gap-3" title="Céleri · Ambiente de demonstração">
     <Image src={celeriLogo} alt="Céleri" width={56} height={56} unoptimized draggable={false} className="h-14 w-14 object-contain dark:brightness-0 dark:invert" priority />
-    {!compact && <span className="border-l pl-4 text-xs font-semibold text-muted-foreground">Escritório Demonstração</span>}
+    {!compact && <span className="whitespace-nowrap border-l pl-3 text-xs font-semibold text-muted-foreground">Escritório Demonstração</span>}
   </Link>;
 }
 
 function NavLinks({ pathname, unreadNotices, mobile = false }: { pathname: string; unreadNotices: number; mobile?: boolean }) {
-  return <nav className={cn("items-center gap-2", mobile ? "flex overflow-x-auto border-t px-4 py-2 xl:hidden" : "hidden xl:flex")} aria-label="Navegação principal">
+  return <nav className={cn("items-center gap-1", mobile ? "flex overflow-x-auto border-t px-4 py-2 2xl:hidden" : "hidden min-w-0 justify-center 2xl:flex")} aria-label="Navegação principal">
     {links.map(([href, label, Icon]) => {
       const active = pathname === href;
       const count = href === "/avisos" ? unreadNotices : 0;
-      return <Link key={href} href={href} className={cn("flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors", mobile && "shrink-0", active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")} aria-current={active ? "page" : undefined}>
-        <Icon size={18} weight={active ? "fill" : "regular"} />
-        <span>{label}</span>
+      return <Link key={href} href={href} className={cn("flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors", active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")} aria-current={active ? "page" : undefined}>
+        <Icon size={18} weight={active ? "fill" : "regular"} className="shrink-0" />
+        <span className="whitespace-nowrap">{label}</span>
         {count > 0 && <span className={cn("ml-auto grid size-6 place-items-center rounded-full text-xs font-semibold", active ? "bg-primary-foreground text-primary" : "bg-warning-soft text-warning")}>{count}</span>}
       </Link>;
     })}
@@ -76,15 +76,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <span role="status" aria-atomic="true" className="sr-only">{unreadNotices === 0 ? "Nenhum aviso não lido" : `${unreadNotices} aviso${unreadNotices === 1 ? "" : "s"} não lido${unreadNotices === 1 ? "" : "s"}`}</span>
 
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <div className="xl:hidden"><Brand compact /></div>
-        <div className="hidden xl:block"><Brand /></div>
+      <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8 min-[1800px]:max-w-[1760px]">
+        <div className="2xl:hidden"><Brand compact /></div>
+        <div className="hidden 2xl:block"><Brand /></div>
         <NavLinks pathname={pathname} unreadNotices={unreadNotices} />
-        <div className="flex items-center gap-2">
-          <span className="inline-flex max-w-28 rounded-md border px-2 py-1 text-[10px] font-semibold leading-tight text-muted-foreground sm:max-w-none sm:px-3 sm:py-2 sm:text-xs">Ambiente de demonstração</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="inline-flex max-w-28 rounded-md border px-2 py-1 text-[10px] font-semibold leading-tight text-muted-foreground max-[370px]:hidden sm:max-w-none sm:px-3 sm:py-2 sm:text-xs">Ambiente de demonstração</span>
           <Link href="/configuracoes" className="flex h-10 items-center gap-2 rounded-md border bg-card px-2 hover:bg-muted" title="Perfil e preferências">
             <span className="grid size-8 place-items-center rounded-full bg-muted text-xs font-semibold">{initials}</span>
-            <span className="hidden max-w-32 truncate text-sm font-medium 2xl:block">{user.display_name}</span>
+            <span className="hidden max-w-32 truncate text-sm font-medium min-[1800px]:block">{user.display_name}</span>
           </Link>
           <Button variant="outline" size="icon" disabled={switchingTheme} onClick={toggleTheme} aria-label={dark ? "Mudar para tema claro" : "Mudar para tema escuro"} title={dark ? "Mudar para tema claro" : "Mudar para tema escuro"}>{dark ? <Sun /> : <Moon />}</Button>
         </div>
