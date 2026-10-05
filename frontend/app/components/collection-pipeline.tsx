@@ -3,7 +3,7 @@ import {
   SpinnerGap, Stop, XCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatDateTime } from "../lib/api";
 import type { CollectionPipeline as Pipeline, PipelineStep, PipelineStepStatus } from "../lib/types";
@@ -24,7 +24,7 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
   const Icon = meta.Icon;
   const errorId = step.error ? `pipeline-error-${step.code}` : undefined;
   return (
-    <li className="group/step">
+    <li className="group/step" data-step-code={step.code}>
       <div className={`flex min-h-10 items-center gap-2 rounded-lg border px-2 py-2 ${meta.className}`}>
         <Icon
           size={17}
@@ -74,6 +74,31 @@ export function CollectionPipeline({
   onAdvance: () => void;
   onFinish: () => void;
 }) {
+  const scrollRegion = useRef<HTMLDivElement>(null);
+  const currentStep = pipeline.current_step;
+  const active = pipeline.active;
+  const cycleId = pipeline.cycle_id;
+
+  useEffect(() => {
+    const region = scrollRegion.current;
+    if (!active || !currentStep || !region || region.scrollWidth <= region.clientWidth) return;
+    const step = Array.from(region.querySelectorAll<HTMLElement>("[data-step-code]"))
+      .find((item) => item.dataset.stepCode === currentStep);
+    const group = step?.closest<HTMLElement>("section");
+    if (!group) return;
+
+    const viewport = region.getBoundingClientRect();
+    const bounds = group.getBoundingClientRect();
+    const margin = 12;
+    let offset = 0;
+    if (bounds.right > viewport.right - margin) offset = bounds.right - viewport.right + margin;
+    else if (bounds.left < viewport.left + margin) offset = bounds.left - viewport.left - margin;
+    if (offset === 0) return;
+
+    const left = Math.max(0, Math.min(region.scrollWidth - region.clientWidth, region.scrollLeft + offset));
+    region.scrollTo({ left, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }, [active, currentStep, cycleId]);
+
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
   const canStart = tokenAvailable && !starting;
   const current = pipeline.steps.find((step) => step.code === pipeline.current_step);
@@ -113,7 +138,7 @@ export function CollectionPipeline({
         <Button type="button" size="sm" onClick={onFinish}>Concluir coleta</Button>
       </div>}
 
-      <div className="mt-4 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
+      <div ref={scrollRegion} className="mt-4 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
         <div className="flex min-w-max items-start">
           {groups.map((group, index) => (
             <Fragment key={group}>

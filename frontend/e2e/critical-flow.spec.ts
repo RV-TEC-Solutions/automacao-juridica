@@ -100,3 +100,32 @@ test("settings, notices and publication reading persist locally", async ({ page,
     expect((await (await request.get("/api/djen/communications/?read=unread")).json()).count).toBe(publications.count - 1);
   }
 });
+
+test("pipeline follows the group in progress and respects manual scrolling until the next step", async ({ page, request }) => {
+  await page.goto("/");
+  const finish = page.getByRole("button", { name: "Concluir coleta" });
+  if (await finish.isVisible()) await finish.click();
+  await page.getByRole("button", { name: "Executar coleta" }).click();
+  const region = page.getByTestId("pipeline-scroll-region");
+  for (let completed = 1; completed <= 8; completed++) {
+    await page.getByRole("button", { name: "Próxima fonte" }).click();
+    await expect(page.getByRole("heading", { name: new RegExp(`^${completed} de`) })).toBeVisible();
+  }
+  await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
+  const current = (await (await request.get("/api/dashboard/")).json()).collection_pipeline.current_step as string;
+  const visible = await region.evaluate((element, code) => {
+    const step = Array.from(element.querySelectorAll<HTMLElement>("[data-step-code]")).find((item) => item.dataset.stepCode === code);
+    const group = step?.closest("section")?.getBoundingClientRect();
+    const viewport = element.getBoundingClientRect();
+    return Boolean(group && group.left >= viewport.left - 1 && group.right <= viewport.right + 1);
+  }, current);
+  expect(visible).toBe(true);
+
+  await region.evaluate((element) => { element.scrollLeft = 0; });
+  await page.getByRole("button", { name: "Atualizar status da coleta" }).click();
+  expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
+  await page.getByRole("button", { name: "Próxima fonte" }).click();
+  await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await finish.click();
+});
