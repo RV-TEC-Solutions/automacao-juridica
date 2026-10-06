@@ -22,7 +22,7 @@ function pipeline(active = true): Pipeline {
 }
 
 const handlers = () => ({
-  onRefresh: vi.fn(), onRun: vi.fn(), onCancel: vi.fn(), onDiscard: vi.fn(), onRerun: vi.fn(), onAdvance: vi.fn(), onFinish: vi.fn(),
+  onRefresh: vi.fn(), onRun: vi.fn(), onCancel: vi.fn(), onDiscard: vi.fn(), onRerun: vi.fn(),
 });
 
 describe("CollectionPipeline", () => {
@@ -31,20 +31,18 @@ describe("CollectionPipeline", () => {
     const region = screen.getByTestId("pipeline-scroll-region");
     expect(within(region).getAllByRole("heading", { level: 4 }).map((item) => item.textContent)).toEqual(["TJRN", "Justiça Eleitoral", "TRT21", "TRF5"]);
     expect(within(region).getAllByRole("listitem").map((item) => item.textContent)).toEqual(expect.arrayContaining([
-      expect.stringContaining("Concluída"), expect.stringContaining("Em execução"), expect.stringContaining("Aguardando"),
+      expect.stringContaining("Concluída"), expect.stringContaining("Coletando..."), expect.stringContaining("Aguardando"),
       expect.stringContaining("Falhou"), expect.stringContaining("Interrompida"), expect.stringContaining("Desativada"), expect.stringContaining("Ignorada"),
     ]));
     expect(screen.getByText("Falha de autenticação no tribunal")).toBeVisible();
   });
 
-  it("disables reruns while active and offers manual demo controls", () => {
+  it("disables reruns while active and shows automatic progress", () => {
     const callbacks = handlers();
     render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
     screen.getAllByRole("button", { name: /Reexecutar somente/ }).forEach((button) => expect(button).toBeDisabled());
-    fireEvent.click(screen.getByRole("button", { name: "Próxima fonte" }));
-    fireEvent.click(screen.getByRole("button", { name: "Concluir coleta" }));
-    expect(callbacks.onAdvance).toHaveBeenCalledOnce();
-    expect(callbacks.onFinish).toHaveBeenCalledOnce();
+    expect(screen.getAllByText(/Coletando/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Próxima fonte" })).not.toBeInTheDocument();
   });
 
   it("enables valid actions after completion and calls rerun with the source", () => {
@@ -57,6 +55,9 @@ describe("CollectionPipeline", () => {
     expect(callbacks.onRerun).toHaveBeenCalledWith("step-0");
     expect(screen.getByRole("link", { name: "Ver relatório de coletas" })).toHaveAttribute("href", "/historico?tab=orquestracao");
     expect(screen.getByRole("button", { name: "Executar coleta" })).toBeEnabled();
+    const discard = screen.getByRole("button", { name: "Excluir coleta de hoje" });
+    fireEvent.click(discard);
+    expect(callbacks.onDiscard).toHaveBeenCalledWith(discard);
   });
 
   it("allows a DJEN rerun while the token is unavailable", () => {

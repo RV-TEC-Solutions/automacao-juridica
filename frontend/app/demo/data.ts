@@ -93,7 +93,7 @@ export function dashboard(state: DemoState) {
   const latestRun = [...state.runs].sort((a, b) => stamp(b.created_at) - stamp(a.created_at))[0] ?? null;
   return { display_name: state.user.display_name,
     today: { new: countKind(todayEvents, "new"), updated: countKind(todayEvents, "updated"), resolved: countKind(todayEvents, "resolved"),
-      discardable: 0, unread: state.expedientes.filter((item) => item.unread).length, urgent, next_week: nextWeek,
+      discardable: state.runs.filter((run) => eventDay(run.created_at) === today).length, unread: state.expedientes.filter((item) => item.unread).length, urgent, next_week: nextWeek,
       calculating: state.expedientes.filter((item) => item.ativo && item.status_prazo_fatal === "em_calculo").length },
     since_last_visit: { since: state.lastVisit, new: countKind(todayEvents, "new"), updated: countKind(todayEvents, "updated"), resolved: countKind(todayEvents, "resolved") },
     latest_run: latestRun ? runSimple(latestRun) : null, collection_pipeline: pipeline(state),
@@ -208,4 +208,17 @@ export function advanceCollection(state: DemoState, finish = false) {
     state.runs.unshift(newRun(state, state.collection.codes[state.collection.current], "running", state.collection.cycleId!));
   } while (finish);
   return pipeline(state);
+}
+
+export function discardTodayCollection(state: DemoState) {
+  if (state.collection.active) throw new Error("Não é possível descartar dados enquanto há uma coleta em andamento.");
+  const todayRuns = state.runs.filter((run) => eventDay(run.created_at) === state.seedDay);
+  const deletedExpedientes = state.expedientes.filter((item) => item.id > 96 && eventDay(item.capturado_em) === state.seedDay).length;
+  const deletedPublications = state.publications.filter((item) => item.id > 23 && eventDay(item.collected_at) === state.seedDay).length;
+  state.expedientes = state.expedientes.filter((item) => !(item.id > 96 && eventDay(item.capturado_em) === state.seedDay));
+  state.publications = state.publications.filter((item) => !(item.id > 23 && eventDay(item.collected_at) === state.seedDay));
+  state.runs = state.runs.filter((run) => eventDay(run.created_at) !== state.seedDay);
+  state.collection = { active: false, current: -1, codes: [], cycleId: null };
+  return { date: state.seedDay, deleted_expedientes: deletedExpedientes, reverted_updates: 0,
+    reactivated_expedientes: 0, cleared_runs: todayRuns.length, deleted_djen_communications: deletedPublications };
 }

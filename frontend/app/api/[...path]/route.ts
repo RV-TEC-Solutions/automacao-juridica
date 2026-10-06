@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { advanceCollection, collectionHistory, dashboard, djenHistory, expedienteHistory, filteredExpedientes, filteredPublications, page, startCollection, statistics } from "../../demo/data";
+import { advanceCollection, collectionHistory, dashboard, discardTodayCollection, djenHistory, expedienteHistory, filteredExpedientes, filteredPublications, page, startCollection, statistics } from "../../demo/data";
 import { demoPdf } from "../../demo/pdf";
 import { localDay, type DemoState } from "../../demo/seed";
 import { withState } from "../../demo/store";
@@ -67,6 +67,7 @@ async function handle(request: NextRequest, context: Context) {
         return { value: json(dashboard(state)) };
       }
       if (path === "automation/history" && method === "GET") return { value: json(collectionHistory(state)) };
+      if (path === "automation/collections/today/discard" && method === "POST") return { value: json(discardTodayCollection(state)), write: true };
       if (path === "automation/runs") {
         if (method === "POST") return { value: json(startCollection(state, String(body.source ?? "pje-tjrn"), body.rerun === true), 202), write: true };
         return { value: json(state.runs.slice(0, 20)) };

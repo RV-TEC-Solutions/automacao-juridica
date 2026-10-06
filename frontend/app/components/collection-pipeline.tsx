@@ -1,6 +1,6 @@
 import {
   ArrowClockwise, ChartBar, CheckCircle, Clock, MinusCircle, Play, Prohibit,
-  SpinnerGap, Stop, XCircle,
+  SpinnerGap, Stop, Trash, XCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { Fragment, useEffect, useRef } from "react";
@@ -11,7 +11,7 @@ import { Panel } from "./ui";
 
 const statusMeta: Record<PipelineStepStatus, { label: string; className: string; Icon: typeof Clock }> = {
   pending: { label: "Aguardando", className: "border-border bg-muted text-muted-foreground", Icon: Clock },
-  running: { label: "Em execução", className: "border-warning/35 bg-warning-soft text-warning", Icon: SpinnerGap },
+  running: { label: "Coletando...", className: "border-warning/35 bg-warning-soft text-warning", Icon: SpinnerGap },
   success: { label: "Concluída", className: "border-success/30 bg-success-soft text-success", Icon: CheckCircle },
   failed: { label: "Falhou", className: "border-destructive/30 bg-destructive/10 text-destructive", Icon: XCircle },
   cancelled: { label: "Interrompida", className: "border-warning/30 bg-warning-soft text-warning", Icon: Stop },
@@ -55,9 +55,9 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
 }
 
 export function CollectionPipeline({
-  pipeline, refreshing, starting,
+  pipeline, refreshing, starting, discarding, canDiscard,
   tokenAvailable = true,
-  onRefresh, onRun, onRerun, onAdvance, onFinish,
+  onRefresh, onRun, onDiscard, onRerun,
 }: {
   pipeline: Pipeline;
   refreshing: boolean;
@@ -71,8 +71,6 @@ export function CollectionPipeline({
   onCancel: () => void;
   onDiscard: (trigger: HTMLButtonElement) => void;
   onRerun: (code: string) => void;
-  onAdvance: () => void;
-  onFinish: () => void;
 }) {
   const scrollRegion = useRef<HTMLDivElement>(null);
   const currentStep = pipeline.current_step;
@@ -119,6 +117,9 @@ export function CollectionPipeline({
           {pipeline.active && <p className="mb-0 truncate text-xs font-medium text-muted-foreground" title={statusDescription}>{statusDescription}</p>}
         </div>
         <div className="flex shrink-0 gap-2">
+          <Button type="button" variant="outline" size="icon" className="text-destructive" disabled={!canDiscard || discarding} onClick={(event) => onDiscard(event.currentTarget)} aria-label="Excluir coleta de hoje" title={canDiscard ? "Excluir coleta de hoje" : "Nenhuma coleta de hoje disponível para excluir"}>
+            <Trash size={15} weight="duotone" />
+          </Button>
           <Link href="/historico?tab=orquestracao" className={buttonVariants({ variant: "outline", size: "icon" })} aria-label="Ver relatório de coletas" title="Ver relatório de coletas">
             <ChartBar size={15} weight="duotone" />
           </Link>
@@ -132,12 +133,6 @@ export function CollectionPipeline({
           )}
         </div>
       </div>
-      {pipeline.active && <div className="mt-4 flex flex-wrap gap-2 rounded-lg border bg-muted/40 p-3">
-        <span className="w-full text-xs font-semibold text-muted-foreground">Controle da gravação</span>
-        <Button type="button" size="sm" variant="outline" onClick={onAdvance}>Próxima fonte</Button>
-        <Button type="button" size="sm" onClick={onFinish}>Concluir coleta</Button>
-      </div>}
-
       <div ref={scrollRegion} className="mt-4 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
         <div className="flex min-w-max items-start">
           {groups.map((group, index) => (

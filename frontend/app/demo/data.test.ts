@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceCollection, dashboard, filteredExpedientes, filteredPublications, startCollection, statistics } from "./data";
+import { advanceCollection, dashboard, discardTodayCollection, filteredExpedientes, filteredPublications, startCollection, statistics } from "./data";
 import { demoPdf } from "./pdf";
 import { createSeed, dayOffset } from "./seed";
 
@@ -42,5 +42,26 @@ describe("cenário de demonstração", () => {
     expect(bytes.toString("latin1")).toContain("%%EOF");
     expect(bytes.toString("latin1")).toContain("AMBIENTE DE DEMONSTRAÇÃO");
     expect(bytes.toString("latin1")).toContain("Parte autora 01");
+  });
+});
+
+describe("discardTodayCollection", () => {
+  it("removes completed demo collection data and keeps seeded history", () => {
+    const state = createSeed(day);
+    startCollection(state, "pje-tjrn", true);
+    advanceCollection(state, true);
+    expect(dashboard(state).today.discardable).toBe(1);
+
+    const result = discardTodayCollection(state);
+    expect(result).toMatchObject({ deleted_expedientes: 1, cleared_runs: 1 });
+    expect(state.expedientes).toHaveLength(96);
+    expect(state.runs).toHaveLength(12);
+    expect(dashboard(state).today.discardable).toBe(0);
+  });
+
+  it("rejects discarding a collection in progress", () => {
+    const state = createSeed(day);
+    startCollection(state);
+    expect(() => discardTodayCollection(state)).toThrow("coleta em andamento");
   });
 });

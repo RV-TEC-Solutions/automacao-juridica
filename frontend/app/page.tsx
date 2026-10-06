@@ -179,14 +179,14 @@ export default function Home() {
     }
   };
 
-  const advanceDemo = async (finish = false) => {
+  const advanceDemo = useCallback(async () => {
     try {
-      await api("demo/advance/", { method: "POST", body: JSON.stringify({ finish }) });
+      await api("demo/advance/", { method: "POST" });
       await Promise.all([load(), loadExpedientes(), loadPublications()]);
     } catch (exception) {
       notify({ message: exception instanceof Error ? exception.message : "Não foi possível avançar a coleta." });
     }
-  };
+  }, [load, loadExpedientes, loadPublications, notify]);
 
   const closeDiscardDialog = () => {
     setDiscardDialogOpen(false);
@@ -211,6 +211,11 @@ export default function Home() {
   };
 
   const pipeline = data?.collection_pipeline;
+  useEffect(() => {
+    if (!pipeline?.active || !pipeline.current_step) return;
+    const timer = window.setTimeout(() => { void advanceDemo(); }, 2_000);
+    return () => window.clearTimeout(timer);
+  }, [pipeline?.active, pipeline?.current_step, pipeline?.cycle_id, advanceDemo]);
   const djenStep = pipeline?.steps.find((step) => step.code === "djen");
   useEffect(() => {
     if (!djenStep?.run_id) return;
@@ -287,8 +292,7 @@ export default function Home() {
               discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
               tokenAvailable={tokenStatus?.available}
-              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }}
-              onAdvance={() => { void advanceDemo(); }} onFinish={() => { void advanceDemo(true); }} />
+              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
           </div>
         )}
       </div>

@@ -19,6 +19,7 @@ test("desktop navigation keeps labels on one line without page overflow", async 
 });
 
 test("demo runs without backend and keeps state across pages", async ({ page, request }) => {
+  test.setTimeout(60_000);
   await page.goto("/");
   await expect(page.getByText("Ambiente de demonstração").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Operador\./ })).toBeVisible();
@@ -26,12 +27,11 @@ test("demo runs without backend and keeps state across pages", async ({ page, re
   expect(before.collection_pipeline.active).toBe(false);
 
   await page.getByRole("button", { name: "Executar coleta" }).click();
-  await expect(page.getByRole("button", { name: "Próxima fonte" })).toBeVisible();
-  await page.getByRole("button", { name: "Próxima fonte" }).click();
+  await expect(page.getByText("Coletando...").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^1 de/ })).toBeVisible({ timeout: 8_000 });
   const during = await (await request.get("/api/dashboard/")).json();
-  expect(during.collection_pipeline.completed).toBe(1);
-  await page.getByRole("button", { name: "Concluir coleta" }).click();
-  await expect(page.getByRole("button", { name: "Executar coleta" })).toBeVisible();
+  expect(during.collection_pipeline.completed).toBeGreaterThanOrEqual(1);
+  await expect(page.getByRole("button", { name: "Executar coleta" })).toBeVisible({ timeout: 40_000 });
   const after = await (await request.get("/api/dashboard/")).json();
   expect(after.collection_pipeline.status).toBe("success");
   expect(after.today.new).toBeGreaterThan(before.today.new);
@@ -102,15 +102,12 @@ test("settings, notices and publication reading persist locally", async ({ page,
 });
 
 test("pipeline follows the group in progress and respects manual scrolling until the next step", async ({ page, request }) => {
+  test.setTimeout(60_000);
   await page.goto("/");
-  const finish = page.getByRole("button", { name: "Concluir coleta" });
-  if (await finish.isVisible()) await finish.click();
+  await expect(page.getByRole("button", { name: "Executar coleta" })).toBeVisible();
   await page.getByRole("button", { name: "Executar coleta" }).click();
   const region = page.getByTestId("pipeline-scroll-region");
-  for (let completed = 1; completed <= 8; completed++) {
-    await page.getByRole("button", { name: "Próxima fonte" }).click();
-    await expect(page.getByRole("heading", { name: new RegExp(`^${completed} de`) })).toBeVisible();
-  }
+  await expect(page.getByRole("heading", { name: /^8 de/ })).toBeVisible({ timeout: 25_000 });
   await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
 
   const current = (await (await request.get("/api/dashboard/")).json()).collection_pipeline.current_step as string;
@@ -125,7 +122,7 @@ test("pipeline follows the group in progress and respects manual scrolling until
   await region.evaluate((element) => { element.scrollLeft = 0; });
   await page.getByRole("button", { name: "Atualizar status da coleta" }).click();
   expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
-  await page.getByRole("button", { name: "Próxima fonte" }).click();
+  await expect(page.getByRole("heading", { name: /^9 de/ })).toBeVisible({ timeout: 8_000 });
   await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-  await finish.click();
+  await expect(page.getByRole("button", { name: "Executar coleta" })).toBeVisible({ timeout: 20_000 });
 });
