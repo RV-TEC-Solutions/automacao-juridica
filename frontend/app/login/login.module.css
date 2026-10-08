@@ -45,6 +45,8 @@
 .brandImage {
   width: 216px;
   height: 216px;
+  object-fit: contain;
+  border-radius: 12px;
 }
 
 .brandDescription {

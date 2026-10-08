@@ -4,7 +4,7 @@ import { NotificationsProvider } from "./components/notifications";
 import { AuthProvider } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Céleri Comunicações",
+  title: "RYV Expedientes",
   description: "Painel operacional para monitoramento de expedientes e prazos do PJe para Barros, Mariz & Rebouças Advogados.",
 };
 

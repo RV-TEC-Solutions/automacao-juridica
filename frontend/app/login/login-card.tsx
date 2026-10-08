@@ -1,13 +1,13 @@
 import { Eye, EyeSlash, LockKey, User } from "@phosphor-icons/react";
 import Image from "next/image";
 import { FormEvent, useState } from "react";
-import celeriLogo from "../../public/images/celeri-logo.png";
+import ryvLogo from "../../public/images/ryvtec_logo.jpeg";
 import styles from "./login.module.css";
 
-function CeleriBrand() {
+function RyvBrand() {
   return (
     <div className={styles.brand}>
-      <Image src={celeriLogo} alt="Céleri" width={216} height={216} priority unoptimized draggable={false} className={styles.brandImage} />
+      <Image src={ryvLogo} alt="RYV Expedientes" width={216} height={216} priority unoptimized draggable={false} className={styles.brandImage} />
       <span className={styles.brandDescription}>Automação de expedientes</span>
     </div>
   );
@@ -66,7 +66,7 @@ export function LoginCard({ busy, error, help, onSubmit, onHelp }: LoginCardProp
 
   return (
     <section className={styles.card} aria-labelledby="login-title">
-      <CeleriBrand />
+      <RyvBrand />
       <div className={styles.operation}>BMR <span aria-hidden="true">·</span> Operação local</div>
 
       <div className={styles.intro}>
@@ -94,7 +94,7 @@ export function LoginCard({ busy, error, help, onSubmit, onHelp }: LoginCardProp
         {help && <p className={styles.helpText}>Peça ao administrador do escritório para redefinir sua senha.</p>}
       </div>
 
-      <footer className={styles.footer}>BMR · Céleri Comunicações · © 2026 RYVTEC Soluções e Consultoria. Todos os direitos reservados.</footer>
+      <footer className={styles.footer}>BMR · RYV Expedientes · © 2026 RYVTEC Soluções e Consultoria. Todos os direitos reservados.</footer>
     </section>
   );
 }
