@@ -25,6 +25,7 @@ backups/
 staticfiles/
 media/
 backend-automacao/respostas_expedientes/
+backend-automacao/docker/vendor/
 
 # Configurações e credenciais locais
 .env

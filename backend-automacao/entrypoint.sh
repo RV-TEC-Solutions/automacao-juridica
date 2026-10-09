@@ -20,13 +20,30 @@ fi
 export GTK_MODULES=gail:atk-bridge
 export QT_ACCESSIBILITY=1
 export AT_SPI_CLIENT=1
+export NO_AT_BRIDGE=0
+
+# Keep Chrome, Java and the PIN helper on the same accessibility session.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    eval "$(dbus-launch --sh-syntax)"
+fi
 
 # Start PJeOffice Pro in background if installed
-if command -v pjeoffice-pro >/dev/null 2>&1; then
+if [ "${PJE_OFFICE_ENABLED:-false}" = "true" ] && command -v pjeoffice-pro >/dev/null 2>&1; then
+    mkdir -p /root/.pjeoffice-pro
+    if [ ! -f /root/.pjeoffice-pro/pjeoffice-pro.config ]; then
+        driver=$(find /usr/lib -maxdepth 1 -name 'libaetpkss.so.*' | sort | tail -n 1)
+        printf 'list.a3=%s\n' "$driver" > /root/.pjeoffice-pro/pjeoffice-pro.config
+    fi
     echo "Iniciando PJeOffice Pro..."
-    pjeoffice-pro &
+    pjeoffice-pro > /tmp/pjeoffice-startup.log 2>&1 &
+    pjeoffice_pid=$!
     sleep 2
-elif command -v pjeoffice >/dev/null 2>&1; then
+    if ! kill -0 "$pjeoffice_pid" 2>/dev/null; then
+        cat /tmp/pjeoffice-startup.log >&2
+        echo "PJeOffice Pro não iniciou." >&2
+        exit 1
+    fi
+elif [ "${PJE_OFFICE_ENABLED:-false}" = "true" ] && command -v pjeoffice >/dev/null 2>&1; then
     echo "Iniciando PJeOffice..."
     pjeoffice &
     sleep 2

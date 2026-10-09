@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd /opt/pjeoffice-pro
+export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/jni${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec ./jre/bin/java \
+    -XX:+UseG1GC -Xms20m -Xmx1024m \
+    -Djava.library.path=/usr/lib/x86_64-linux-gnu/jni:/usr/lib \
+    -Dpjeoffice_home=/opt/pjeoffice-pro \
+    -Dffmpeg_home=/opt/pjeoffice-pro \
+    -Dpjeoffice_looksandfeels=Metal \
+    -Dsigner4j_a3auto=false \
+    -jar pjeoffice-pro.jar

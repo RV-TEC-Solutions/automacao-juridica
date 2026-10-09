@@ -52,6 +52,7 @@ services:
     command: python manage.py processar_coletas
     shm_size: '2gb'
     environment:
+      PJE_OFFICE_ENABLED: "true"
       POSTGRES_DB: ${POSTGRES_DB:?configure POSTGRES_DB no .env}
       POSTGRES_USER: ${POSTGRES_USER:?configure POSTGRES_USER no .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?configure POSTGRES_PASSWORD no .env}
@@ -64,6 +65,7 @@ services:
       DJEN_OAB_NUMBER: ${DJEN_OAB_NUMBER:-5691}
       DJEN_OAB_STATE: ${DJEN_OAB_STATE:-RN}
     volumes:
+      - pjeoffice_worker_data:/root/.pjeoffice-pro
       - /run/pcscd/pcscd.comm:/run/pcscd/pcscd.comm
       - ./backend-automacao/respostas_expedientes:/app/respostas_expedientes
       - ~/.config/pje-automacao:/root/.config/pje-automacao:ro
@@ -85,4 +87,5 @@ services:
       - backend
 
 volumes:
+  pjeoffice_worker_data:
   postgres_data:
