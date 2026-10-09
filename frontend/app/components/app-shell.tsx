@@ -26,10 +26,10 @@ const links = [
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return <Link href="/" className="flex items-center gap-4" title={compact ? "RYV Expedientes" : "RYV Expedientes e Barros, Mariz & Rebouças"}>
-    <Image src={ryvLogo} alt="RYV Expedientes" width={56} height={56} unoptimized draggable={false} className="h-14 w-14 object-contain rounded" priority />
+    <Image src={ryvLogo} alt="RYV Expedientes" width={40} height={40} unoptimized draggable={false} className="h-10 w-10 object-contain rounded" priority />
     {!compact && <span className="border-l pl-4">
-      <Image src={bmrLogoLight} alt="Barros, Mariz & Rebouças Advogados" width={90} height={36} unoptimized draggable={false} className="h-9 w-auto object-contain dark:hidden" priority />
-      <Image src={bmrLogoDark} alt="" width={90} height={36} unoptimized draggable={false} className="hidden h-9 w-auto object-contain dark:block" priority />
+      <Image src={bmrLogoLight} alt="Barros, Mariz & Rebouças Advogados" width={90} height={36} unoptimized draggable={false} className="h-7 w-auto object-contain dark:hidden" priority />
+      <Image src={bmrLogoDark} alt="" width={90} height={36} unoptimized draggable={false} className="hidden h-7 w-auto object-contain dark:block" priority />
     </span>}
   </Link>;
 }
@@ -39,7 +39,7 @@ function NavLinks({ pathname, unreadNotices, mobile = false }: { pathname: strin
     {links.map(([href, label, Icon]) => {
       const active = pathname === href;
       const count = href === "/avisos" ? unreadNotices : 0;
-      return <Link key={href} href={href} className={cn("flex h-10 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors", mobile && "shrink-0", active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")} aria-current={active ? "page" : undefined}>
+      return <Link key={href} href={href} className={cn("flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors", mobile && "shrink-0", active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")} aria-current={active ? "page" : undefined}>
         <Icon size={18} weight={active ? "fill" : "regular"} />
         <span>{label}</span>
         {count > 0 && <span className={cn("ml-auto grid size-6 place-items-center rounded-full text-xs font-semibold", active ? "bg-primary-foreground text-primary" : "bg-warning-soft text-warning")}>{count}</span>}
@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <span role="status" aria-atomic="true" className="sr-only">{unreadNotices === 0 ? "Nenhum aviso não lido" : `${unreadNotices} aviso${unreadNotices === 1 ? "" : "s"} não lido${unreadNotices === 1 ? "" : "s"}`}</span>
 
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="xl:hidden"><Brand compact /></div>
         <div className="hidden xl:block"><Brand /></div>
         <NavLinks pathname={pathname} unreadNotices={unreadNotices} />
@@ -98,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <NavLinks pathname={pathname} unreadNotices={unreadNotices} mobile />
     </header>
 
-    <main className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
-    <footer className="border-t px-6 py-8 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · RYV Expedientes · © 2026 RYVTEC Soluções e Consultoria. Todos os direitos reservados.</footer>
+    <main className="mx-auto w-full max-w-screen-2xl px-4 py-5 sm:px-6">{children}</main>
+    <footer className="border-t px-6 py-5 text-center text-xs text-muted-foreground">Barros, Mariz & Rebouças Advogados · RYV Expedientes · © 2026 RYVTEC Soluções e Consultoria. Todos os direitos reservados.</footer>
   </div>;
 }

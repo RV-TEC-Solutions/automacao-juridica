@@ -81,8 +81,8 @@ export function CollectionPipeline({
   const announcement = `${pipeline.completed} de ${pipeline.total} fontes concluídas. ${statusDescription}${pipeline.finished_at ? ` Última sincronização: ${formatDateTime(pipeline.finished_at)}.` : ""}`;
 
   return (
-    <Panel className="min-w-0 h-full overflow-hidden" innerClassName="flex min-w-0 flex-col p-4 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
+    <Panel className="min-w-0 h-full overflow-hidden" innerClassName="flex min-w-0 flex-col p-3 sm:p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="mb-0 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Pipeline de coleta</p>
@@ -91,29 +91,29 @@ export function CollectionPipeline({
           <h3 className="mb-2 text-base font-extrabold tracking-tight text-foreground">{pipeline.completed} de {pipeline.total} fontes concluídas</h3>
           {pipeline.active && <p className="mb-0 truncate text-xs font-medium text-muted-foreground" title={statusDescription}>{statusDescription}</p>}
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Link href="/historico?tab=orquestracao" className={buttonVariants({ variant: "outline", size: "icon" })} aria-label="Ver relatório de coletas" title="Ver relatório de coletas">
+        <div className="flex shrink-0 gap-1">
+          <Link href="/historico?tab=orquestracao" className={buttonVariants({ variant: "outline", size: "icon-sm" })} aria-label="Ver relatório de coletas" title="Ver relatório de coletas">
             <ChartBar size={15} weight="duotone" />
           </Link>
-          <Button type="button" variant="outline" size="icon" onClick={onRefresh} disabled={refreshing} aria-label="Atualizar status da coleta" title="Atualizar status da coleta">
+          <Button type="button" variant="outline" size="icon-sm" onClick={onRefresh} disabled={refreshing} aria-label="Atualizar status da coleta" title="Atualizar status da coleta">
             <ArrowClockwise size={15} weight="bold" className={refreshing ? "animate-spin motion-reduce:animate-none" : ""} />
           </Button>
-          <Button type="button" variant="outline" size="icon" className="text-destructive" onClick={(event) => onDiscard(event.currentTarget)} disabled={!canDiscard || discarding} aria-label="Descartar coleta do dia" title={canDiscard ? "Descartar coleta do dia" : "Disponível quando houver dados coletados e nenhuma fonte em execução"}>
+          <Button type="button" variant="outline" size="icon-sm" className="text-destructive" onClick={(event) => onDiscard(event.currentTarget)} disabled={!canDiscard || discarding} aria-label="Descartar coleta do dia" title={canDiscard ? "Descartar coleta do dia" : "Disponível quando houver dados coletados e nenhuma fonte em execução"}>
             <Trash size={15} weight="fill" className={discarding ? "animate-pulse" : ""} />
           </Button>
           {pipeline.active ? (
-            <Button type="button" variant="outline" size="icon" className="text-destructive" onClick={onCancel} disabled={cancelling} aria-label="Interromper coleta" title="Interromper coleta">
+            <Button type="button" variant="outline" size="icon-sm" className="text-destructive" onClick={onCancel} disabled={cancelling} aria-label="Interromper coleta" title="Interromper coleta">
               <Stop size={15} weight="fill" />
             </Button>
           ) : (
-            <Button type="button" size="icon" onClick={onRun} disabled={!canStart} aria-label="Executar coleta" title={tokenAvailable ? "Executar coleta" : "Conecte o token físico para iniciar a coleta"}>
+            <Button type="button" size="icon-sm" onClick={onRun} disabled={!canStart} aria-label="Executar coleta" title={tokenAvailable ? "Executar coleta" : "Conecte o token físico para iniciar a coleta"}>
               <Play size={14} weight="fill" />
             </Button>
           )}
         </div>
       </div>
 
-      <div className="mt-4 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
+      <div className="mt-3 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
         <div className="flex min-w-max items-start">
           {groups.map((group, index) => (
             <Fragment key={group}>

@@ -17,10 +17,10 @@ describe("EventBadges", () => {
 
   it("clarifies what is not identified in an expediente card", () => {
     const item = {
-      unread: false, ativo: true, tipo_pendencia_label: "Não identificada",
+      unread: false, ativo: true, tipo_pendencia: "nao_identificada", tipo_pendencia_label: "Não identificada",
     } as Expediente;
     render(<EventBadges item={item} />);
-    expect(screen.getByText("Tipo de pendência: não identificada")).toBeInTheDocument();
+    expect(screen.getByText("Tipo de pendência: Não identificada")).toBeInTheDocument();
   });
 
   it("always shows a distinct, labelled badge for the source", () => {

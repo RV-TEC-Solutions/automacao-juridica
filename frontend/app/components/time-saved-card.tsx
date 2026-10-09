@@ -19,7 +19,7 @@ export function TimeSavedCard({ value }: { value?: TimeSaved }) {
           </span>
           <div className="min-w-0">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tempo economizado · estimativa</h3>
-            <strong className="mt-2 block font-mono text-3xl font-semibold tabular-nums sm:text-4xl">{formatDuration(value?.total_seconds ?? 0)}</strong>
+            <strong className="mt-2 block font-mono text-2xl font-semibold tabular-nums sm:text-3xl">{formatDuration(value?.total_seconds ?? 0)}</strong>
             <p className="mt-2 text-xs text-muted-foreground">Acumulado desde a primeira coleta concluída · até 4 h por dia</p>
           </div>
         </div>

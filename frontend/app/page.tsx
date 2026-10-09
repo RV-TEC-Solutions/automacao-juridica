@@ -257,16 +257,16 @@ export default function Home() {
         actions={<Clock />}
       />
 
-      <div className="mb-8 grid min-w-0 gap-x-6 gap-y-4 xl:grid-cols-2">
+      <div className="mb-5 grid min-w-0 gap-3 lg:grid-cols-2">
         <section className="contents">
-          <div className="order-2 flex items-center justify-between xl:order-none xl:col-start-1 xl:row-start-1">
+          <div className="order-2 flex items-center justify-between lg:order-none lg:col-start-1 lg:row-start-1">
             <div>
-              <h2 className="mb-2 text-2xl font-extrabold tracking-tight leading-tight text-foreground sm:text-3xl">Visão executiva</h2>
+              <h2 className="mb-1 text-xl font-extrabold tracking-tight leading-tight text-foreground sm:text-2xl">Visão executiva</h2>
               <p className="mb-0 text-xs font-medium text-muted-foreground">Indicadores consolidados do ciclo de monitoramento atual.</p>
             </div>
             <div className="grid size-8 place-items-center rounded-xl border border-border bg-card text-muted-foreground"><ChartLineUp size={18} weight="duotone" /></div>
           </div>
-          <div className="order-3 grid min-w-0 grid-cols-2 gap-4 lg:grid-cols-3 xl:order-none xl:col-start-1 xl:row-start-2">
+          <div className="order-3 grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-3 lg:order-none lg:col-start-1 lg:row-start-2">
             <MetricCard label="Novos" value={data?.today.new ?? 0} note="expedientes descobertos" icon={<Sparkle size={18} weight="duotone" />} tone="green" onClick={() => selectMetric("new")} selected={activeMetric === "new"} />
             <MetricCard label="Alterados" value={data?.today.updated ?? 0} note="mudanças de prazo/teor" icon={<ClockCounterClockwise size={18} weight="duotone" />} tone="blue" onClick={() => selectMetric("updated")} selected={activeMetric === "updated"} />
             <MetricCard label="Não lidos" value={data?.today.unread ?? 0} note="aguardando leitura" icon={<Bell size={18} weight="duotone" />} tone="slate" onClick={() => selectMetric("unread")} selected={activeMetric === "unread"} />
@@ -276,7 +276,7 @@ export default function Home() {
           </div>
         </section>
         {pipeline && (
-          <div className="order-1 min-w-0 xl:order-none xl:col-start-2 xl:row-start-2">
+          <div className="order-1 min-w-0 lg:order-none lg:col-start-2 lg:row-start-2">
             <CollectionPipeline pipeline={pipeline} refreshing={refreshing} starting={running} cancelling={cancelling}
               discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
@@ -290,7 +290,7 @@ export default function Home() {
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <h2 className="mb-2 text-2xl font-extrabold tracking-tight leading-tight text-foreground sm:text-3xl">
+            <h2 className="mb-1 text-xl font-extrabold tracking-tight leading-tight text-foreground sm:text-2xl">
               {todayTab === "publicacoes" || activeMetric === "new" ? `Hoje (${formattedDate})` : metricFilters[activeMetric].title}
             </h2>
             <p className="mb-0 text-xs text-muted-foreground font-medium">
@@ -299,7 +299,7 @@ export default function Home() {
           </div>
         </div>
 
-        <TabsList aria-label="Tipo de coleta de hoje" className="mb-5 h-auto w-full gap-1 rounded-lg border-0 bg-muted p-1 sm:w-fit">
+        <TabsList aria-label="Tipo de coleta de hoje" className="mb-3 h-auto w-full gap-1 rounded-lg border-0 bg-muted p-1 sm:w-fit">
           <TabsTrigger value="expedientes" className="min-h-10 flex-1 rounded-md px-5 text-xs data-active:bg-card data-active:shadow-sm data-active:after:hidden sm:flex-none">Expedientes</TabsTrigger>
           <TabsTrigger value="publicacoes" className="min-h-10 flex-1 rounded-md px-5 text-xs data-active:bg-card data-active:shadow-sm data-active:after:hidden sm:flex-none">Publicações Processuais</TabsTrigger>
         </TabsList>
