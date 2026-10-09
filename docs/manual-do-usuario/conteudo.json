@@ -1,0 +1,681 @@
+{
+  "title": "RYV Expedientes",
+  "subtitle": "Manual do usuário",
+  "version": "1.0",
+  "date": "08/10/2026",
+  "sections": [
+    {
+      "title": "Apresentação e leitura deste manual",
+      "intro": "O RYV Expedientes reúne expedientes do PJe, publicações do Diário de Justiça Eletrônico Nacional (DJEN), avisos e resultados das coletas. Este manual orienta a rotina de consulta e acompanhamento do escritório.",
+      "steps": [
+        "Use o índice para ir diretamente à área desejada. Cada capítulo apresenta o objetivo da tela, o procedimento e o resultado esperado.",
+        "Nas capturas, os retângulos vermelhos e os números indicam os controles importantes. A legenda abaixo de cada imagem explica esses números.",
+        "Os prints mostram a interface da codebase com dados fictícios. Nomes, processos, publicações, contagens, horários e falhas de exemplo não representam uma coleta real.",
+        "Este manual corresponde à interface disponível em 08/10/2026. A aparência pode variar conforme o tamanho da janela e o tema escolhido."
+      ],
+      "notes": [
+        "A aplicação auxilia o acompanhamento. A leitura no painel registra organização interna; ciência, resposta e demais atos processuais devem ser realizados na plataforma de origem."
+      ]
+    },
+    {
+      "title": "Antes de começar: acesso e preparação",
+      "intro": "Peça ao responsável técnico o endereço da aplicação e sua conta de acesso. Na execução local padrão, o endereço é http://localhost:3002.",
+      "steps": [
+        "Abra o endereço fornecido em um navegador. Se a página não abrir, solicite ao responsável que verifique se a aplicação está em execução.",
+        "Tenha seu usuário e sua senha de acesso ao RYV Expedientes. Essa senha é diferente do PIN do certificado digital.",
+        "Para coletar no PJe, mantenha o token físico conectado e a estrutura de autenticação configurada pelo responsável técnico, incluindo PJeOffice e credenciais locais.",
+        "Para a rotina automática, o computador e os serviços de coleta precisam permanecer ligados e disponíveis no horário agendado.",
+        "A coleta do DJEN usa a OAB configurada na instalação, consulta sete datas incluindo o dia atual e independe do token físico. Confirme com o responsável qual OAB está sendo usada."
+      ],
+      "notes": [
+        "Instalação, criação de conta, configuração de OAB, certificados e recuperação do banco são procedimentos técnicos documentados no README principal. Não existe campo de edição da OAB na interface atual."
+      ]
+    },
+    {
+      "title": "Entrar, mostrar a senha e recuperar o acesso",
+      "intro": "A tela de entrada identifica sua conta e abre a Visão geral após a autenticação.",
+      "steps": [
+        "Digite o usuário no campo Usuário [1].",
+        "Digite sua senha no campo Senha [2]. O ícone de olho permite mostrar ou ocultar o que foi digitado.",
+        "Clique em Entrar [3] e aguarde o carregamento do painel.",
+        "Se esquecer a senha, clique em Esqueceu sua senha? [4]. A aplicação orienta a pedir ao administrador do escritório a redefinição.",
+        "Se a entrada falhar, confira o usuário, a senha e a tecla Caps Lock. Persistindo a falha, procure o administrador."
+      ],
+      "image": "01-login.png",
+      "legend": [
+        "Usuário: identificação da conta.",
+        "Senha: chave de acesso ao painel.",
+        "Entrar: envio dos dados de autenticação.",
+        "Esqueceu sua senha?: instrução para solicitar ajuda ao administrador."
+      ],
+      "notes": [
+        "A tela não envia e-mail de recuperação nem disponibiliza cadastro de nova conta."
+      ]
+    },
+    {
+      "title": "Navegação, tema e encerramento da sessão",
+      "intro": "O menu principal acompanha as telas do sistema. Use-o para alternar entre as sete áreas.",
+      "steps": [
+        "No menu [1], escolha Visão geral, Expedientes, Publicações DJEN, Histórico, Avisos, Estatísticas ou Configurações.",
+        "Clique no botão de lua ou sol [2] para alternar entre os temas claro e escuro. A preferência é salva na conta.",
+        "Clique no avatar do perfil para abrir Configurações.",
+        "Ao terminar, clique em Sair [3]. A aplicação encerra a sessão e retorna ao login.",
+        "Em janelas menores, o menu aparece em uma segunda linha. Deslize a faixa horizontalmente para encontrar os demais itens."
+      ],
+      "image": "18-navegacao.png",
+      "legend": [
+        "Menu principal: acesso às áreas do sistema.",
+        "Lua/sol: alteração rápida do tema visual.",
+        "Sair: encerramento da sessão."
+      ]
+    },
+    {
+      "title": "Visão geral: indicadores e prioridades",
+      "intro": "A Visão geral combina indicadores, acompanhamento das coletas e listas. Ao clicar em um indicador, a lista de expedientes passa a usar aquele filtro.",
+      "steps": [
+        "Comece pelos cartões Urgentes, Não lidos e Prazos em cálculo [2], conforme a rotina de acompanhamento do escritório.",
+        "Novos mostra os expedientes descobertos hoje. Alterados mostra os que tiveram alterações identificadas hoje.",
+        "Não lidos reúne expedientes com eventos ainda não lidos. Urgentes inclui prazos vencidos ou com vencimento nas próximas 72 horas.",
+        "Até próxima semana reúne prazos fatais a vencer até o fim da próxima semana. Prazos em cálculo reúne registros ainda sem cálculo concluído no PJe.",
+        "Na parte inferior, alterne entre Expedientes e Publicações Processuais. Use Ver consulta completa para abrir a área de consulta correspondente."
+      ],
+      "image": "02-visao-geral.png",
+      "legend": [
+        "Navegação: escolha a área desejada.",
+        "Indicadores: clique para filtrar a lista.",
+        "Pipeline de coleta: acompanhe as fontes consultadas."
+      ],
+      "notes": [
+        "Novos e Alterados são recortes de hoje. Os cartões Não lidos, Urgentes, Até próxima semana e Prazos em cálculo representam o estado atual e podem incluir registros coletados em dias anteriores. Os cartões são de expedientes PJe; as publicações DJEN ficam em sua própria aba."
+      ]
+    },
+    {
+      "title": "Coletas: executar, acompanhar e reexecutar",
+      "intro": "A Pipeline de coleta mostra as fontes, seus estados e a última sincronização. O ciclo PJe percorre as fontes habilitadas; o DJEN tem sua própria rotina diária.",
+      "steps": [
+        "Conecte o token físico e clique no ícone de reprodução Executar coleta [1]. Aguarde o processamento das fontes.",
+        "Acompanhe a lista [4]. Ela tem rolagem horizontal: mova a faixa para visualizar os grupos à direita, incluindo TRF5 e DJEN.",
+        "Use Atualizar status da coleta [2] para consultar o progresso. Esse botão atualiza a tela; não inicia outra coleta.",
+        "Leia o estado de cada fonte, mesmo que o painel informe uma última sincronização. Uma fonte pode falhar enquanto outras concluem.",
+        "Após o ciclo, clique na seta circular da fonte para Reexecutar somente aquela fonte. Para fontes PJe, o token precisa continuar disponível. A reexecução do DJEN independe dele.",
+        "Durante um ciclo PJe ativo, o botão de reprodução dá lugar a Interromper coleta. Use-o para solicitar a interrupção; acompanhe a confirmação nos estados e no Histórico."
+      ],
+      "image": "03-coleta.png",
+      "legend": [
+        "Executar coleta: início manual do ciclo PJe.",
+        "Atualizar status: nova consulta do andamento.",
+        "Ver relatório de coletas: abre o Histórico de orquestração.",
+        "Fontes e estados: use a rolagem e as setas de reexecução."
+      ],
+      "notes": [
+        "Executar coleta inicia o ciclo PJe; não deve ser confundido com a coleta independente do DJEN. Interromper uma coleta não desfaz registros já gravados. Para investigar uma falha, consulte Orquestração de coletas no Histórico."
+      ],
+      "image_max_height": 285
+    },
+    {
+      "title": "Coleta independente do DJEN",
+      "intro": "O grupo DJEN fica à direita na faixa de fontes da Visão geral. A coleta diária consulta publicações nacionais pela OAB configurada, independentemente do ciclo PJe e do token físico.",
+      "steps": [
+        "Na Pipeline, mova a barra horizontal até o grupo DJEN [2].",
+        "Confira o estado de Publicações DJEN. Quando a rotina terminar e a seta estiver disponível, clique em Reexecutar somente Publicações DJEN [1] para uma nova consulta manual.",
+        "Aguarde a mudança de estado. Ao concluir, revise Publicações Processuais na Visão geral ou Publicações DJEN no menu.",
+        "Se não aparecerem resultados, confira o período de coleta e o Histórico de orquestração. Uma consulta bem-sucedida pode não encontrar publicações novas."
+      ],
+      "image": "20-djen-coleta.png",
+      "legend": [
+        "Seta circular da fonte: reexecução manual somente do DJEN.",
+        "Faixa rolada até o fim: grupos TRF5 e DJEN."
+      ],
+      "notes": [
+        "Executar coleta inicia o ciclo PJe. Para a consulta manual do DJEN, use sua seta própria. A fonte DJEN deve estar habilitada em Configurações. Reexecuções usam a mesma janela dos últimos sete dias de disponibilização."
+      ]
+    },
+    {
+      "title": "Como interpretar os estados das fontes",
+      "intro": "Os estados aparecem na Pipeline e no Histórico. A conclusão de uma fonte significa que a execução terminou, mesmo quando nenhum registro novo foi encontrado.",
+      "rows": [
+        [
+          "Estado",
+          "Significado e ação do usuário"
+        ],
+        [
+          "Aguardando",
+          "Fonte ainda não iniciada ou na fila. Acompanhe o ciclo antes de tentar outra execução."
+        ],
+        [
+          "Em execução",
+          "Coleta em andamento. Aguarde o resultado; evite iniciar operações repetidas."
+        ],
+        [
+          "Concluída",
+          "Execução terminou com sucesso. Confira encontrados, novos, alterados e resolvidos no Histórico."
+        ],
+        [
+          "Falhou",
+          "Execução terminou com erro. Leia a mensagem, verifique o ambiente e reexecute a fonte quando o problema for resolvido."
+        ],
+        [
+          "Interrompida",
+          "Execução cancelada. Verifique no Histórico o que chegou a ser processado."
+        ],
+        [
+          "Desativada",
+          "Fonte desabilitada em Configurações. Não participa das coletas enquanto estiver desativada."
+        ],
+        [
+          "Ignorada",
+          "Fonte não executada naquele ciclo. Não interprete esse estado como confirmação de ausência de expedientes."
+        ]
+      ],
+      "notes": [
+        "A quantidade de fontes concluídas não substitui a conferência individual. Se houver Falhou, Interrompida ou Ignorada, verifique a cobertura da coleta."
+      ]
+    },
+    {
+      "title": "Descartar a coleta do dia",
+      "intro": "A lixeira da Pipeline abre uma confirmação para remover os efeitos da coleta do dia. Use esse recurso somente quando realmente precisar invalidar os dados coletados.",
+      "steps": [
+        "Na Visão geral, clique na lixeira Descartar coleta do dia. O botão fica disponível quando há dados descartáveis e nenhuma fonte está em execução.",
+        "Leia a confirmação [1]. O descarte exclui expedientes novos do dia e desfaz alterações e resoluções associadas à coleta.",
+        "Publicações DJEN vinculadas às execuções descartadas também são excluídas. A Pipeline e o Histórico de orquestração deixam de exibir essas execuções.",
+        "Clique em Cancelar [2] para manter os dados ou em Descartar coleta [3] para efetivar o descarte.",
+        "Após a confirmação, confira a notificação e as listas atualizadas. Se necessário, execute uma nova coleta para reconstruir os dados."
+      ],
+      "image": "04-descarte.png",
+      "legend": [
+        "Confirmação: descreve os principais efeitos do descarte.",
+        "Cancelar: fecha a confirmação e preserva os dados.",
+        "Descartar coleta: efetiva a remoção e a reversão."
+      ],
+      "notes": [
+        "O descarte atua nos dados locais do RYV Expedientes. Ele não desfaz atos realizados nos tribunais. A interface não oferece um botão para desfazer o descarte. A reexecução obtém o estado disponível na fonte naquele momento."
+      ]
+    },
+    {
+      "title": "Expedientes: pesquisar e aplicar filtros",
+      "intro": "A tela Expedientes permite localizar registros por processo, partes ou assunto e combinar filtros de acompanhamento.",
+      "steps": [
+        "Digite um número de processo, uma parte ou um assunto no campo de busca [1].",
+        "Abra Filtros avançados [2]. Escolha os filtros necessários e clique em Buscar para aplicá-los à consulta.",
+        "Use Fonte, Pendência, Prazo, Situação de leitura, Coleta a partir de, Coleta até e Ordenação. Os filtros são combinados.",
+        "Confira a quantidade encontrada. Quando houver várias páginas, use os controles de paginação abaixo da lista.",
+        "Clique em Limpar filtros para voltar à consulta sem restrições. Esse comando também limpa o texto de busca.",
+        "Clique no registro [4] para abrir os detalhes. Use o ícone de PDF [3] depois de aplicar a pesquisa."
+      ],
+      "image": "05-expedientes.png",
+      "legend": [
+        "Busca textual: processo, partes ou assunto.",
+        "Filtros avançados: combinação dos critérios.",
+        "PDF: exportação dos resultados aplicados.",
+        "Registro: acesso ao detalhe do expediente."
+      ],
+      "notes": [
+        "Os campos de data filtram eventos de coleta, não o vencimento do prazo. Após editar filtros, clique em Buscar: a exportação fica indisponível enquanto as alterações não forem aplicadas. O seletor Fonte atual lista TJRN, TRE-RN, TSE e TRT21; para registros TRF5, use Todas as fontes e a pesquisa por processo."
+      ]
+    },
+    {
+      "title": "Filtros de prazo, pendência e leitura",
+      "intro": "Escolha o filtro conforme a pergunta que deseja responder. A tabela abaixo explica a regra aplicada pela versão atual.",
+      "rows": [
+        [
+          "Filtro",
+          "O que retorna"
+        ],
+        [
+          "Urgentes",
+          "Expedientes ativos com prazo calculado, vencidos ou a vencer em até 72 horas."
+        ],
+        [
+          "Vencidos",
+          "Expedientes ativos com prazo calculado anterior ao momento da consulta."
+        ],
+        [
+          "Futuros",
+          "Expedientes ativos com vencimento além das próximas 72 horas."
+        ],
+        [
+          "Até o fim da próxima semana",
+          "Expedientes ativos com prazo calculado entre agora e o fim do domingo da próxima semana."
+        ],
+        [
+          "Em cálculo",
+          "Expedientes ativos cujo prazo ainda está em cálculo na origem."
+        ],
+        [
+          "Sem prazo",
+          "Expedientes ativos classificados como sem prazo pela fonte."
+        ],
+        [
+          "Resolvidos",
+          "Expedientes marcados como inativos na base local."
+        ],
+        [
+          "Ciência / Resposta",
+          "Tipo de pendência informado pelo PJe."
+        ],
+        [
+          "Não identificada",
+          "A fonte não forneceu dados suficientes para distinguir a pendência."
+        ],
+        [
+          "Não lidos / Lidos",
+          "Existência ou ausência de eventos ainda não lidos no expediente."
+        ]
+      ],
+      "steps": [
+        "Exemplo: para revisar pendências urgentes, selecione Prazo = Urgentes e Situação de leitura = Não lidos, depois clique em Buscar.",
+        "Para achar um registro que desapareceu da lista urgente, limpe os filtros e pesquise pelo processo. Ele pode ter sido lido, ter mudado de prazo ou estar resolvido."
+      ],
+      "notes": [
+        "O filtro Futuros exclui os vencimentos nas próximas 72 horas, embora eles ainda não tenham vencido. Sem prazo e Em cálculo são estados diferentes; um traço na data, isoladamente, não permite distingui-los."
+      ]
+    },
+    {
+      "title": "Detalhe do expediente e leitura local",
+      "intro": "Ao selecionar um expediente, abre-se um painel lateral. Ele apresenta o processo, os prazos, a ação indicada pela origem e os dados coletados.",
+      "steps": [
+        "Confira o número do processo e use Copiar processo [1] se precisar consultar a plataforma de origem.",
+        "Em Prazo e ação processual [2], leia o prazo fatal, o prazo original, a situação do cálculo e a ação disponível.",
+        "Em Dados do processo [3], confira classe, unidade judiciária, destinatário, expedição, meio de comunicação e tribunal.",
+        "Role o painel para ver Última alteração identificada, quando disponível. Os valores antes e depois ajudam a reconhecer mudanças. O registro de ciência também aparece quando fornecido pela fonte.",
+        "Feche o painel no botão Fechar, no canto superior. A lista e os indicadores são atualizados após o registro de leitura."
+      ],
+      "image": "06-detalhe-expediente.png",
+      "legend": [
+        "Copiar processo: copia o número para a área de transferência.",
+        "Prazo e ação processual: dados para conferência na origem.",
+        "Dados do processo: identificação e contexto do expediente."
+      ],
+      "notes": [
+        "Abrir um expediente não lido solicita automaticamente a marcação dos seus eventos como lidos. Não há botão de ciência ou resposta processual neste painel. Tomar ciência e Responder são informações sobre ações disponíveis no PJe, onde devem ser executadas. Uma nova alteração coletada pode tornar o expediente não lido novamente."
+      ]
+    },
+    {
+      "title": "Conferir alterações de um expediente",
+      "intro": "Quando há mudança identificada pela coleta, o detalhe do expediente mostra a última alteração disponível com os valores anteriores e atuais.",
+      "steps": [
+        "Abra o expediente alterado e role o painel lateral até Última alteração identificada [1].",
+        "Confira a data do evento e o nome do campo alterado, como Prazo fatal, Destinatário ou Assunto.",
+        "Compare o valor anterior com o atual, apresentados em comparação, ligados por uma seta. No exemplo fictício, o prazo mudou de 08/10 para 09/10.",
+        "Confira o registro atual na seção de prazo e consulte a origem antes de adotar providências."
+      ],
+      "image": "19-alteracoes.png",
+      "legend": [
+        "Última alteração identificada: data, campo e comparação entre os valores."
+      ],
+      "notes": [
+        "Esta seção aparece quando o último evento traz alterações. Ela não é uma lista de todas as mudanças desde a primeira coleta. Marcar a leitura não confirma uma providência jurídica."
+      ]
+    },
+    {
+      "title": "Publicações DJEN: pesquisar por coleta",
+      "intro": "Publicações DJEN reúne comunicações localizadas pela OAB configurada. A tela começa com o período de coleta do dia atual.",
+      "steps": [
+        "Digite processo, parte, advogado ou um trecho da publicação na pesquisa [1].",
+        "Defina Coleta de e Até [2]. A data inicial deve ser igual ou anterior à final.",
+        "Clique em Pesquisar para aplicar o texto e o intervalo. Confira o total e a lista.",
+        "Clique na publicação [4] para ler o detalhe. Se houver várias páginas, navegue nos controles abaixo da lista.",
+        "Use o PDF [3] para baixar os resultados aplicados. Se editar a busca ou o período, clique em Pesquisar antes de exportar.",
+        "Limpar busca remove o texto pesquisado; o intervalo de coleta selecionado permanece."
+      ],
+      "image": "08-djen.png",
+      "legend": [
+        "Texto de pesquisa: processo, parte, advogado ou trecho.",
+        "Intervalo de coleta e Pesquisar: aplicação da consulta.",
+        "PDF: download das publicações encontradas.",
+        "Publicação: abertura do detalhe."
+      ],
+      "notes": [
+        "Data de coleta é quando o RYV Expedientes incorporou o registro. Disponibilização é a data informada pelo DJEN. Uma publicação disponibilizada em 07/10 e coletada em 08/10 aparece na pesquisa por coleta de 08/10. A rotina consulta os últimos sete dias de disponibilização e evita cadastrar novamente publicações já conhecidas."
+      ]
+    },
+    {
+      "title": "Detalhe da publicação e inteiro teor",
+      "intro": "O painel de uma publicação DJEN apresenta sua identificação, as partes, os advogados e o texto disponibilizado pela fonte.",
+      "steps": [
+        "Abra uma publicação na lista e confira processo, tribunal, órgão, tipo, classe, data de disponibilização e número da comunicação.",
+        "Se o link estiver disponível, clique em Abrir inteiro teor [1]. A página de origem abre em outra aba.",
+        "Em Partes e advogados [2], confira os nomes e a inscrição da OAB associada à comunicação.",
+        "Leia Texto publicado [3]. Role o painel para ver todo o conteúdo.",
+        "Use o botão ao lado do número para copiá-lo. Feche o painel no canto superior quando terminar."
+      ],
+      "image": "09-detalhe-djen.png",
+      "legend": [
+        "Abrir inteiro teor: acesso externo ao conteúdo de origem.",
+        "Partes e advogados: pessoas relacionadas à comunicação.",
+        "Texto publicado: conteúdo recebido do DJEN."
+      ],
+      "notes": [
+        "Abrir uma publicação não lida solicita sua marcação como lida no RYV Expedientes. Isso não realiza ciência nem envia manifestação ao tribunal. A tela DJEN não apresenta o mesmo campo Prazo fatal do expediente PJe."
+      ]
+    },
+    {
+      "title": "Histórico: expedientes dos últimos 30 dias",
+      "intro": "O Histórico organiza informações por dia. Na aba Expedientes, ele lista os registros descobertos pela primeira vez no período, com os dados atuais do expediente.",
+      "steps": [
+        "Abra Histórico no menu e escolha a aba Expedientes [1].",
+        "Ajuste Coletas de e Até [2] dentro dos últimos 30 dias, incluindo hoje, e clique em Aplicar período.",
+        "Consulte os grupos por data e selecione o registro [4] para abrir o mesmo painel de detalhes da consulta completa.",
+        "Use os controles inferiores se houver outras páginas.",
+        "Use o ícone de PDF [3] para exportar o histórico de expedientes do período aplicado."
+      ],
+      "image": "10-historico.png",
+      "legend": [
+        "Abas: expedientes, publicações e orquestração.",
+        "Período: escolha das datas e aplicação.",
+        "PDF: exportação do histórico de expedientes.",
+        "Registro por dia: abertura do detalhe."
+      ],
+      "notes": [
+        "Esta aba é o histórico de entrada de novos expedientes, não uma lista de todas as alterações diárias. O detalhe mostra a última alteração disponível. Para pesquisar expedientes por eventos de coleta, use a consulta completa; para volumes de alterações e resoluções, veja Estatísticas."
+      ]
+    },
+    {
+      "title": "Histórico: publicações processuais",
+      "intro": "A aba Publicações Processuais do Histórico agrupa as comunicações DJEN pelo dia em que foram coletadas.",
+      "steps": [
+        "No Histórico, selecione Publicações Processuais [1].",
+        "Escolha o período dentro dos últimos 30 dias e clique em Aplicar período.",
+        "Confira os grupos diários. Clique no registro [3] para abrir identificação, partes, advogados e texto.",
+        "Use o ícone de PDF [2] para baixar as publicações do período, incluindo registros de outras páginas."
+      ],
+      "image": "11-historico-djen.png",
+      "legend": [
+        "Publicações Processuais: histórico do DJEN.",
+        "PDF: exportação das publicações do período.",
+        "Registro: conteúdo da publicação."
+      ],
+      "notes": [
+        "Ao trocar de aba, confira as datas aplicadas. Em Expedientes e Publicações, editar as datas exige Aplicar período antes da exportação. Para pesquisar por texto, use a área Publicações DJEN."
+      ]
+    },
+    {
+      "title": "Histórico: orquestração e diagnóstico de coletas",
+      "intro": "Orquestração de coletas mostra as execuções dos últimos 30 dias e ajuda a verificar cobertura, duração e erros por fonte.",
+      "steps": [
+        "No Histórico, clique em Orquestração de coletas [1], ou use Ver relatório de coletas na Pipeline.",
+        "Leia a tabela [2]: Status, Fonte, Acionamento, Início, Duração, Resultados e Detalhes.",
+        "Em Resultados, encontrados é o volume localizado; + indica novos registros, alt. indica alterados e res. indica resolvidos. Esses números medem aspectos diferentes.",
+        "Se aparecer Ver erro, clique para expandir a mensagem [3]. Anote a fonte, o horário e o texto para informar ao responsável.",
+        "Depois de corrigir a causa da falha, volte à Pipeline e reexecute somente a fonte necessária."
+      ],
+      "image": "12-orquestracao.png",
+      "legend": [
+        "Orquestração: relatório de execuções.",
+        "Tabela: resultado e contexto de cada fonte.",
+        "Erro expandido: mensagem útil para diagnóstico."
+      ],
+      "notes": [
+        "Esta aba usa seu próprio relatório dos últimos 30 dias; não mostra os campos de período das outras abas. Encontrar registros sem criar novos pode ser normal, pois uma reexecução também encontra registros conhecidos."
+      ]
+    },
+    {
+      "title": "Avisos do PJe",
+      "intro": "Avisos reúne comunicados recebidos nas fontes conectadas. A contagem no menu indica quantos ainda estão não lidos localmente.",
+      "steps": [
+        "Abra Avisos no menu. Use Somente não lidos [1] para alternar entre todos os comunicados e os pendentes de leitura.",
+        "Leia o título, a publicação, o autor quando informado e o corpo do aviso [2].",
+        "Confira Origens para saber em quais fontes o comunicado foi encontrado. Os links do texto são preservados quando existentes.",
+        "Após ler, clique em Marcar como lido [3]. O botão passa a Lido, e a contagem do menu é atualizada.",
+        "Se estiver usando o filtro de não lidos, uma nova consulta poderá remover da lista os avisos que você já marcou."
+      ],
+      "image": "13-avisos.png",
+      "legend": [
+        "Somente não lidos: filtro de leitura.",
+        "Comunicado: título, conteúdo e origens.",
+        "Marcar como lido: confirmação explícita da leitura local."
+      ],
+      "notes": [
+        "Ao contrário dos painéis de expedientes e publicações, nesta tela a leitura depende do clique em Marcar como lido. A confirmação de avisos no PJe durante a coleta e a leitura local são registros diferentes."
+      ]
+    },
+    {
+      "title": "Estatísticas e tempo economizado",
+      "intro": "Estatísticas apresenta o volume de eventos dos expedientes, sua evolução diária e a distribuição das pendências e dos prazos ativos.",
+      "steps": [
+        "Escolha 7 dias ou 30 dias [1] para alterar o período dos indicadores de atividade e do gráfico.",
+        "Leia Atividade Total, Novos, Alterados e Resolvidos. A variação compara o período atual com o anterior; sem base anterior aparece quando a comparação não pode ser calculada.",
+        "Em Entradas e movimentações [3], cada coluna representa um dia. Use as cores da legenda e passe o cursor para consultar os volumes.",
+        "Role para Pendências Ativas e Situação dos Prazos. Essas distribuições representam o estado dos expedientes ativos.",
+        "No cartão Tempo economizado [2], abra Como calculamos para conhecer as regras da estimativa."
+      ],
+      "image": "14-estatisticas.png",
+      "legend": [
+        "Período: alternância entre 7 e 30 dias.",
+        "Tempo economizado: estimativa operacional acumulada.",
+        "Gráfico: chegadas, alterações e resoluções por dia."
+      ],
+      "notes": [
+        "Tempo economizado é uma estimativa, não uma cronometragem. Conta coletas concluídas e não descartadas, limita o total a 4 horas por dia e evita repetir o tempo fixo nas reexecuções. O acumulado abrange todo o histórico, mesmo ao alternar 7/30 dias, e não inclui leitura jurídica nem providências posteriores."
+      ]
+    },
+    {
+      "title": "Configurações: perfil, tema e horário diário",
+      "intro": "Configurações permite ajustar o nome exibido, o tema e o horário da rotina automática.",
+      "steps": [
+        "No campo Nome de exibição [1], informe como deseja aparecer no painel. Isso não altera seu nome de usuário para login.",
+        "Em Tema visual [2], escolha Claro, Escuro ou Seguir o sistema operacional.",
+        "Em Horário diário [3], ajuste a hora desejada para a coleta automática. O fuso de referência exibido é America/Fortaleza (GMT-3).",
+        "Clique em Salvar alterações [4] e aguarde a notificação Configurações salvas.",
+        "Mantenha o computador, a aplicação e o serviço de coleta disponíveis nesse horário. Para fontes PJe, mantenha o token conectado e a autenticação preparada."
+      ],
+      "image": "15-configuracoes.png",
+      "legend": [
+        "Nome de exibição: identificação visual do perfil.",
+        "Tema visual: preferência de aparência.",
+        "Horário diário: agendamento da coleta.",
+        "Salvar alterações: gravação das preferências."
+      ],
+      "notes": [
+        "As opções do perfil e do horário são salvas por esse botão. As chaves das fontes, na parte inferior, são aplicadas imediatamente. Ajustar o horário não inicia uma coleta naquele instante."
+      ]
+    },
+    {
+      "title": "Configurações: fontes e prontidão operacional",
+      "intro": "As fontes conectadas definem quais consultas PJe e DJEN participam das coletas. A prontidão operacional informa se as credenciais locais estão configuradas.",
+      "steps": [
+        "Em Fontes conectadas, use a chave de cada fonte [3] para habilitar ou desabilitar sua coleta.",
+        "Use Todas as fontes [1] para aplicar a mudança em conjunto. Aguarde o processamento; eventuais falhas são exibidas em notificações.",
+        "Desativar uma fonte preserva seus dados e seu histórico, mas interrompe a participação nas coletas.",
+        "Em Prontidão operacional [2], confira Arquivo de credenciais, PIN e Segredo TOTP. Se algo estiver ausente, solicite ao responsável técnico a configuração.",
+        "A lista PJe contempla TJRN 1º/2º grau, TRE-RN 1º/2º grau, TSE 3º grau, TRT21 1º/2º grau e destinos TRF5: 2º grau/TRU, varas federais, JEF, turmas recursais e TRU alternativo."
+      ],
+      "image": "16-fontes.png",
+      "legend": [
+        "Todas as fontes: alteração em conjunto.",
+        "Prontidão operacional: configuração das credenciais.",
+        "Chave individual: habilitar ou desabilitar uma fonte."
+      ],
+      "notes": [
+        "O DJEN também aparece na lista de fontes e pode ser habilitado ou desabilitado. Sua coleta independe do token físico e do ciclo PJe; a OAB é configurada pelo responsável técnico. A indicação PJeOffice Integrado não é uma checagem contínua do dispositivo: a autenticação é verificada a cada coleta. Configuração presente não garante acesso ao tribunal; confirme o resultado na Pipeline e no Histórico."
+      ]
+    },
+    {
+      "title": "Configurações: alterar a senha de acesso",
+      "intro": "O formulário Segurança e senha de acesso altera a senha da sua conta no RYV Expedientes.",
+      "steps": [
+        "Em Configurações, role até Segurança e senha de acesso.",
+        "Digite a Senha atual [1].",
+        "Digite a Nova senha [2] e repita o mesmo valor em Confirmar nova senha [3]. Use pelo menos oito caracteres.",
+        "Clique em Alterar senha [4] e aguarde a confirmação Senha de acesso alterada.",
+        "No próximo acesso, use a nova senha. Se não souber a senha atual, solicite uma redefinição ao administrador."
+      ],
+      "image": "17-senha.png",
+      "legend": [
+        "Senha atual: validação da identidade.",
+        "Nova senha: novo valor de acesso.",
+        "Confirmar nova senha: repetição do novo valor.",
+        "Alterar senha: envio da solicitação."
+      ],
+      "notes": [
+        "Esse formulário altera apenas a senha do painel. Não altera o PIN do certificado, o segredo TOTP nem a senha de acesso aos tribunais."
+      ]
+    },
+    {
+      "title": "Exportar relatórios em PDF",
+      "intro": "O ícone de download gera relatórios a partir da consulta aplicada. Ele está disponível nas listas de expedientes, nas publicações e nas abas de histórico correspondentes.",
+      "steps": [
+        "Aplique primeiro a busca, os filtros e o período. Clique no ícone de exportação da lista desejada.",
+        "Quando houver confirmação [1], confira o resumo e a quantidade. A exportação inclui todos os registros filtrados, inclusive os de outras páginas.",
+        "Para expedientes, escolha Sintético [3] para um relatório resumido ou Analítico [2] para dados detalhados e alterações abrangidas pelo período.",
+        "Para publicações, o download pode começar diretamente; na Visão geral, a confirmação apresenta a opção Baixar PDF.",
+        "Aguarde a geração. Localize o arquivo na pasta de downloads do navegador e confira se o conteúdo corresponde à consulta.",
+        "Se não houver registros, o sistema informa que não há resultados para exportar. Altere os filtros ou o período e tente novamente."
+      ],
+      "image": "07-exportacao.png",
+      "legend": [
+        "Confirmação: resumo e quantidade incluída.",
+        "Analítico: detalhamento dos expedientes.",
+        "Sintético: versão resumida dos expedientes."
+      ],
+      "notes": [
+        "Na Visão geral, o PDF de Novos/Alterados usa os eventos de hoje. Nos demais cartões, ele usa o estado atual e apresenta alterações registradas hoje, embora os expedientes possam ter sido coletados antes. O relatório é um retrato dos dados locais no momento da geração."
+      ]
+    },
+    {
+      "title": "Roteiro de uso diário",
+      "intro": "Use este roteiro para uma conferência organizada do que a aplicação encontrou e do que ainda exige atenção.",
+      "steps": [
+        "Entre no RYV Expedientes e confira a data e a última sincronização na Visão geral.",
+        "Verifique cada fonte da Pipeline, inclusive as que ficam à direita na rolagem. Consulte o Histórico para fontes com falha ou interrupção.",
+        "Revise Urgentes, Não lidos e Prazos em cálculo. Abra os detalhes, confira o processo e consulte o PJe para as providências necessárias.",
+        "Revise Novos e Alterados. Verifique as mudanças de prazo e de informações antes de distribuir o trabalho.",
+        "Abra Publicações Processuais na Visão geral ou Publicações DJEN no menu. Leia o texto e use o inteiro teor quando disponível.",
+        "Leia os Avisos e marque explicitamente os comunicados já conferidos.",
+        "Se necessário, exporte as consultas em PDF e revise o Histórico de execuções para registrar a cobertura da coleta.",
+        "Encerre a sessão com Sair."
+      ],
+      "notes": [
+        "Abrir um registro marca leitura local; mantenha o controle das providências e dos prazos conforme a rotina do escritório. A ausência de registros numa consulta filtrada deve ser conferida com o período, os critérios e o resultado das fontes."
+      ]
+    },
+    {
+      "title": "Problemas frequentes e como resolver",
+      "intro": "Comece pelo sintoma abaixo. Quando precisar de ajuda, informe a área, a fonte, o horário e a mensagem exibida, sem enviar senha, PIN ou segredo TOTP.",
+      "rows": [
+        [
+          "Situação",
+          "Procedimento"
+        ],
+        [
+          "O endereço não abre",
+          "Confirme o endereço com o responsável técnico e peça a verificação dos serviços locais."
+        ],
+        [
+          "Não consigo entrar",
+          "Confira usuário, senha e Caps Lock. Use Esqueceu sua senha? para consultar a orientação de redefinição."
+        ],
+        [
+          "Executar coleta está desabilitado",
+          "Conecte o token. Se continuar indisponível, peça a verificação do dispositivo, PJeOffice e credenciais."
+        ],
+        [
+          "Uma fonte falhou",
+          "Abra Histórico > Orquestração > Ver erro. Corrija a causa e reexecute a fonte na Pipeline."
+        ],
+        [
+          "A lista está vazia",
+          "Confira período e filtros; limpe-os quando possível. Verifique se a fonte concluiu a coleta e está habilitada."
+        ],
+        [
+          "Há registros encontrados, mas nenhum novo",
+          "Pode ser uma consulta de registros já conhecidos. Confira também alterados e resolvidos no Histórico."
+        ],
+        [
+          "Não vejo uma publicação antiga",
+          "Em DJEN, mude as datas de coleta e clique em Pesquisar. O Histórico está limitado aos últimos 30 dias."
+        ],
+        [
+          "PDF está desabilitado",
+          "Aplique os filtros com Buscar, Pesquisar ou Aplicar período antes de exportar."
+        ],
+        [
+          "Não há registros para exportar",
+          "A consulta retornou zero resultados. Revise os critérios e o período."
+        ],
+        [
+          "A coleta automática não ocorreu",
+          "Confira o horário, o fuso, as fontes e se os serviços estavam ativos. Para PJe, verifique também o token."
+        ],
+        [
+          "O prazo aparece como um traço",
+          "Abra o detalhe e confira a situação: Em cálculo e Sem prazo têm significados diferentes."
+        ],
+        [
+          "Não consigo descartar",
+          "Confira se há fonte em execução ou se já não existem dados descartáveis naquele dia."
+        ],
+        [
+          "Nome alterado, mas login não mudou",
+          "Nome de exibição não altera o usuário de autenticação."
+        ],
+        [
+          "Erro de autenticação ao consultar",
+          "Recarregue a página e entre novamente se a sessão tiver expirado. Persistindo, informe a mensagem ao responsável."
+        ]
+      ]
+    },
+    {
+      "title": "Glossário e mapa rápido do sistema",
+      "intro": "Use os termos abaixo para interpretar os registros e localizar a função adequada.",
+      "rows": [
+        [
+          "Termo",
+          "Significado"
+        ],
+        [
+          "Expediente",
+          "Registro de comunicação ou pendência coletado no PJe e associado a um processo."
+        ],
+        [
+          "Publicação DJEN",
+          "Comunicação do Diário localizada pela OAB configurada."
+        ],
+        [
+          "Coleta",
+          "Consulta automática da fonte e gravação dos resultados na base local."
+        ],
+        [
+          "Pipeline",
+          "Visão do andamento e do resultado das fontes de coleta."
+        ],
+        [
+          "Novo",
+          "Registro descoberto pela primeira vez; não significa necessariamente expedição naquele dia."
+        ],
+        [
+          "Alterado",
+          "Expediente conhecido que recebeu mudança relevante identificada pela coleta."
+        ],
+        [
+          "Resolvido",
+          "Expediente classificado como inativo localmente; não significa que o processo inteiro foi encerrado."
+        ],
+        [
+          "Não lido",
+          "Evento ou publicação ainda sem leitura registrada no painel."
+        ],
+        [
+          "Prazo fatal",
+          "Data e hora de vencimento registradas conforme as informações coletadas da origem."
+        ],
+        [
+          "Disponibilização",
+          "Data da publicação informada pelo DJEN, diferente da data de coleta."
+        ],
+        [
+          "Pendência de ciência/resposta",
+          "Classificação da obrigação indicada no PJe; a ação deve ser realizada lá."
+        ],
+        [
+          "TOTP",
+          "Mecanismo de código temporário de autenticação, configurado pelo responsável técnico."
+        ]
+      ],
+      "steps": [
+        "Triagem do dia e andamento: Visão geral. Pesquisa detalhada PJe: Expedientes. Texto de publicação: Publicações DJEN.",
+        "Entradas e execuções recentes: Histórico. Comunicados institucionais: Avisos. Volumes e estimativa: Estatísticas. Preferências, fontes e senha: Configurações."
+      ]
+    }
+  ]
+}

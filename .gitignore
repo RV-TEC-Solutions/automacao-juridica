@@ -26,6 +26,7 @@ staticfiles/
 media/
 backend-automacao/respostas_expedientes/
 backend-automacao/docker/vendor/
+docs/manual-do-usuario/imagens/
 
 # Configurações e credenciais locais
 .env
