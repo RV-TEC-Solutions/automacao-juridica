@@ -81,16 +81,19 @@ export default function Home() {
     }
   }, [notify]);
 
-  const updateTokenStatus = useCallback((status: TokenStatus) => {
+  const updateTokenStatus = useCallback((status: TokenStatus, notifyUnavailable = false) => {
     const wasUnavailable = tokenStatusRef.current?.available === false;
     tokenStatusRef.current = status;
     setTokenStatus(status);
-    if (!status.available && !wasUnavailable) notify({ tone: "warning", message: status.message || "Token não conectado." });
+    if (!status.available && (!wasUnavailable || notifyUnavailable)) notify({ tone: "warning", message: status.message || "Token não conectado." });
   }, [notify]);
 
-  const loadTokenStatus = useCallback(async () => {
-    try { updateTokenStatus(await api<TokenStatus>("automation/token-status/")); }
-    catch { updateTokenStatus({ available: false, message: "Não foi possível verificar o token físico." }); }
+  const loadTokenStatus = useCallback(async (notifyUnavailable = false) => {
+    let status: TokenStatus;
+    try { status = await api<TokenStatus>("automation/token-status/"); }
+    catch { status = { available: false, message: "Não foi possível verificar o token físico." }; }
+    updateTokenStatus(status, notifyUnavailable);
+    return status;
   }, [updateTokenStatus]);
 
   const loadExpedientes = useCallback(async () => {
@@ -145,12 +148,12 @@ export default function Home() {
   }, [loadTokenStatus]);
 
   const run = async (source = "pje-tjrn", rerun = false) => {
-    if (source !== "djen" && !tokenStatus?.available) {
-      await loadTokenStatus();
-      return;
-    }
     setRunning(true);
     try {
+      if (source !== "djen" && !tokenStatus?.available) {
+        const status = await loadTokenStatus(true);
+        if (!status.available) return;
+      }
       const started = await api<{ id: number; status: string }>("automation/runs/", {
         method: "POST",
         body: JSON.stringify({ source, ...(rerun ? { rerun: true } : {}) }),
