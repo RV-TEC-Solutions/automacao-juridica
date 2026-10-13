@@ -1,7 +1,8 @@
 "use client";
 
 import { ArrowRight, CalendarDots, Check, Copy } from "@phosphor-icons/react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { copyText } from "../lib/clipboard";
 import { Panel } from "./ui";
 
 type ProcessRow = {
@@ -18,18 +19,40 @@ type ProcessRow = {
 
 export function ProcessList({ rows }: { rows: ProcessRow[] }) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, []);
+
+  const copyProcess = async (row: ProcessRow) => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    setCopiedId(null);
+    setCopyError(null);
+    try {
+      await copyText(row.number);
+      setCopiedId(row.id);
+      copyTimer.current = setTimeout(() => setCopiedId(null), 1800);
+    } catch {
+      setCopyError("Não foi possível copiar. Selecione o número do processo e copie manualmente.");
+    }
+  };
+
   return <Panel innerClassName="overflow-hidden">
+    {copyError && <p role="alert" className="px-4 py-3 text-xs text-destructive">{copyError}</p>}
+    <span role="status" className="sr-only">{copiedId !== null ? "Número do processo copiado." : ""}</span>
     <div className="divide-y divide-border">
       {rows.map((row) => <div key={row.id} role="button" tabIndex={0}
         onClick={row.onSelect}
-        onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); row.onSelect(); } }}
+        onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); row.onSelect(); } }}
         className={`group relative grid w-full cursor-pointer grid-cols-1 gap-3 border-0 bg-transparent px-4 py-3 text-left transition-all duration-150 hover:bg-muted sm:flex sm:items-center sm:gap-4 sm:px-4 ${row.unread ? "before:absolute before:inset-y-4 before:left-0 before:w-2 before:rounded-r-full before:bg-success" : ""}`}>
         <div className="min-w-0 pr-2 sm:flex-1">
           {row.badges}
           <div className="mt-1 flex items-center gap-2">
             <strong className="block truncate font-mono text-sm font-extrabold tracking-tight text-foreground">{row.number}</strong>
             <button type="button" title="Copiar número do processo" aria-label="Copiar número do processo"
-              onClick={(event) => { event.stopPropagation(); if (navigator.clipboard) { void navigator.clipboard.writeText(row.number); setCopiedId(row.id); setTimeout(() => setCopiedId(null), 1800); } }}
+              onClick={(event) => { event.stopPropagation(); void copyProcess(row); }}
               className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100">
               {copiedId === row.id ? <Check size={13} weight="bold" className="text-success" /> : <Copy size={13} />}
             </button>

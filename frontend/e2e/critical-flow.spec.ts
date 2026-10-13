@@ -67,6 +67,7 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
       authenticated = true;
       return route.fulfill({ json: user });
     }
+    if (path.endsWith("automation/token-status/")) return route.fulfill({ json: { available: true } });
     if (path.endsWith("dashboard/") && route.request().method() === "GET") {
       const cycleStatus = collectionRequests > 0 && ++activeDashboardRequests === 1 ? "pending" : "success";
       const latestRun = collectionRequests === 0 ? null : {
@@ -129,9 +130,11 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
     return route.fulfill({ json: {} });
   });
 
+  const authReady = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith("auth/me/"));
   await page.goto("/login");
+  await authReady;
   await page.getByLabel("Usuário").fill("operador");
-  await page.getByLabel("Senha").fill("senha-segura");
+  await page.getByLabel("Senha", { exact: true }).fill("senha-segura");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Bo(m dia|a tarde|a noite), Victor\./ })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

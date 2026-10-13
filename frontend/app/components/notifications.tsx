@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type NotificationTone = "success" | "warning" | "error";
-type NotificationInput = { message: string; tone?: NotificationTone };
+type NotificationInput = { message: string; tone?: NotificationTone; link?: { href: string; label: string } };
 type Notification = NotificationInput & { id: number };
 type NotificationsValue = { notify: (input: NotificationInput) => void };
 
@@ -21,9 +21,11 @@ function compactMessage(message: string) {
 
 function Toast({ notification, onDismiss }: { notification: Notification; onDismiss: (id: number) => void }) {
   useEffect(() => {
+    // Avisos com uma ação permanecem disponíveis até o usuário fechá-los.
+    if (notification.link) return;
     const timer = window.setTimeout(() => onDismiss(notification.id), DISMISS_AFTER);
     return () => window.clearTimeout(timer);
-  }, [notification.id, onDismiss]);
+  }, [notification.id, notification.link, onDismiss]);
 
   const config = {
     success: { label: "Sucesso", Icon: CheckCircle, className: "border-success/35 bg-success-soft text-success" },
@@ -34,7 +36,9 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
 
   return <div role={notification.tone === "error" ? "alert" : "status"} className={cn("pointer-events-auto flex items-start gap-3 rounded-lg border p-3 shadow-lg", config.className)}>
     <Icon size={20} weight="fill" className="mt-0.5 shrink-0" aria-hidden="true" />
-    <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{config.label}</p><p className="mt-0.5 text-sm leading-5 text-current/90">{compactMessage(notification.message)}</p></div>
+    <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{config.label}</p><p className="mt-0.5 text-sm leading-5 text-current/90">{compactMessage(notification.message)}</p>
+      {notification.link && <a href={notification.link.href} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block rounded-sm text-sm font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">{notification.link.label}<span className="sr-only"> (abre em nova aba)</span></a>}
+    </div>
     <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => onDismiss(notification.id)} aria-label={`Fechar aviso de ${config.label.toLowerCase()}`}>
       <X size={16} aria-hidden="true" />
     </Button>
@@ -44,12 +48,12 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const dismiss = useCallback((id: number) => setNotifications((current) => current.filter((notification) => notification.id !== id)), []);
-  const notify = useCallback(({ message, tone = "error" }: NotificationInput) => {
+  const notify = useCallback(({ message, tone = "error", link }: NotificationInput) => {
     const text = compactMessage(message);
     if (!text) return;
     setNotifications((current) => {
-      if (current.some((notification) => notification.message === text && notification.tone === tone)) return current;
-      return [...current, { id: Date.now() + Math.random(), message: text, tone }].slice(-MAX_NOTIFICATIONS);
+      if (current.some((notification) => notification.message === text && notification.tone === tone && notification.link?.href === link?.href)) return current;
+      return [...current, { id: Date.now() + Math.random(), message: text, tone, link }].slice(-MAX_NOTIFICATIONS);
     });
   }, []);
 

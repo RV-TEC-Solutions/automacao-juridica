@@ -1,12 +1,14 @@
 import logging
+import json
 import os
+import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from django.conf import settings
 from django.db import connections
 
@@ -28,9 +30,79 @@ CREDENCIAIS = Path.home() / ".config/pje-automacao/.env"
 PASTA_RESPOSTAS = settings.BASE_DIR / "respostas_expedientes"
 logger = logging.getLogger("automation")
 
-CERTIFICATE_EXPIRY_CLICK_RETRY_TIMEOUT_MS = 1000
+CERTIFICATE_EXPIRY_CLICK_RETRY_TIMEOUT_MS = 10000
+AJAX_TIMEOUT_MS = 30000
+LOGIN_TIMEOUT_MS = 30000
+AJAX_STATUS = '[id="_viewRoot:status.start"]'
 
 load_dotenv(CREDENCIAIS)
+
+
+def url_segura(url):
+    """Mantém domínio/caminho; descarta parâmetros de sessão e credenciais."""
+    parsed = urlparse(str(url))
+    if parsed.scheme not in ("https", "http"):
+        return "<indisponível>"
+    return f"{parsed.scheme}://{parsed.hostname}{parsed.path.split(';')[0]}"
+
+
+def texto_diagnostico_seguro(texto):
+    texto = re.sub(r'onclick="[^"]*"', 'onclick="[omitido]"', str(texto))
+    texto = re.sub(r'\b(state|token|session_code|nonce|codigoSeguranca)=\S+', r'\1=[omitido]', texto)
+    texto = re.sub(r'https?://[^\s<>\"\x27]+', lambda m: url_segura(m[0]), str(texto))
+    for name in ("PJE_CERT_PIN", "PJE_TOTP_SECRET"):
+        secret = os.environ.get(name)
+        if secret:
+            texto = texto.replace(secret, "[omitido]")
+    return texto[:1500]
+
+
+def recurso_auxiliar(url):
+    host = urlparse(str(url)).hostname or ""
+    return any(host == domain or host.endswith("." + domain) for domain in (
+        "google-analytics.com", "analytics.google.com", "googletagmanager.com",
+    ))
+
+
+def evidencias_relevantes(eventos):
+    return [e for e in eventos if not e.get("auxiliar") and e["tipo"] != "console"]
+
+
+def abrir_destino_pje(pagina, link, profile):
+    """Espera o destino confirmado, sem depender do carregamento de recursos externos."""
+    link.evaluate("element => element.removeAttribute('target')")
+    try:
+        link.click(no_wait_after=True, timeout=LOGIN_TIMEOUT_MS)
+        pagina.wait_for_url(
+            lambda url: urlparse(str(url)).hostname in (
+                profile.portal_destination_host, "sso.cloud.pje.jus.br",
+            ),
+            wait_until="commit", timeout=LOGIN_TIMEOUT_MS,
+        )
+    except PlaywrightTimeoutError as error:
+        raise PJeAutomationError(
+            "Acesso ao PJe pelo portal",
+            f"o acesso não confirmou o destino {profile.portal_destination_host} ou o SSO "
+            f"em 30 segundos. Página atual: {url_segura(url_atual(pagina))}.",
+        ) from error
+
+
+class PJeAutomationError(RuntimeError):
+    def __init__(self, etapa, motivo):
+        self.etapa = etapa
+        self.motivo = motivo
+        super().__init__(f"{etapa}: {motivo}")
+
+
+def aguardar_ajax_pje(pagina):
+    try:
+        pagina.locator(AJAX_STATUS).wait_for(state="hidden", timeout=AJAX_TIMEOUT_MS)
+    except PlaywrightTimeoutError as error:
+        raise PJeAutomationError(
+            "Carregamento dos expedientes",
+            "o PJe permaneceu com a camada de carregamento AJAX ativa por 30 segundos. "
+            "A coleta foi interrompida para evitar importar dados incompletos.",
+        ) from error
 
 
 @dataclass(frozen=True)
@@ -114,12 +186,11 @@ def localizar_arvore_pendencias(pagina):
 def clicar_apos_dispensar_aviso_certificado(pagina, alvo):
     """Clica novamente apenas se o alerta RichFaces tardio bloquear o primeiro clique.
 
-    O PJe pode montar o alerta de expiração depois que o painel já está visível.
-    Assim, uma checagem feita antes de localizar o alvo não elimina a corrida. O
-    primeiro clique tem prazo curto: se ele for bloqueado, só o repetimos quando
-    conseguimos de fato fechar o alerta conhecido.
+    Aguarda a camada AJAX e tolera carregamento tardio durante o clique.
+    Um segundo clique só é permitido após fechar o alerta conhecido.
     """
     fechar_aviso_certificado_proximo_de_expirar(pagina)
+    aguardar_ajax_pje(pagina)
     try:
         alvo.click(timeout=CERTIFICATE_EXPIRY_CLICK_RETRY_TIMEOUT_MS)
         return
@@ -174,6 +245,37 @@ def esperar_view_expedientes(pagina):
         pass
 
     pagina.wait_for_timeout(1000)
+    aguardar_ajax_pje(pagina)
+
+
+def clicar_aba_expedientes(pagina, aba):
+    """Correlaciona a resposta AJAX com a aba para não salvar o conteúdo anterior."""
+    identifier = aba.get_attribute("id")
+    if not identifier:
+        raise PJeAutomationError("Coleta dos expedientes", "a aba não possui identificador AJAX.")
+
+    def corresponde(response):
+        request = response.request
+        return (
+            request.method == "POST"
+            and identifier in parse_qs(request.post_data or "")
+        )
+
+    try:
+        with pagina.expect_response(corresponde, timeout=AJAX_TIMEOUT_MS) as pending:
+            clicar_apos_dispensar_aviso_certificado(pagina, aba)
+        response = pending.value
+        if response.status >= 400:
+            raise PJeAutomationError(
+                "Coleta dos expedientes", f"o carregamento da aba retornou HTTP {response.status}."
+            )
+        response.body()  # Aguarda todo o corpo antes de verificar a renderização do DOM.
+        esperar_view_expedientes(pagina)
+    except PlaywrightTimeoutError as error:
+        raise PJeAutomationError(
+            "Coleta dos expedientes",
+            "o PJe não concluiu o clique ou a resposta AJAX da aba no prazo de 30 segundos.",
+        ) from error
 
 
 def salvar_html_renderizado(pagina, pasta_respostas, indice):
@@ -267,8 +369,14 @@ def coletar_expedientes(pagina, source_code):
             f"Processando aba filha {indice + 1}/{quantidade}..."
         )
 
-        clicar_apos_dispensar_aviso_certificado(pagina, aba_filha)
-        esperar_view_expedientes(pagina)
+        try:
+            clicar_aba_expedientes(pagina, aba_filha)
+        except Exception as error:
+            raise PJeAutomationError(
+                "Coleta dos expedientes",
+                f"falha na aba {indice + 1}/{quantidade}; {len(arquivos)} captura(s) parcial(is) "
+                f"salva(s), sem importar os resultados desta tentativa. {texto_diagnostico_seguro(error)}",
+            ) from error
 
         arquivo = salvar_html_renderizado(
             pagina,
@@ -628,10 +736,15 @@ def _abrir_link_tre_rn_pje(pagina, profile, portal_link_name, access_link_name):
             f"O acesso {portal_link_name!r} do portal TRE-RN não foi encontrado "
             "de forma única."
         )
-    portal_link.click()
-    pagina.wait_for_load_state("domcontentloaded", timeout=15000)
+    portal_link.click(no_wait_after=True, timeout=LOGIN_TIMEOUT_MS)
 
     access_link = pagina.get_by_role("link", name=access_link_name, exact=True)
+    try:
+        access_link.wait_for(state="visible", timeout=LOGIN_TIMEOUT_MS)
+    except PlaywrightTimeoutError as error:
+        raise PJeAutomationError(
+            "Acesso ao PJe pelo portal", f"o portal não apresentou o link {access_link_name!r} em 30 segundos."
+        ) from error
     if access_link.count() != 1:
         raise RuntimeError(
             f"O acesso {access_link_name!r} não foi encontrado de forma única."
@@ -643,9 +756,7 @@ def _abrir_link_tre_rn_pje(pagina, profile, portal_link_name, access_link_name):
             f"({profile.portal_destination_host})."
         )
 
-    access_link.evaluate("element => element.removeAttribute('target')")
-    access_link.click()
-    pagina.wait_for_load_state("domcontentloaded", timeout=15000)
+    abrir_destino_pje(pagina, access_link, profile)
 
 
 def abrir_link_tre_rn_1g_pje(pagina, profile):
@@ -724,13 +835,13 @@ def clicar_certificado(pagina, source_code):
     except PlaywrightTimeoutError as error:
         raise RuntimeError(
             "Botão de certificado digital não ficou visível no prazo. "
-            f"fonte={source_code} seletor={selector!r} url={pagina.url!r} "
+            f"fonte={source_code} seletor={selector!r} url={url_segura(pagina.url)!r} "
             f"quantidade={botao.count()}"
         ) from error
     if botao.count() != 1:
         raise RuntimeError(
             "Botão de certificado digital não encontrado de forma única. "
-            f"fonte={source_code} seletor={selector!r} url={pagina.url!r} "
+            f"fonte={source_code} seletor={selector!r} url={url_segura(pagina.url)!r} "
             f"quantidade={botao.count()}"
         )
     botao.click()
@@ -744,9 +855,40 @@ def entrar_com_pdpj(pagina):
     if imagem.count() != 1:
         raise RuntimeError("Imagem do botão 'Entrar com PDPJ' não encontrada de forma única.")
     imagem.click()
-    pagina.locator(".botao-certificado-titulo").wait_for(
-        state="visible", timeout=15000
-    )
+    preparar_login_certificado(pagina, ".botao-certificado-titulo")
+
+
+def preparar_login_certificado(pagina, selector):
+    """Uma recarga limitada apenas antes de qualquer solicitação ao assinador."""
+    for tentativa in range(2):
+        try:
+            botao = pagina.locator(selector) if isinstance(selector, str) else selector
+            botao.wait_for(state="visible", timeout=LOGIN_TIMEOUT_MS)
+            pagina.wait_for_function(
+                "window.location.hostname === 'sso.cloud.pje.jus.br' ? "
+                "(typeof window.autenticar === 'function' && "
+                "typeof window.PJeOffice?.executar === 'function') : document.readyState === 'complete'",
+                timeout=LOGIN_TIMEOUT_MS,
+            )
+            return
+        except PlaywrightTimeoutError as error:
+            if tentativa:
+                raise PJeAutomationError(
+                    "Preparação do login",
+                    "a tela de autenticação ou o script do certificado não ficou pronto, "
+                    "mesmo após uma recarga. Nenhuma solicitação de PIN foi iniciada.",
+                ) from error
+            logger.warning("Tela de autenticação incompleta; recarregando uma vez. url=%s", url_segura(pagina.url))
+            try:
+                pagina.reload(wait_until="domcontentloaded", timeout=LOGIN_TIMEOUT_MS)
+            except PlaywrightTimeoutError:
+                # A segunda tentativa verifica os controles, inclusive se o DOM veio parcialmente.
+                pass
+
+
+def requisicao_pjeoffice(request):
+    parsed = urlparse(request.url)
+    return parsed.hostname in ("localhost", "127.0.0.1") and parsed.port == 8800 and parsed.path == "/pjeOffice/requisicao/"
 
 
 def autenticar_pje(pagina, source_code):
@@ -756,14 +898,45 @@ def autenticar_pje(pagina, source_code):
 
     if get_source_profile(source_code).collector == "trt21":
         entrar_com_pdpj(pagina)
-    clicar_certificado(pagina, source_code)
-    preencher_pin_pjeoffice_atspi()
+    else:
+        profile = get_source_profile(source_code)
+        botao = (
+            pagina.locator(profile.certificate_button_selector)
+            if profile.certificate_button_selector
+            else pagina.get_by_text("CERTIFICADO DIGITAL", exact=True)
+        )
+        preparar_login_certificado(pagina, botao)
+    try:
+        with pagina.expect_request(requisicao_pjeoffice, timeout=10000):
+            clicar_certificado(pagina, source_code)
+    except PlaywrightTimeoutError as error:
+        raise PJeAutomationError(
+            "Comunicação com o PJeOffice",
+            "o botão de certificado não iniciou a chamada ao assinador em 10 segundos. "
+            "Verifique o carregamento da página e a permissão de acesso à rede local. "
+            "O PIN ainda não foi solicitado.",
+        ) from error
+    logger.info("Chamada de autenticação ao PJeOffice iniciada pela página. fonte=%s", source_code)
+    try:
+        preencher_pin_pjeoffice_atspi()
+    except (RuntimeError, subprocess.TimeoutExpired) as error:
+        raise PJeAutomationError(
+            "Autenticação no PJeOffice",
+            "a página iniciou a chamada ao assinador, mas o preenchimento do PIN não foi concluído. "
+            + texto_diagnostico_seguro(error),
+        ) from error
 
     campo_otp = pagina.get_by_label(
         "Entre no seu aplicativo de autenticação e digite abaixo o código apresentado:",
         exact=True,
     )
-    campo_otp.wait_for(state="visible")
+    try:
+        campo_otp.wait_for(state="visible", timeout=LOGIN_TIMEOUT_MS)
+    except PlaywrightTimeoutError as error:
+        raise PJeAutomationError(
+            "Validação em duas etapas",
+            "o PIN foi preenchido, mas a página não apresentou o campo do código de autenticação em 30 segundos.",
+        ) from error
     campo_otp.fill(gerar_codigo_totp(segredo_totp))
     pagina.get_by_text("Validar", exact=True).click()
 
@@ -783,6 +956,31 @@ def abrir_pje(source_code, source=None):
         )
 
         pagina = contexto.new_page()
+        eventos = []
+        etapa = "Abertura do site"
+        inicio = time.monotonic()
+
+        def registrar(tipo, detalhe, *, url=None):
+            evento = {"tipo": tipo, "detalhe": texto_diagnostico_seguro(detalhe)}
+            if url is not None:
+                evento.update(url=url_segura(url), auxiliar=recurso_auxiliar(url))
+            eventos.append(evento)
+            del eventos[:-20]
+
+        pagina.on("pageerror", lambda error: registrar("javascript", error))
+        pagina.on("requestfailed", lambda request: registrar(
+            "recurso_interrompido", f"{url_segura(request.url)}: {request.failure}", url=request.url
+        ))
+        pagina.on("response", lambda response: registrar(
+            "http", f"HTTP {response.status}: {url_segura(response.url)}", url=response.url
+        ) if response.status >= 400 else None)
+        def registrar_console(message):
+            if message.type == "error":
+                location = message.location or {}
+                url = location.get("url")
+                registrar("console", message.text, url=url if isinstance(url, str) and url else None)
+
+        pagina.on("console", registrar_console)
 
         try:
             pagina.goto(
@@ -791,6 +989,7 @@ def abrir_pje(source_code, source=None):
             )
 
             profile = get_source_profile(source_code)
+            etapa = "Navegação pelo portal"
             if profile.portal_flow == "trf5":
                 abrir_link_trf5_pje(pagina, profile)
             elif profile.portal_flow == "tre-rn-1g":
@@ -808,8 +1007,10 @@ def abrir_pje(source_code, source=None):
             print("Aguardando o login por certificado digital.")
             print("O PIN será preenchido na janela do PJeOffice.")
 
+            etapa = "Autenticação"
             autenticar_pje(pagina, source_code)
 
+            etapa = "Abertura do painel e coleta dos expedientes"
             if profile.collector == "trt21":
                 esperar_destino_pos_login_trt21(pagina)
                 return collect_trt21_expedientes(pagina)
@@ -818,17 +1019,37 @@ def abrir_pje(source_code, source=None):
                 source = AutomationSource.objects.get(code=source_code)
             notice_message = esperar_destino_pos_login(pagina, source)
             return LegacyCollection(coletar_expedientes(pagina, source_code), notice_message)
-        except Exception:
+        except Exception as error:
             evidencias = salvar_diagnostico_pje(pagina, source_code)
-            logger.exception(
-                "Falha na automação PJe. fonte=%s url=%s diagnostico_html=%s "
-                "diagnostico_screenshot=%s",
-                source_code,
-                url_atual(pagina),
-                evidencias["html"],
-                evidencias["screenshot"],
-            )
-            raise
+            etapa = getattr(error, "etapa", etapa)
+            motivo = texto_diagnostico_seguro(getattr(error, "motivo", error))
+            if isinstance(error, PlaywrightTimeoutError):
+                # A primeira linha identifica a operação, sem reproduzir atributos/chaves do DOM.
+                motivo = "o site não concluiu a operação no prazo esperado. " + texto_diagnostico_seguro(str(error).splitlines()[0])
+            relevantes = evidencias_relevantes(eventos)
+            if relevantes:
+                observados = "; ".join(f"{e['tipo']}: {e['detalhe']}" for e in relevantes[-3:])
+                motivo += f" Eventos associados à página (causa não confirmada): {observados[:700]}"
+            mensagem = f"Fonte {source_code} — {etapa}: {motivo}"
+            resumo = {
+                "fonte": source_code, "etapa": etapa,
+                "duracao_segundos": round(time.monotonic() - inicio, 1),
+                "url": url_segura(url_atual(pagina)), "erro": mensagem,
+                "tipo_erro": type(error).__name__, "eventos": eventos,
+                "operacao": texto_diagnostico_seguro(str(error).splitlines()[0]),
+                "html": str(evidencias["html"]) if evidencias["html"] else None,
+                "screenshot": str(evidencias["screenshot"]) if evidencias["screenshot"] else None,
+            }
+            if evidencias["html"]:
+                try:
+                    evidencias["html"].with_name("diagnostico.json").write_text(
+                        json.dumps(resumo, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                except OSError:
+                    logger.error("Não foi possível salvar o resumo de diagnóstico. fonte=%s", source_code)
+            logger.error("Falha na automação PJe. diagnostico=%s", json.dumps(resumo, ensure_ascii=False))
+            # Não propaga URLs com parâmetros/desafios no traceback registrado pelo runner.
+            raise PJeAutomationError(etapa, f"Fonte {source_code} — {motivo}") from None
         finally:
             navegador.close()
 

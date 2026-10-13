@@ -68,4 +68,16 @@ describe("CollectionPipeline", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reexecutar somente Publicações nacionais" }));
     expect(callbacks.onRerun).toHaveBeenCalledWith("djen");
   });
+
+  it("links only failed steps to orchestration without making rerun a nested control", () => {
+    const callbacks = handlers();
+    render(<CollectionPipeline pipeline={pipeline(false)} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
+    const link = screen.getByRole("link", { name: "Ver falha de Justiça Eleitoral · TRE-RN · 2º Grau no histórico de coletas" });
+    expect(link).toHaveAttribute("href", "/historico?tab=orquestracao&failed_source=step-3");
+    expect(screen.getAllByRole("link", { name: /Ver falha de/ })).toHaveLength(1);
+    const rerun = screen.getByRole("button", { name: "Reexecutar somente TRE-RN · 2º Grau" });
+    expect(link.contains(rerun)).toBe(false);
+    fireEvent.click(rerun);
+    expect(callbacks.onRerun).toHaveBeenCalledWith("step-3");
+  });
 });

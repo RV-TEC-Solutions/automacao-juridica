@@ -822,12 +822,13 @@ class PJeBrowserTests(TestCase):
             call("link", name="PJe - 1º Grau", exact=True),
             call("link", name="Clique aqui para acessar o PJE-Zonas", exact=True),
         ])
-        first_degree_link.click.assert_called_once_with()
+        first_degree_link.click.assert_called_once_with(no_wait_after=True, timeout=30000)
         pje_zonas_link.evaluate.assert_called_once_with(
             "element => element.removeAttribute('target')"
         )
-        pje_zonas_link.click.assert_called_once_with()
-        self.assertEqual(page.wait_for_load_state.call_count, 2)
+        pje_zonas_link.click.assert_called_once_with(no_wait_after=True, timeout=30000)
+        page.wait_for_load_state.assert_not_called()
+        self.assertEqual(page.wait_for_url.call_args.kwargs["wait_until"], "commit")
 
     def test_tre_rn_second_degree_starts_from_the_stable_portal(self):
         profile = get_source_profile("tre-rn-2g")
@@ -857,12 +858,13 @@ class PJeBrowserTests(TestCase):
             call("link", name="PJe - 2º Grau", exact=True),
             call("link", name="Acesso ao sistema", exact=True),
         ])
-        second_degree_link.click.assert_called_once_with()
+        second_degree_link.click.assert_called_once_with(no_wait_after=True, timeout=30000)
         system_link.evaluate.assert_called_once_with(
             "element => element.removeAttribute('target')"
         )
-        system_link.click.assert_called_once_with()
-        self.assertEqual(page.wait_for_load_state.call_count, 2)
+        system_link.click.assert_called_once_with(no_wait_after=True, timeout=30000)
+        page.wait_for_load_state.assert_not_called()
+        self.assertEqual(page.wait_for_url.call_args.kwargs["wait_until"], "commit")
 
     def test_tre_rn_portal_rejects_a_link_outside_the_expected_host(self):
         page = Mock()
@@ -1103,7 +1105,7 @@ class PJeBrowserTests(TestCase):
 
         self.assertEqual(
             calls.mock_calls,
-            [call.close_popup(page), call.open_tree(timeout=1000)],
+            [call.close_popup(page), call.open_tree(timeout=10000)],
         )
 
     def test_retries_the_pendencies_tree_click_when_the_certificate_popup_appears_late(self):
@@ -1137,7 +1139,7 @@ class PJeBrowserTests(TestCase):
             calls.mock_calls,
             [
                 call.close_popup(page),
-                call.open_tree(timeout=1000),
+                call.open_tree(timeout=10000),
                 call.close_popup(page),
                 call.open_tree(),
             ],
@@ -1157,7 +1159,7 @@ class PJeBrowserTests(TestCase):
                 return_value=child_tabs,
             ),
             patch(
-                "automation.services.pje.browser.clicar_apos_dispensar_aviso_certificado"
+                "automation.services.pje.browser.clicar_aba_expedientes"
             ) as click_after_closing,
             patch("automation.services.pje.browser.esperar_view_expedientes"),
             patch(
@@ -1284,7 +1286,7 @@ class PJeBrowserTests(TestCase):
         self.assertEqual(len(logs.records), 3)
         self.assertTrue(logs.records[0].exc_info)
         self.assertTrue(logs.records[1].exc_info)
-        self.assertTrue(logs.records[2].exc_info)
+        self.assertFalse(logs.records[2].exc_info)
         self.assertIn("Falha na automação PJe", logs.output[2])
 
     def test_resolves_the_url_for_each_supported_source(self):

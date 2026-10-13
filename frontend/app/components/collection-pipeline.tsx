@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { formatDateTime } from "../lib/api";
 import type { CollectionPipeline as Pipeline, PipelineStep, PipelineStepStatus } from "../lib/types";
 import { Panel } from "./ui";
+import { cn } from "@/lib/utils";
 
 const statusMeta: Record<PipelineStepStatus, { label: string; className: string; Icon: typeof Clock }> = {
   pending: { label: "Aguardando", className: "border-border bg-muted text-muted-foreground", Icon: Clock },
@@ -25,7 +26,14 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
   const errorId = step.error ? `pipeline-error-${step.code}` : undefined;
   return (
     <li className="group/step">
-      <div className={`flex min-h-10 items-center gap-2 rounded-lg border px-2 py-2 ${meta.className}`}>
+      <div className={cn("relative flex min-h-10 items-center gap-2 rounded-lg border px-2 py-2", meta.className, step.status === "failed" && "hover:border-destructive focus-within:ring-2 focus-within:ring-ring")}>
+        {step.status === "failed" && <Link
+          href={`/historico?${new URLSearchParams({ tab: "orquestracao", failed_source: step.code })}`}
+          className="absolute inset-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label={`Ver falha de ${step.group} · ${step.label} no histórico de coletas`}
+          aria-describedby={errorId}
+          title="Ver falha no histórico e consultar o site manualmente"
+        />}
         <Icon
           size={17}
           weight={step.status === "success" || step.status === "failed" ? "fill" : "duotone"}
@@ -40,6 +48,7 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
           type="button"
           variant="outline"
           size="icon-sm"
+          className="relative z-10"
           aria-label={`Reexecutar somente ${step.label}`}
           aria-describedby={errorId}
           title={canRerun ? `Reexecutar somente ${step.label}` : "Disponível após o fim da coleta"}

@@ -38,11 +38,13 @@ SOURCE_PROFILES = {
         code="pje-tjrn",
         url="https://pje1g.tjrn.jus.br/pje/Painel/painel_usuario/advogado.seam",
         tribunal="TJRN", system="PJe 1º Grau", collector="tjrn", reconcile_missing=True,
+        certificate_button_selector="#kc-pje-office",
     ),
     "pje2g-tjrn": PJeSourceProfile(
         code="pje2g-tjrn",
         url="https://pje2g.tjrn.jus.br/pje/Painel/painel_usuario/advogado.seam",
         tribunal="TJRN", system="PJe 2º Grau", collector="tjrn", reconcile_missing=True,
+        certificate_button_selector="#kc-pje-office",
     ),
     "tre-rn-1g": PJeSourceProfile(
         code="tre-rn-1g",

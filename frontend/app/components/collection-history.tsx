@@ -34,7 +34,13 @@ function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: bo
       <TableCell><span>{run.found} encontrados</span><span className="mx-2 text-border">·</span><span className="text-success">+{run.created}</span><span className="mx-2 text-border">·</span><span>{run.updated} alt.</span><span className="mx-2 text-border">·</span><span>{run.resolved} res.</span></TableCell>
       <TableCell className="text-right">{run.error ? <Button variant="outline" size="sm" className="text-destructive" aria-expanded={expanded} aria-controls={errorId} onClick={onToggle}>Ver erro<CaretDown className={expanded ? "rotate-180" : ""} /></Button> : "—"}</TableCell>
     </TableRow>
-    {run.error && expanded && <TableRow id={errorId} className="bg-destructive/10"><TableCell colSpan={7}><div role="alert" className="flex gap-2 whitespace-pre-wrap text-xs leading-6 text-destructive"><WarningCircle size={16} weight="fill" className="mt-2 shrink-0" />{run.error}</div></TableCell></TableRow>}
+    {run.error && expanded && <TableRow id={errorId} className="bg-destructive/10"><TableCell colSpan={7}>
+      {/* Fill the existing columns without contributing the log's intrinsic width to the table. */}
+      <div role="alert" className="flex w-0 min-w-full gap-2 text-xs leading-6 text-destructive">
+        <WarningCircle size={16} weight="fill" className="mt-2 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere">{run.error}</span>
+      </div>
+    </TableCell></TableRow>}
   </Fragment>;
 }
 

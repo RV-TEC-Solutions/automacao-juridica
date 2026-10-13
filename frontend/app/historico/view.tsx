@@ -18,10 +18,13 @@ import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 import { localCollectionDate } from "../lib/export";
 import type { DjenCommunication, DjenHistory, Expediente, History } from "../lib/types";
+import { getCollectionSite } from "../lib/collection-sites";
+import { useAuth } from "../providers";
 
 export function HistoricoClient() {
   const router = useRouter();
   const search = useSearchParams();
+  const { user } = useAuth();
   const [data, setData] = useState<History | null>(null);
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [publications, setPublications] = useState<DjenHistory | null>(null);
@@ -34,6 +37,19 @@ export function HistoricoClient() {
   const appliedTo = search.get("date_to") || localCollectionDate();
   const tab = search.get("tab") === "orquestracao" ? "orquestracao" : search.get("tab") === "publicacoes" ? "publicacoes" : "expedientes";
   const page = Math.max(1, Number(search.get("page") ?? 1) || 1);
+  useEffect(() => {
+    const source = search.get("failed_source");
+    if (!user || tab !== "orquestracao" || !source) return;
+    const site = getCollectionSite(source);
+    if (site) notify({
+      tone: "warning",
+      message: `A coleta de ${site.name} falhou. Você pode consultar os expedientes manualmente, diretamente no site.`,
+      link: { href: site.href, label: `Clique aqui para acessar ${site.name}` },
+    });
+    const params = new URLSearchParams(search);
+    params.delete("failed_source");
+    router.replace(`/historico?${params}`, { scroll: false });
+  }, [user, tab, search, router, notify]);
   const load = useCallback(async () => {
     try { setData(await api<History>(`history/?${new URLSearchParams({ page: String(page), date_from: appliedFrom, date_to: appliedTo })}`)); setError(""); }
     catch (exception) { const message = exception instanceof Error ? exception.message : "Falha ao carregar o histórico."; setError(message); notify({ message }); }
