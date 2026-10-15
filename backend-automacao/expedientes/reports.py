@@ -151,4 +151,4 @@ def export_expedientes(request):
     return pdf_response(title="RELATÓRIO DE EXPEDIENTES" + (" URGENTES" if urgent else ""),
                         subtitle=description, count=count,
                         filename=f"expedientes-{file_suffix}-{mode}.pdf", records=records,
-                        compact=mode == "sintetico", urgent=urgent)
+                        compact=mode == "sintetico", urgent=urgent, group_by_deadline=True)

@@ -1,7 +1,6 @@
 """Shared date handling and printable PDF layout for collection exports."""
 
 from datetime import date, datetime, timedelta
-from collections import Counter
 from html import escape
 from tempfile import SpooledTemporaryFile
 from zoneinfo import ZoneInfo
@@ -68,25 +67,24 @@ def _register_fonts():
         pdfmetrics.registerFontFamily("Liberation", normal="Liberation", bold="Liberation-Bold")
 
 
-def _compact_records(records, urgent, styles):
+def _deadline(record):
+    value = dict(record[1]).get("Prazo fatal", "")
+    try:
+        return datetime.strptime(value, "%d/%m/%Y %H:%M")
+    except (ValueError, TypeError):
+        return datetime.max
+
+
+def _deadline_heading(record):
+    deadline = _deadline(record)
+    return deadline.strftime("%d/%m/%y") if deadline != datetime.max else "Sem prazo fatal informado"
+
+
+def _compact_records(records, group_by_deadline, styles):
     """Lay out expedition fields as short document entries; preserve exceptional facts."""
     ink = colors.HexColor("#171717")
     rule = colors.HexColor("#cccccc")
     rows = list(records)
-    if urgent:
-        today = timezone.localdate(timezone=LOCAL_TZ)
-
-        def group(record):
-            deadline = dict(record[1]).get("Prazo fatal", "")
-            try:
-                due = datetime.strptime(deadline[:10], "%d/%m/%Y").date()
-            except (ValueError, TypeError):
-                return 3
-            return 0 if due < today else 1 if due == today else 2 if due == today + timedelta(days=1) else 3
-
-        rows.sort(key=lambda record: (group(record), dict(record[1]).get("Prazo fatal", "")))
-        totals = Counter(group(record) for record in rows)
-        groups = ("VENCIDOS", "VENCEM HOJE", "VENCEM AMANHÃ", "DEMAIS URGENTES")
     story = []
     last_group = None
     pages = max(1, (len(rows) + 5) // 6)
@@ -97,10 +95,10 @@ def _compact_records(records, urgent, styles):
     for index, (heading, fields) in enumerate(rows, 1):
         values = dict(fields)
         group_heading = []
-        if urgent:
-            current_group = group((heading, fields))
+        if group_by_deadline:
+            current_group = _deadline_heading((heading, fields))
             if current_group != last_group:
-                group_heading = [Paragraph(f"{groups[current_group]}  ·  {totals[current_group]}", styles["section"]),
+                group_heading = [Paragraph(_text(current_group), styles["section"]),
                                  HRFlowable(width="100%", thickness=.6, color=ink, spaceAfter=5)]
                 last_group = current_group
 
@@ -115,7 +113,13 @@ def _compact_records(records, urgent, styles):
         due = f"Prazo fatal: {deadline}" if deadline and deadline != "Não informado" else (
             f"Prazo fatal não informado ({status})" if status == "Calculado" else f"Prazo: {status or 'não informado'}"
         )
-        operation = line(values.get("Pendência"), values.get("Ação no PJe"), due)
+        operation = line(values.get("Pendência"), values.get("Ação no PJe"))
+        due = _text(due)
+        if deadline and deadline != "Não informado":
+            due = due.replace("Prazo fatal:", "<b>Prazo fatal:</b>", 1)
+        else:
+            due = due.replace("Prazo:", "<b>Prazo:</b>", 1)
+        operation = "  ·  ".join(part for part in (operation, due) if part)
         origin = line(
             f"Expedido: {values['Expedido em']}" if values.get("Expedido em") not in (None, "Não informado") else None,
             f"Prazo: {values['Prazo original']}" if values.get("Prazo original") else None,
@@ -123,6 +127,7 @@ def _compact_records(records, urgent, styles):
             values.get("Fonte") or values.get("Tribunal"),
             f"ID {values['Identificador no PJe']}" if values.get("Identificador no PJe") else None,
         )
+        origin = origin.replace("Prazo:", "<b>Prazo:</b>", 1)
         extras = line(
             f"Destinatário: {values['Destinatário']}" if values.get("Destinatário") else None,
             f"Caixa: {values['Caixa']}" if values.get("Caixa") else None,
@@ -142,9 +147,11 @@ def _compact_records(records, urgent, styles):
     return story
 
 
-def pdf_response(*, title, subtitle, count, filename, records, compact=False, urgent=False):
+def pdf_response(*, title, subtitle, count, filename, records, compact=False, urgent=False, group_by_deadline=False):
     """Build a readable multi-page report from (heading, fields) records."""
     _register_fonts()
+    if group_by_deadline:
+        records = sorted(records, key=_deadline)
     font = "Liberation" if compact else "DejaVu"
     body = ParagraphStyle("body", fontName=font, fontSize=8.5, leading=11 if compact else 13,
                           textColor=colors.HexColor("#171717" if compact else "#243042"), spaceAfter=1 if compact else 5)
@@ -160,10 +167,17 @@ def pdf_response(*, title, subtitle, count, filename, records, compact=False, ur
         styles = {"body": body, "small": small,
                   "entry": ParagraphStyle("entry", parent=body, fontName="Liberation-Bold", fontSize=9, leading=12, spaceAfter=2),
                   "section": ParagraphStyle("section", parent=heading, fontSize=10, spaceBefore=9, spaceAfter=3)}
-        story.extend(_compact_records(records, urgent, styles))
+        story.extend(_compact_records(records, group_by_deadline, styles))
     else:
+        last_group = None
         for index, (record_title, fields) in enumerate(records, 1):
-            story.append(Paragraph(f"{index}. {_text(record_title)}", heading))
+            entry_heading = Paragraph(f"{index}. {_text(record_title)}", heading)
+            current_group = _deadline_heading((record_title, fields)) if group_by_deadline else None
+            if current_group != last_group:
+                story.append(KeepTogether([Paragraph(_text(current_group), heading), entry_heading]))
+                last_group = current_group
+            else:
+                story.append(entry_heading)
             for label, value in fields:
                 content = _text(value)
                 if label == "Link para o inteiro teor" and isinstance(value, str) and value.startswith(("https://", "http://")):

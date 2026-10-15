@@ -192,6 +192,7 @@ class ApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 2)
+        self.assertTrue(create_pdf.call_args.kwargs["group_by_deadline"])
         self.assertEqual(len(response.data["records"]), 2)
         first = next(fields for title, fields in response.data["records"] if "0800000-" in title)
         self.assertTrue(any(label.startswith("Prazo original · ") and "3 dias → 5 dias" in value for label, value in first))
