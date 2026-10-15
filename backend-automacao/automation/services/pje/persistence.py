@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from expedientes.models import Expediente, ExpedienteEvent, Processo
+from expedientes.clientes import cliente_do_destinatario
 
 
 PROCESS_FIELDS = ("tribunal", "classe", "assunto", "partes_texto", "unidade_judiciaria")
@@ -52,6 +53,7 @@ def _registrar_mudanca(changes, prefixo, campo, anterior, atual):
     return False
 
 
+@transaction.atomic
 def salvar_expediente(dado, *, source, run=None, seen_at=None):
     seen_at = seen_at or timezone.now()
     identificador_pje = str(dado["identificador_pje"])
@@ -94,6 +96,10 @@ def salvar_expediente(dado, *, source, run=None, seen_at=None):
         if not created:
             _registrar_mudanca(changes, "", campo, anterior, atual)
         setattr(expediente, campo, atual)
+
+    # O vínculo é derivado do destinatário; sua reversão usa o mesmo dado
+    # original, inclusive para eventos anteriores ao cadastro de clientes.
+    expediente.cliente = cliente_do_destinatario(expediente.destinatario)
 
     if not created and not expediente.ativo:
         _registrar_mudanca(changes, "", "ativo", False, True)

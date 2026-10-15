@@ -17,7 +17,7 @@ from automation.models import AutomationRun, Notice, UserProfile
 from automation.pipeline import collection_pipeline_payload
 from automation.time_saved import time_saved_summary
 from automation.serializers import NoticeSerializer
-from .models import Expediente, ExpedienteEvent
+from .models import Cliente, Expediente, ExpedienteEvent
 from .serializers import EventSerializer, ExpedienteSerializer
 
 
@@ -63,8 +63,18 @@ def expediente_queryset(params):
             | Q(processo__partes_texto__icontains=query)
             | Q(processo__assunto__icontains=query)
         )
-    if source := params.get("source"):
-        queryset = queryset.filter(source__code=source)
+    sources = params.getlist("source") if hasattr(params, "getlist") else [params.get("source")]
+    if sources := [source for source in sources if source]:
+        queryset = queryset.filter(source__code__in=sources)
+    clients = params.getlist("client") if hasattr(params, "getlist") else [params.get("client")]
+    if clients := [client for client in clients if client]:
+        try:
+            client_ids = [int(client) for client in clients]
+        except (TypeError, ValueError) as exc:
+            raise ParseError("Informe identificadores de clientes válidos.") from exc
+        if any(client_id <= 0 or client_id > 9223372036854775807 for client_id in client_ids):
+            raise ParseError("Informe identificadores de clientes válidos.")
+        queryset = queryset.filter(cliente_id__in=client_ids)
     if pending := params.get("pending_type"):
         queryset = queryset.filter(tipo_pendencia=pending)
     if read := params.get("read"):
@@ -89,6 +99,22 @@ def expediente_queryset(params):
         event_filters["created_at__lt"] = datetime.combine(end_exclusive, datetime.min.time(), tzinfo=LOCAL_TZ)
     if event_filters:
         queryset = queryset.filter(pk__in=ExpedienteEvent.objects.filter(**event_filters).values("expediente_id"))
+
+    try:
+        deadline_from = date.fromisoformat(params["deadline_from"]) if params.get("deadline_from") else None
+        deadline_to = date.fromisoformat(params["deadline_to"]) if params.get("deadline_to") else None
+    except ValueError as exc:
+        raise ParseError("Informe datas de prazo válidas no formato AAAA-MM-DD.") from exc
+    if deadline_from and deadline_to and deadline_from > deadline_to:
+        raise ParseError("A data inicial do prazo não pode ser posterior à data final do prazo.")
+    if deadline_from:
+        queryset = queryset.filter(prazo_fatal__gte=datetime.combine(deadline_from, datetime.min.time(), tzinfo=LOCAL_TZ))
+    if deadline_to:
+        try:
+            deadline_end = deadline_to + timedelta(days=1)
+        except OverflowError as exc:
+            raise ParseError("Data final do prazo inválida.") from exc
+        queryset = queryset.filter(prazo_fatal__lt=datetime.combine(deadline_end, datetime.min.time(), tzinfo=LOCAL_TZ))
 
     now = timezone.now()
     urgent_limit = now + timedelta(hours=72)
@@ -118,6 +144,12 @@ def expediente_queryset(params):
         "expedition": "-data_expedicao", "process": "processo__numero",
     }
     return queryset.order_by(orderings.get(params.get("ordering", "recent"), "-latest_event_at")).distinct()
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def clientes(request):
+    return Response(list(Cliente.objects.values("id", "nome")))
 
 
 @api_view(["POST"])

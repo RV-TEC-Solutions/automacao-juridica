@@ -107,6 +107,10 @@ class DjenCommunication(models.Model):
 
 
 class DjenRecipient(models.Model):
+    cliente = models.ForeignKey(
+        "expedientes.Cliente", on_delete=models.PROTECT,
+        related_name="djen_recipients", null=True, blank=True,
+    )
     communication = models.ForeignKey(
         DjenCommunication, on_delete=models.CASCADE, related_name="recipients"
     )

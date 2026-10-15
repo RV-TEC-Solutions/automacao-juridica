@@ -2,7 +2,7 @@ from rest_framework.routers import DefaultRouter
 
 from django.urls import path
 
-from .views import ExpedienteViewSet, dashboard, history, mark_read, statistics
+from .views import ExpedienteViewSet, clientes, dashboard, history, mark_read, statistics
 from .reports import export_expedientes
 
 router = DefaultRouter()
@@ -14,6 +14,7 @@ router.register(
 )
 
 urlpatterns = [
+    path("expedientes/clientes/", clientes, name="expedientes-clientes"),
     path("dashboard/", dashboard, name="dashboard"),
     path("statistics/", statistics, name="statistics"),
     path("history/", history, name="history"),

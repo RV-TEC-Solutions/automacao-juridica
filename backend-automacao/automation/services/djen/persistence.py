@@ -4,6 +4,7 @@ from django.db import transaction
 
 from automation.models import DjenAttorney, DjenCommunication, DjenRecipient
 from expedientes.models import Processo
+from expedientes.clientes import cliente_do_destinatario
 
 
 FIELDS = {
@@ -70,26 +71,39 @@ def save_communications(records, *, source, run=None):
                         changed = True
                 if changed:
                     communication.save()
-            if created or changed:
+            recipients = [
+                (str(item["nome"]), str(item.get("polo") or ""))
+                for item in record.get("destinatarios") or [] if item.get("nome")
+            ]
+            attorneys = [
+                (str(person["nome"]), str(person.get("numero_oab") or ""), str(person.get("uf_oab") or "")[:2])
+                for item in record.get("destinatarioadvogados") or []
+                if (person := item.get("advogado") or {}).get("nome")
+            ]
+            people_changed = (
+                list(communication.recipients.values_list("name", "pole")) != recipients
+                or list(communication.attorneys.values_list("name", "oab_number", "oab_state")) != attorneys
+            )
+            if created or changed or people_changed:
+                if people_changed and not created and not changed:
+                    communication.save(update_fields=("updated_at",))
+                changed = changed or people_changed
                 communication.recipients.all().delete()
                 communication.attorneys.all().delete()
                 DjenRecipient.objects.bulk_create([
                     DjenRecipient(
                         communication=communication,
-                        name=str(item.get("nome") or ""),
-                        pole=str(item.get("polo") or ""),
+                        name=name, pole=pole,
+                        cliente=cliente_do_destinatario(name),
                     )
-                    for item in record.get("destinatarios") or [] if item.get("nome")
+                    for name, pole in recipients
                 ])
                 DjenAttorney.objects.bulk_create([
                     DjenAttorney(
                         communication=communication,
-                        name=str((item.get("advogado") or {}).get("nome") or ""),
-                        oab_number=str((item.get("advogado") or {}).get("numero_oab") or ""),
-                        oab_state=str((item.get("advogado") or {}).get("uf_oab") or "")[:2],
+                        name=name, oab_number=number, oab_state=state,
                     )
-                    for item in record.get("destinatarioadvogados") or []
-                    if (item.get("advogado") or {}).get("nome")
+                    for name, number, state in attorneys
                 ])
             created_count += int(created)
             updated_count += int(not created and changed)

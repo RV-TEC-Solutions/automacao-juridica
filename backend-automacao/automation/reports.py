@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from .reporting import collection_range, local_date, local_datetime, pdf_response
 from .views import filtered_djen_queryset
+from expedientes.models import Cliente
 
 
 def _record(item):
@@ -33,27 +34,38 @@ def export_publications(request):
     if scope not in ("list", "overview", "history"):
         return Response({"detail": "Escopo inválido."}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        start, end, _, _ = collection_range(
-            request.query_params, history=scope == "history", default_today=scope != "history",
-            from_key="collected_from", to_key="collected_to",
-        )
-        if scope == "overview":
-            params = {"collected_from": start.isoformat(), "collected_to": end.isoformat()}
-        elif scope == "history":
-            params = {"collected_from": start.isoformat(), "collected_to": end.isoformat()}
+        if scope == "list":
+            params = request.query_params
+            queryset = filtered_djen_queryset(params)
+            start = params.get("collected_from") or ""
+            end = params.get("collected_to") or ""
         else:
-            params = request.query_params.copy()
-            params["collected_from"] = start.isoformat()
-            params["collected_to"] = end.isoformat()
-        queryset = filtered_djen_queryset(params).order_by("-collected_at", "-id")
-    except ValueError as exc:
+            first, last, _, _ = collection_range(
+                request.query_params, history=scope == "history", default_today=scope != "history",
+                from_key="collected_from", to_key="collected_to",
+            )
+            start, end = first.isoformat(), last.isoformat()
+            params = {"collected_from": start, "collected_to": end}
+            queryset = filtered_djen_queryset(params)
+    except (ValueError, OverflowError) as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     count = queryset.count()
     if not count:
         return Response({"detail": "Nenhuma publicação encontrada para a exportação."}, status=status.HTTP_404_NOT_FOUND)
-    description = f"Publicações Processuais · coletas de {start:%d/%m/%Y} a {end:%d/%m/%Y}"
-    if scope == "list" and request.query_params.get("q"):
-        description += f" · busca: {request.query_params['q']}"
+    description = "Publicações Processuais"
+    if start or end:
+        description += f" · coleta: {start or 'início'} a {end or 'hoje'}"
+    if scope == "list":
+        for key, label in (("q", "busca"), ("tipo_comunicacao", "comunicação"), ("read", "leitura"),
+                           ("date_from", "disponibilização de"), ("date_to", "disponibilização até"), ("ordering", "ordenação")):
+            if value := request.query_params.get(key):
+                description += f" · {label}: {value}"
+        if tribunals := request.query_params.getlist("tribunal"):
+            description += " · tribunais: " + ", ".join(tribunals)
+        if states := [value for value in request.query_params.getlist("uf") if value]:
+            description += " · UFs: " + ", ".join(value.strip().upper() for value in states)
+        if clients := [value for value in request.query_params.getlist("client") if value]:
+            description += " · clientes: " + ", ".join(Cliente.objects.filter(pk__in=clients).values_list("nome", flat=True))
     records = (_record(item) for item in queryset.iterator(chunk_size=200))
     return pdf_response(title="Publicações Processuais", subtitle=description, count=count,
-                        filename=f"publicacoes-processuais-{start:%Y%m%d}-{end:%Y%m%d}.pdf", records=records)
+                        filename=f"publicacoes-processuais-{start or 'inicio'}-{end or 'todos'}.pdf", records=records)

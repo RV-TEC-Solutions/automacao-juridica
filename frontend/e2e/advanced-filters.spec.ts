@@ -1,0 +1,71 @@
+import { expect, test } from "@playwright/test";
+
+test("searchable filters preserve sources and clients on submission", async ({ page }) => {
+  await page.route("**/api/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("auth/me/")) return route.fulfill({ json: { id: 1, username: "operador", display_name: "Operador", theme: "light", collection_time: "06:00" } });
+    if (path.endsWith("expedientes/clientes/")) return route.fulfill({ json: [{ id: 1, nome: "Caixa Econômica Federal" }, { id: 2, nome: "Município de Natal" }] });
+    return route.fulfill({ json: { count: 0, results: [] } });
+  });
+  await page.goto("/expedientes");
+  await page.getByText("Filtros avançados", { exact: true }).click();
+  await page.getByRole("button", { name: "Fontes Todas as fontes" }).click();
+  await expect(page.getByRole("checkbox")).toHaveCount(13);
+  await expect(page.getByRole("textbox", { name: "Buscar fonte ou tribunal" })).toBeFocused();
+  await page.getByRole("textbox", { name: "Buscar fonte ou tribunal" }).fill("TRF5");
+  await expect(page.getByRole("checkbox")).toHaveCount(5);
+  await page.getByRole("button", { name: "Selecionar resultados" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Fontes 5 selecionados" })).toBeFocused();
+  await page.getByRole("button", { name: "Clientes Todos os clientes" }).click();
+  await page.getByRole("textbox", { name: "Buscar cliente pelo nome" }).fill("economica");
+  await page.getByRole("checkbox", { name: "Caixa Econômica Federal" }).check();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Buscar", exact: true }).click();
+  await expect(page).toHaveURL(/client=1/);
+  expect(new URL(page.url()).searchParams.getAll("source")).toHaveLength(5);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("DJEN advanced filters support multiple recipients, URL persistence and keyboard selection", async ({ page }) => {
+  let options = { clientes: [{ id: 1, nome: "Caixa Econômica Federal" }, { id: 2, nome: "Outro destinatário" }], tribunais: ["TJRN", "TRF5"], tipos_comunicacao: ["Intimação", "Citação"] };
+  await page.route("**/api/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("auth/me/")) return route.fulfill({ json: { id: 1, username: "operador", display_name: "Operador", theme: "light", collection_time: "06:00" } });
+    if (path.endsWith("djen/filters/")) return route.fulfill({ json: options });
+    return route.fulfill({ json: { count: 40, results: [] } });
+  });
+  await page.goto("/djen?collected_from=&collected_to=");
+  await page.getByText("Filtros avançados", { exact: false }).click();
+  await page.getByRole("button", { name: "Clientes Todos os clientes" }).click();
+  await expect(page.getByRole("textbox", { name: "Buscar cliente pelo nome" })).toBeFocused();
+  await page.getByRole("textbox", { name: "Buscar cliente pelo nome" }).fill("economica");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("checkbox", { name: "Caixa Econômica Federal" })).toBeChecked();
+  await page.getByRole("textbox", { name: "Buscar cliente pelo nome" }).fill("");
+  await page.getByRole("checkbox", { name: "Outro destinatário" }).check();
+  options = { ...options, clientes: [...options.clientes, { id: 3, nome: "Novo destinatário" }] };
+  await page.evaluate(() => window.dispatchEvent(new Event("collections-updated")));
+  await expect(page.getByRole("checkbox", { name: "Novo destinatário" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Caixa Econômica Federal" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Tribunais Todos os tribunais" }).click();
+  await page.getByRole("button", { name: "Selecionar todos" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Situação de leitura").selectOption("unread");
+  await page.getByRole("button", { name: "Buscar", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.getAll("client")).toEqual(["1", "2"]);
+  expect(new URL(page.url()).searchParams.getAll("tribunal")).toEqual(["TJRN", "TRF5"]);
+  await page.getByRole("button", { name: /Próxima/ }).click();
+  await expect(page).toHaveURL(/page=2/);
+  expect(new URL(page.url()).searchParams.getAll("client")).toEqual(["1", "2"]);
+  await page.reload();
+  await page.getByText("Filtros avançados", { exact: false }).click();
+  await page.getByRole("button", { name: "Clientes 2 selecionados" }).click();
+  await expect(page.getByRole("checkbox", { name: "Outro destinatário" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.getAll("client")).toEqual([]);
+});

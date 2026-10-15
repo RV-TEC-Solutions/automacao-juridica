@@ -1,6 +1,17 @@
 from django.db import models
 
 
+class Cliente(models.Model):
+    nome = models.CharField(max_length=500)
+    chave_normalizada = models.CharField(max_length=500, unique=True)
+
+    class Meta:
+        ordering = ("chave_normalizada", "id")
+
+    def __str__(self):
+        return self.nome
+
+
 class Processo(models.Model):
     numero = models.CharField(
         max_length=30,
@@ -110,6 +121,11 @@ class Expediente(models.Model):
     destinatario = models.CharField(
         max_length=255,
         blank=True,
+    )
+
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.PROTECT, related_name="expedientes",
+        null=True, blank=True,
     )
 
     # Ex.: "Intimação", "Citação".

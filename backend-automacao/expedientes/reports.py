@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from automation.reporting import LOCAL_TZ, collection_range, local_datetime, pdf_response
-from .models import ExpedienteEvent
+from .models import Cliente, ExpedienteEvent
 from .views import expediente_queryset
 
 
@@ -135,6 +135,10 @@ def export_expedientes(request):
             ) if request.query_params.get(key)]
             if active_filters:
                 description += " · " + ", ".join(f"{label}: {value}" for label, value in active_filters)
+            client_ids = [value for value in request.query_params.getlist("client") if value]
+            if client_ids:
+                names = Cliente.objects.filter(pk__in=client_ids).values_list("nome", flat=True)
+                description += " · clientes: " + ", ".join(names)
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 

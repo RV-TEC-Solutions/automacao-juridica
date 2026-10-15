@@ -7,6 +7,32 @@ com instruções passo a passo, índice e capturas com destaques vermelhos,
 ou baixe a [versão em PDF](docs/manual-do-usuario/RYV-Expedientes-Manual-do-Usuario.pdf).
 As capturas utilizam dados fictícios de demonstração.
 
+### Restrição de reexecução (reload)
+
+Só clique no reload de uma fonte após o término de toda a pipeline.
+Reexecute **uma fonte por vez** e aguarde sua conclusão antes de reexecutar
+outra. Os botões ficam bloqueados durante esse processamento, e a API rejeita
+reexecuções concorrentes para evitar conflitos na coleta.
+
+## Filtro de clientes nos expedientes
+
+Em **Expedientes → Filtros avançados → Clientes**, busque pelo nome, marque
+um ou mais clientes e clique em **Buscar**. Nenhuma seleção inclui todos.
+A seleção permanece na paginação e também se aplica à exportação em PDF.
+**Limpar clientes** remove somente essa seleção; **Limpar filtros** remove todos.
+
+O cadastro usa o destinatário original coletado pelo PJe e é atualizado a cada
+coleta, inclusive a diária das 06h. Variações de maiúsculas, espaços e acentos
+compartilham o cadastro; siglas e nomes completos permanecem separados.
+Clientes de expedientes resolvidos continuam disponíveis. O DJEN não participa
+desse cadastro.
+
+Na atualização, execute `python manage.py migrate` no ambiente do backend.
+As migrações cadastram também os destinatários dos expedientes existentes.
+A API autenticada `GET /api/expedientes/clientes/` retorna uma lista de
+`{id, nome}`. A consulta e o PDF aceitam IDs repetidos, como
+`/api/expedientes/?client=1&client=2`.
+
 ## Guia técnico
 
 Aplicação para acompanhar expedientes do PJe e publicações do Diário de Justiça

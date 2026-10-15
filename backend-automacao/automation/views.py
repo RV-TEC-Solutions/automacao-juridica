@@ -19,7 +19,7 @@ from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, 
 from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
 from .services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
-from expedientes.models import Expediente, ExpedienteEvent, Processo
+from expedientes.models import Cliente, Expediente, ExpedienteEvent, Processo
 
 
 LOCAL_TZ = ZoneInfo("America/Fortaleza")
@@ -223,6 +223,10 @@ def _restore_event(event, window_start):
             )
 
     if expediente_values:
+        if "destinatario" in expediente_values:
+            from expedientes.clientes import cliente_do_destinatario
+            cliente = cliente_do_destinatario(expediente_values["destinatario"])
+            expediente_values["cliente_id"] = cliente.pk if cliente else None
         Expediente.objects.filter(pk=event.expediente_id).update(**expediente_values)
 
 
@@ -488,32 +492,75 @@ def _djen_queryset():
     )
 
 
+def _djen_values(params, key):
+    values = params.getlist(key) if hasattr(params, "getlist") else [params.get(key)]
+    return [value for value in values if value]
+
+
 def filtered_djen_queryset(params):
     queryset = _djen_queryset()
-    query = params.get("q", "").strip()
-    tribunal = params.get("tribunal", "").strip()
-    date_from = params.get("date_from", "").strip()
-    date_to = params.get("date_to", "").strip()
-    if date_from:
-        queryset = queryset.filter(data_disponibilizacao__gte=date_from)
-    if date_to:
-        queryset = queryset.filter(data_disponibilizacao__lte=date_to)
-    if collected_from := params.get("collected_from", "").strip():
-        queryset = queryset.filter(collected_at__gte=datetime.combine(date.fromisoformat(collected_from), datetime.min.time(), tzinfo=LOCAL_TZ))
-    if collected_to := params.get("collected_to", "").strip():
-        queryset = queryset.filter(collected_at__lt=datetime.combine(date.fromisoformat(collected_to) + timedelta(days=1), datetime.min.time(), tzinfo=LOCAL_TZ))
-    if query:
+    for first_key, last_key, field, is_datetime in (
+        ("date_from", "date_to", "data_disponibilizacao", False),
+        ("collected_from", "collected_to", "collected_at", True),
+    ):
+        try:
+            first = date.fromisoformat(params[first_key]) if params.get(first_key) else None
+            last = date.fromisoformat(params[last_key]) if params.get(last_key) else None
+            if first and last and first > last:
+                raise ValueError("A data inicial não pode ser posterior à data final.")
+            if first:
+                value = datetime.combine(first, datetime.min.time(), tzinfo=LOCAL_TZ) if is_datetime else first
+                queryset = queryset.filter(**{f"{field}__gte": value})
+            if last:
+                value = datetime.combine(last + timedelta(days=1), datetime.min.time(), tzinfo=LOCAL_TZ) if is_datetime else last
+                queryset = queryset.filter(**{f"{field}__lt" if is_datetime else f"{field}__lte": value})
+        except (ValueError, OverflowError) as exc:
+            raise ValueError("Informe um intervalo de datas válido, com data final igual ou posterior à inicial.") from exc
+    if query := params.get("q", "").strip():
         queryset = queryset.filter(
-            Q(processo__numero__icontains=query)
-            | Q(texto__icontains=query)
-            | Q(recipients__name__icontains=query)
-            | Q(attorneys__name__icontains=query)
-        ).distinct()
-    if tribunal:
-        queryset = queryset.filter(tribunal=tribunal)
-    if params.get("read") == "unread":
-        queryset = queryset.filter(read_at__isnull=True)
-    return queryset
+            Q(processo__numero__icontains=query) | Q(texto__icontains=query)
+            | Q(recipients__name__icontains=query) | Q(attorneys__name__icontains=query)
+        )
+    if tribunals := _djen_values(params, "tribunal"):
+        queryset = queryset.filter(tribunal__in=tribunals)
+    if states := _djen_values(params, "uf"):
+        from .services.djen.uf import UFS, uf_condition
+        states = [value.strip().upper() for value in states]
+        if any(value not in UFS for value in states):
+            raise ValueError("Informe unidades federativas válidas (siglas dos estados ou DF).")
+        queryset = queryset.filter(uf_condition(states))
+    if clients := _djen_values(params, "client"):
+        try:
+            ids = [int(value) for value in clients]
+            if any(value <= 0 or value > 9223372036854775807 for value in ids):
+                raise ValueError
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Informe identificadores de clientes válidos.") from exc
+        queryset = queryset.filter(recipients__cliente_id__in=ids)
+    if kind := params.get("tipo_comunicacao"):
+        queryset = queryset.filter(tipo_comunicacao=kind)
+    if read := params.get("read"):
+        if read not in ("unread", "read"):
+            raise ValueError("Situação de leitura inválida.")
+        queryset = queryset.filter(read_at__isnull=read == "unread")
+    orderings = {
+        "recent": ("-collected_at", "-id"),
+        "publication": ("-data_disponibilizacao", "-numero_comunicacao", "-id"),
+        "oldest": ("data_disponibilizacao", "numero_comunicacao", "id"),
+        "process": ("processo__numero", "-id"),
+    }
+    return queryset.order_by(*orderings.get(params.get("ordering"), orderings["recent"])).distinct()
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def djen_filters(request):
+    publications = DjenCommunication.objects.all()
+    return Response({
+        "clientes": list(Cliente.objects.filter(djen_recipients__isnull=False).distinct().values("id", "nome")),
+        "tribunais": list(publications.exclude(tribunal="").order_by("tribunal").values_list("tribunal", flat=True).distinct()),
+        "tipos_comunicacao": list(publications.exclude(tipo_comunicacao="").order_by("tipo_comunicacao").values_list("tipo_comunicacao", flat=True).distinct()),
+    })
 
 
 @api_view(["GET"])
@@ -521,8 +568,8 @@ def filtered_djen_queryset(params):
 def djen_communications(request):
     try:
         queryset = filtered_djen_queryset(request.query_params)
-    except (ValueError, OverflowError):
-        return Response({"detail": "Data de coleta inválida."}, status=status.HTTP_400_BAD_REQUEST)
+    except (ValueError, OverflowError) as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     try:
         page = max(int(request.query_params.get("page", 1)), 1)
     except ValueError:

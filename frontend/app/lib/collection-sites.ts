@@ -21,3 +21,7 @@ const sites = new Map<string, { name: string; href: string }>([
 export function getCollectionSite(code: string) {
   return sites.get(code);
 }
+
+export function getCollectionSourceOptions() {
+  return [...sites].map(([value, site]) => ({ value, label: site.name }));
+}
