@@ -2,13 +2,13 @@
 
 import { CaretDown, Clock, WarningCircle } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, formatDateTime } from "../lib/api";
+import { formatDateTime } from "../lib/api";
 import type { CollectionHistory, CollectionRun } from "../lib/types";
-import { EmptyState, HistoryDayHeader, LoadingRows } from "./ui";
-import { useNotifications } from "./notifications";
+import { EmptyState, HistoryDayHeader, ListLoading, LoadingRows } from "./ui";
+import { useLiveList } from "../hooks/use-live-list";
 
 const statusVariant: Record<CollectionRun["status"], "outline" | "warning" | "success" | "destructive"> = {
   pending: "outline", running: "warning", success: "success", failed: "destructive",
@@ -45,19 +45,12 @@ function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: bo
 }
 
 export function CollectionHistoryPanel() {
-  const [data, setData] = useState<CollectionHistory | null>(null);
-  const { notify } = useNotifications();
-  const [error, setError] = useState("");
   const [expandedRun, setExpandedRun] = useState<number | null>(null);
-  const load = useCallback(async () => {
-    try { setData(await api<CollectionHistory>("automation/history/")); setError(""); }
-    catch (exception) { const message = exception instanceof Error ? exception.message : "Falha ao carregar o relatório de coletas."; setError(message); notify({ message }); }
-  }, [notify]);
-
-  useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
+  const { data, loading, error } = useLiveList<CollectionHistory>("automation/history/");
   if (!data && !error) return <LoadingRows />;
 
   return <div className="space-y-8">
+    <ListLoading loading={loading} error={error} />
 
     {data?.days.map((day) => <section key={day.date} aria-labelledby={`collection-day-${day.date}`}>
       <HistoryDayHeader date={day.date} label={`${day.runs.length} fonte${day.runs.length === 1 ? "" : "s"}`} icon={<Clock size={18} aria-hidden="true" />} id={`collection-day-${day.date}`} />

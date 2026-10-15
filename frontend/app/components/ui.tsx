@@ -19,7 +19,14 @@ export function PageTitle({ title, description, actions }: { title: string; desc
   return <header className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{title}</h1>{description && <p className="mt-1 max-w-2xl text-sm leading-5 text-muted-foreground">{description}</p>}</div>{actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}</header>;
 }
 
-export function LoadingRows() { return <Panel innerClassName="space-y-2 p-4">{[1, 2, 3].map((row) => <Skeleton className="h-16 w-full" key={row} />)}</Panel>; }
+export function ListLoading({ loading, error }: { loading: boolean; error?: string }) {
+  return <div className="mb-2 min-h-6" aria-busy={loading}>
+    {loading && <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground"><span aria-hidden="true" className="size-3 motion-safe:animate-spin rounded-full border-2 border-muted border-t-primary" />Atualizando lista…</div>}
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+  </div>;
+}
+
+export function LoadingRows() { return <Panel innerClassName="space-y-2 p-4"><div role="status" className="text-xs text-muted-foreground">Carregando informações…</div>{[1, 2, 3].map((row) => <Skeleton className="h-16 w-full" key={row} />)}</Panel>; }
 
 export function EmptyState({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
   return <div className="px-4 py-10 text-center"><div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl border border-border bg-muted text-muted-foreground">{icon}</div><h3 className="mb-2 text-base font-extrabold text-foreground">{title}</h3><p className="mx-auto mb-0 max-w-sm text-xs text-muted-foreground sm:text-sm">{description}</p></div>;

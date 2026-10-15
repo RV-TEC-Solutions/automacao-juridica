@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarBlank, FolderSimple, Newspaper } from "@phosphor-icons/react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,9 @@ import { DjenList } from "../components/djen-list";
 import { DjenDrawer } from "../components/djen-drawer";
 import { CollectionHistoryPanel } from "../components/collection-history";
 import { PdfExportButton } from "../components/pdf-export-button";
-import { EmptyState, HistoryDayHeader, LoadingRows, PageTitle, Pagination } from "../components/ui";
+import { EmptyState, HistoryDayHeader, ListLoading, LoadingRows, PageTitle, Pagination } from "../components/ui";
 import { useNotifications } from "../components/notifications";
-import { api } from "../lib/api";
+import { useLiveList } from "../hooks/use-live-list";
 import { localCollectionDate } from "../lib/export";
 import type { DjenCommunication, DjenHistory, Expediente, History } from "../lib/types";
 import { getCollectionSite } from "../lib/collection-sites";
@@ -25,12 +25,9 @@ export function HistoricoClient() {
   const router = useRouter();
   const search = useSearchParams();
   const { user } = useAuth();
-  const [data, setData] = useState<History | null>(null);
   const [selected, setSelected] = useState<Expediente | null>(null);
-  const [publications, setPublications] = useState<DjenHistory | null>(null);
   const [selectedPublication, setSelectedPublication] = useState<DjenCommunication | null>(null);
   const { notify } = useNotifications();
-  const [error, setError] = useState("");
   const [dateFrom, setDateFrom] = useState(() => search.get("date_from") || localCollectionDate(-29));
   const [dateTo, setDateTo] = useState(() => search.get("date_to") || localCollectionDate());
   const appliedFrom = search.get("date_from") || localCollectionDate(-29);
@@ -50,24 +47,10 @@ export function HistoricoClient() {
     params.delete("failed_source");
     router.replace(`/historico?${params}`, { scroll: false });
   }, [user, tab, search, router, notify]);
-  const load = useCallback(async () => {
-    try { setData(await api<History>(`history/?${new URLSearchParams({ page: String(page), date_from: appliedFrom, date_to: appliedTo })}`)); setError(""); }
-    catch (exception) { const message = exception instanceof Error ? exception.message : "Falha ao carregar o histórico."; setError(message); notify({ message }); }
-  }, [page, appliedFrom, appliedTo, notify]);
-  useEffect(() => {
-    if (tab !== "expedientes") return;
-    queueMicrotask(() => { void load(); });
-  }, [load, tab]);
-  useEffect(() => {
-    if (tab !== "publicacoes") return;
-    queueMicrotask(() => {
-      void api<DjenHistory>(`djen/history/?${new URLSearchParams({ page: String(page), collected_from: appliedFrom, collected_to: appliedTo })}`).then((result) => { setPublications(result); setError(""); }).catch((exception) => {
-        const message = exception instanceof Error ? exception.message : "Falha ao carregar publicações.";
-        setError(message);
-        notify({ message });
-      });
-    });
-  }, [page, tab, appliedFrom, appliedTo, notify]);
+  const historyParams = new URLSearchParams({ page: String(page), date_from: appliedFrom, date_to: appliedTo });
+  const publicationParams = new URLSearchParams({ page: String(page), collected_from: appliedFrom, collected_to: appliedTo });
+  const { data, setData, reload: reloadHistory, loading: historyLoading, error: historyError } = useLiveList<History>(`history/?${historyParams}`, tab === "expedientes");
+  const { data: publications, setData: setPublications, reload: reloadPublications, loading: publicationsLoading, error: publicationsError } = useLiveList<DjenHistory>(`djen/history/?${publicationParams}`, tab === "publicacoes");
 
   const applyDates = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -79,7 +62,10 @@ export function HistoricoClient() {
     }
     const params = new URLSearchParams(search);
     params.set("date_from", dateFrom); params.set("date_to", dateTo); params.delete("page");
-    setData(null); setPublications(null);
+    if (dateFrom === appliedFrom && dateTo === appliedTo && page === 1) {
+      if (tab === "expedientes") void reloadHistory();
+      if (tab === "publicacoes") void reloadPublications();
+    }
     router.replace(`/historico?${params}`, { scroll: false });
   };
 
@@ -125,7 +111,8 @@ export function HistoricoClient() {
       <TabsContent value="orquestracao"><CollectionHistoryPanel /></TabsContent>
       <TabsContent value="publicacoes">
         <div className="mb-4 flex justify-start"><PdfExportButton path={`djen/communications/export.pdf/?${new URLSearchParams({ scope: "history", collected_from: appliedFrom, collected_to: appliedTo })}`} count={publications?.count} disabled={dateFrom !== appliedFrom || dateTo !== appliedTo} label="Exportar histórico de publicações em PDF" /></div>
-        {!publications && !error && <LoadingRows />}
+        <ListLoading loading={publicationsLoading} error={publicationsError} />
+        {!publications && !publicationsError && <LoadingRows />}
         {publications && <div className="space-y-8">
           {publications.days.map((day) => <section key={day.date} aria-labelledby={`publication-day-${day.date}`}>
             <HistoryDayHeader date={day.date} label={`${day.items.length} publicação${day.items.length === 1 ? "" : "ões"}`} icon={<Newspaper size={18} weight="duotone" aria-hidden="true" />} id={`publication-day-${day.date}`} />
@@ -143,7 +130,8 @@ export function HistoricoClient() {
 
     <div className="mb-4 flex justify-start"><PdfExportButton path={`expedientes/export.pdf/?${new URLSearchParams({ scope: "history", date_from: appliedFrom, date_to: appliedTo })}`} count={data?.count} disabled={dateFrom !== appliedFrom || dateTo !== appliedTo} label="Exportar histórico de expedientes em PDF" analytical /></div>
 
-    {!data && !error && <LoadingRows />}
+    <ListLoading loading={historyLoading} error={historyError} />
+    {!data && !historyError && <LoadingRows />}
     {data && <div className="space-y-8">{data.days.map((day) => {
       return <section key={day.date} aria-labelledby={`history-day-${day.date}`}>
         <HistoryDayHeader date={day.date} label={`${day.new_count} expediente${day.new_count === 1 ? "" : "s"}`} icon={<CalendarBlank size={18} weight="duotone" aria-hidden="true" />} id={`history-day-${day.date}`} />

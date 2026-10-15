@@ -12,9 +12,10 @@ import { ExpedienteList } from "./components/expediente-list";
 import { DjenDrawer } from "./components/djen-drawer";
 import { DjenList } from "./components/djen-list";
 import { PdfExportButton } from "./components/pdf-export-button";
-import { EmptyState, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
+import { EmptyState, ListLoading, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNotifications } from "./components/notifications";
+import { useLiveList } from "./hooks/use-live-list";
 import { api } from "./lib/api";
 import type { Dashboard, DjenCommunication, DjenCommunicationPage, Expediente, ExpedientePage } from "./lib/types";
 
@@ -67,9 +68,7 @@ export default function Home() {
 
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
   const [listPage, setListPage] = useState(1);
-  const [expedientes, setExpedientes] = useState<ExpedientePage | null>(null);
   const [todayTab, setTodayTab] = useState("expedientes");
-  const [publications, setPublications] = useState<DjenCommunicationPage | null>(null);
   const [publicationPage, setPublicationPage] = useState(1);
   const [selectedPublication, setSelectedPublication] = useState<DjenCommunication | null>(null);
 
@@ -97,43 +96,22 @@ export default function Home() {
     return status;
   }, [updateTokenStatus]);
 
-  const loadExpedientes = useCallback(async () => {
-    const filter = metricFilters[activeMetric];
-    const params = new URLSearchParams({ ...filter.params, page: String(listPage), page_size: "50", ordering: "recent" });
-    if (activeMetric === "new" || activeMetric === "updated") {
-      const today = localDate();
-      params.set("date_from", today);
-      params.set("date_to", today);
-    }
-    try {
-      setExpedientes(await api<ExpedientePage>(`expedientes/?${params}`));
-    } catch (exception) {
-      notify({ message: exception instanceof Error ? exception.message : "Falha ao carregar expedientes." });
-    }
-  }, [activeMetric, listPage, notify]);
-
-  useEffect(() => {
-    queueMicrotask(() => { void loadExpedientes(); });
-  }, [loadExpedientes]);
-
-  const loadPublications = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(publicationPage), collected_from: localDate(), collected_to: localDate() });
-    try {
-      setPublications(await api<DjenCommunicationPage>(`djen/communications/?${params}`));
-    } catch (exception) {
-      notify({ message: exception instanceof Error ? exception.message : "Falha ao carregar publicações processuais." });
-    }
-  }, [publicationPage, notify]);
-
-  useEffect(() => {
-    if (todayTab === "publicacoes") queueMicrotask(() => { void loadPublications(); });
-  }, [todayTab, loadPublications]);
+  const listRefreshInterval = data?.collection_pipeline?.active || data?.collection_pipeline?.steps.some((step) => step.status === "running") ? 3_000 : 10_000;
+  const filter = metricFilters[activeMetric];
+  const listParams = new URLSearchParams({ ...filter.params, page: String(listPage), page_size: "50", ordering: "recent" });
+  if (activeMetric === "new" || activeMetric === "updated") {
+    listParams.set("date_from", localDate());
+    listParams.set("date_to", localDate());
+  }
+  const { data: expedientes, reload: loadExpedientes, loading: expedientesLoading, error: expedientesError } = useLiveList<ExpedientePage>(`expedientes/?${listParams}`, todayTab === "expedientes", listRefreshInterval);
+  const publicationParams = new URLSearchParams({ page: String(publicationPage), collected_from: localDate(), collected_to: localDate() });
+  const { data: publications, setData: setPublications, reload: loadPublications, loading: publicationsLoading, error: publicationsError } = useLiveList<DjenCommunicationPage>(`djen/communications/?${publicationParams}`, todayTab === "publicacoes", listRefreshInterval);
 
   const selectMetric = (metric: MetricKey) => {
     setTodayTab("expedientes");
     setActiveMetric(metric);
     setListPage(1);
-    setExpedientes(null);
+    if (metric === activeMetric && listPage === 1 && todayTab === "expedientes") void loadExpedientes();
   };
 
   useEffect(() => {
@@ -224,6 +202,10 @@ export default function Home() {
     }
     previousDjenRun.current = { id: djenStep.run_id, status: djenStep.status };
   }, [djenStep?.run_id, djenStep?.status, notify]);
+  const collectionVersion = JSON.stringify(pipeline);
+  useEffect(() => {
+    window.dispatchEvent(new Event("collections-updated"));
+  }, [collectionVersion]);
   const runStatus = data?.latest_run?.status;
   const collectionInProgress = (pipeline?.active ?? ["pending", "running"].includes(runStatus ?? ""))
     || djenStep?.status === "pending" && djenStep.run_id !== null
@@ -286,7 +268,7 @@ export default function Home() {
           <div className="order-1 min-w-0 lg:order-none lg:col-start-2 lg:row-start-2">
             <CollectionPipeline pipeline={pipeline} refreshing={refreshing} starting={running} cancelling={cancelling}
               discarding={discarding} canDiscard={canDiscard}
-              onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
+              onRefresh={() => { setRefreshing(true); void Promise.all([load(), todayTab === "publicacoes" ? loadPublications() : loadExpedientes()]).finally(() => setRefreshing(false)); }}
               tokenAvailable={tokenStatus?.available}
               onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
           </div>
@@ -321,7 +303,8 @@ export default function Home() {
               <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
             </Link>
           </div>
-          {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : <LoadingRows />}
+          <ListLoading loading={expedientesLoading} error={expedientesError} />
+          {expedientes ? <ExpedienteList items={expedientes.results} onSelect={setSelected} /> : !expedientesError && <LoadingRows />}
           {expedientes && <Pagination page={listPage} pages={Math.ceil(expedientes.count / 50)} onPageChange={setListPage} label="Paginação de expedientes" />}
         </TabsContent>
 
@@ -335,10 +318,11 @@ export default function Home() {
               <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />
             </Link>
           </div>
+          <ListLoading loading={publicationsLoading} error={publicationsError} />
           {publications ? <div>
             <DjenList items={publications.results} onSelect={setSelectedPublication} />
             {publications.results.length === 0 && <EmptyState icon={<Newspaper size={26} weight="duotone" />} title="Nenhuma publicação por aqui" description="Quando a coleta no DJEN identificar novas publicações processuais, elas aparecerão nesta lista." />}
-          </div> : <LoadingRows />}
+          </div> : !publicationsError && <LoadingRows />}
           {publications && <Pagination page={publicationPage} pages={Math.ceil(publications.count / 20)} onPageChange={setPublicationPage} label="Paginação de publicações processuais" />}
         </TabsContent>
       </section>

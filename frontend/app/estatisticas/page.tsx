@@ -1,13 +1,12 @@
 "use client";
 
 import { ChartBar, CheckCircle, ClockCounterClockwise, Sparkle } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "../components/app-shell";
 import { TimeSavedCard } from "../components/time-saved-card";
-import { Panel, MetricCard, PageTitle } from "../components/ui";
-import { useNotifications } from "../components/notifications";
-import { api } from "../lib/api";
+import { ListLoading, LoadingRows, Panel, MetricCard, PageTitle } from "../components/ui";
+import { useLiveList } from "../hooks/use-live-list";
 import type { TimeSaved } from "../lib/types";
 
 type Stats = {
@@ -65,16 +64,7 @@ function formatChartDay(day: string) {
 
 export default function StatisticsPage() {
   const [period, setPeriod] = useState(7);
-  const [data, setData] = useState<Stats | null>(null);
-  const { notify } = useNotifications();
-
-  useEffect(() => {
-    api<Stats>(`statistics/?period=${period}`)
-      .then((value) => {
-        setData(value);
-      })
-      .catch((exception) => notify({ message: exception instanceof Error ? exception.message : "Não foi possível carregar as estatísticas." }));
-  }, [period, notify]);
+  const { data, loading, error } = useLiveList<Stats>(`statistics/?period=${period}`);
 
   const timeline = groupTimeline(data?.timeline ?? []);
   const maxDailyTotal = Math.max(1, ...timeline.map((day) => day.new + day.updated + day.resolved));
@@ -104,6 +94,8 @@ export default function StatisticsPage() {
         }
       />
 
+      <ListLoading loading={loading} error={error} />
+      {!data && !error && <LoadingRows />}
       {data && (
         <>
           <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
