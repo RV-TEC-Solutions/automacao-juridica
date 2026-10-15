@@ -55,6 +55,21 @@ class QueueTests(TestCase):
     def setUp(self):
         self.source = AutomationSource.objects.get(code="pje-tjrn")
 
+    def test_rerun_waits_for_pipeline_and_other_sources(self):
+        other = AutomationSource.objects.get(code="djen")
+        for trigger in (AutomationRun.Trigger.MANUAL, AutomationRun.Trigger.RERUN):
+            for state in (AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING):
+                with self.subTest(trigger=trigger, state=state):
+                    active = AutomationRun.objects.create(source=self.source, trigger=trigger, status=state)
+                    with self.assertRaisesMessage(ValueError, "uma fonte por vez"):
+                        enqueue_run(other, AutomationRun.Trigger.RERUN)
+                    active.status = AutomationRun.Status.SUCCESS
+                    active.save(update_fields=["status"])
+        run = enqueue_run(other, AutomationRun.Trigger.RERUN)
+        self.assertEqual(run.status, AutomationRun.Status.PENDING)
+        with self.assertRaisesMessage(ValueError, "uma fonte por vez"):
+            enqueue_run(self.source, AutomationRun.Trigger.MANUAL)
+
     def test_prevents_concurrent_runs_per_source(self):
         enqueue_run(self.source, AutomationRun.Trigger.MANUAL)
         with self.assertRaisesMessage(ValueError, "Já existe"):

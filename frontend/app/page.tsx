@@ -58,6 +58,7 @@ export default function Home() {
 
   const [selected, setSelected] = useState<Expediente | null>(null);
   const [running, setRunning] = useState(false);
+  const runRequest = useRef(false);
   const [cancelling, setCancelling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -148,6 +149,11 @@ export default function Home() {
   }, [loadTokenStatus]);
 
   const run = async (source = "pje-tjrn", rerun = false) => {
+    if (runRequest.current) return;
+    const currentPipeline = data?.collection_pipeline;
+    if (rerun && (currentPipeline?.active || currentPipeline?.steps.some((step) =>
+      step.run_id !== null && (step.status === "pending" || step.status === "running")))) return;
+    runRequest.current = true;
     setRunning(true);
     try {
       if (source !== "djen" && !tokenStatus?.available) {
@@ -163,6 +169,7 @@ export default function Home() {
     } catch (exception) {
       notify({ message: exception instanceof Error ? exception.message : "Não foi possível iniciar." });
     } finally {
+      runRequest.current = false;
       setRunning(false);
     }
   };

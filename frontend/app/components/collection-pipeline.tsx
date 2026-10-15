@@ -82,7 +82,9 @@ export function CollectionPipeline({
   onRerun: (code: string) => void;
 }) {
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
-  const canStart = tokenAvailable && !starting;
+  const busy = pipeline.active || pipeline.steps.some((step) =>
+    step.run_id !== null && (step.status === "running" || step.status === "pending"));
+  const canStart = tokenAvailable && !starting && !busy;
   const current = pipeline.steps.find((step) => step.code === pipeline.current_step);
   const statusDescription = pipeline.active
     ? current ? `${current.label}: ${statusMeta[current.status].label}.` : "Coleta em andamento."
@@ -131,7 +133,7 @@ export function CollectionPipeline({
                 <h4 id={`pipeline-group-${index}`} className="mb-2 text-xs font-extrabold uppercase tracking-wide text-foreground">{group}</h4>
                 <ol className="space-y-2">
                   {pipeline.steps.filter((step) => step.group === group).map((step) => (
-                  <Step key={step.code} step={step} canRerun={!pipeline.active && !starting && step.status !== "disabled" && step.status !== "running" && !(step.code === "djen" && step.run_id !== null && step.status === "pending")} onRerun={onRerun} />
+                  <Step key={step.code} step={step} canRerun={!busy && !starting && !discarding && !cancelling && step.status !== "disabled"} onRerun={onRerun} />
                   ))}
                 </ol>
               </section>
@@ -139,6 +141,7 @@ export function CollectionPipeline({
           ))}
         </div>
       </div>
+      <p className="mt-2 mb-0 text-xs text-muted-foreground">Reexecute uma fonte por vez, somente após o término de toda a pipeline e de qualquer reexecução em andamento.</p>
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{announcement}</div>
     </Panel>
   );

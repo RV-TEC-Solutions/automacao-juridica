@@ -136,7 +136,7 @@ A Pipeline de coleta mostra as fontes, seus estados e a última sincronização.
 2. Acompanhe a lista [4]. Ela tem rolagem horizontal: mova a faixa para visualizar os grupos à direita, incluindo TRF5 e DJEN.
 3. Use Atualizar status da coleta [2] para consultar o progresso. Esse botão atualiza a tela; não inicia outra coleta.
 4. Leia o estado de cada fonte, mesmo que o painel informe uma última sincronização. Uma fonte pode falhar enquanto outras concluem.
-5. Após o ciclo, clique na seta circular da fonte para Reexecutar somente aquela fonte. Para fontes PJe, o token precisa continuar disponível. A reexecução do DJEN independe dele.
+5. Somente após o término de toda a pipeline, clique na seta circular (reload) da fonte para Reexecutar somente aquela fonte. Reexecute **uma fonte por vez**: aguarde sua conclusão antes de reexecutar outra. Os botões ficam bloqueados enquanto houver coleta ou reexecução pendente ou em andamento, inclusive do DJEN. Para fontes PJe, o token precisa continuar disponível. A reexecução do DJEN independe dele.
 6. Durante um ciclo PJe ativo, o botão de reprodução dá lugar a Interromper coleta. Use-o para solicitar a interrupção; acompanhe a confirmação nos estados e no Histórico.
 
 ![Tela de Coletas: executar, acompanhar e reexecutar com destaques vermelhos numerados](imagens/03-coleta.png)

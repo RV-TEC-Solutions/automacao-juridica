@@ -31,9 +31,19 @@ def first_enabled_source(start_code=None):
     return next((sources[code] for code in source_codes if code in sources), None)
 
 
+@transaction.atomic
 def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id=None):
     if not source.enabled:
         raise ValueError("A fonte está desativada.")
+    # Shared lock across sources: two requests must not both pass the idle check.
+    list(AutomationSource.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
+    active_runs = AutomationRun.objects.filter(
+        status__in=(AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING),
+    )
+    if (trigger == AutomationRun.Trigger.RERUN and active_runs.exists()) or active_runs.filter(
+        trigger=AutomationRun.Trigger.RERUN,
+    ).exists():
+        raise ValueError("Aguarde a pipeline e a reexecução em andamento terminarem. Reexecute uma fonte por vez.")
     try:
         values = {
             "source": source, "trigger": trigger, "requested_by": requested_by,
@@ -41,7 +51,8 @@ def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id
         }
         if cycle_id is not None:
             values["cycle_id"] = cycle_id
-        return AutomationRun.objects.create(**values)
+        with transaction.atomic():
+            return AutomationRun.objects.create(**values)
     except IntegrityError as error:
         raise ValueError("Já existe uma coleta pendente ou em execução.") from error
 

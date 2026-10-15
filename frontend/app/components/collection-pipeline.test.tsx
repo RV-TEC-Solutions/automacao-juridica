@@ -15,7 +15,8 @@ function pipeline(active = true): Pipeline {
     completed: 1, total: 6, started_at: "2026-09-27T10:00:00Z",
     finished_at: active ? null : "2026-09-27T10:05:00Z", current_step: active ? "step-1" : null,
     steps: statuses.map((status, index) => ({
-      code: `step-${index}`, group: groups[index], label: labels[index], status,
+      code: `step-${index}`, group: groups[index], label: labels[index],
+      status: !active && (status === "running" || status === "pending") ? "success" : status,
       run_id: index + 1, error: status === "failed" ? "Falha de autenticação no tribunal" : "", message: "",
     })),
   };
@@ -26,6 +27,22 @@ const handlers = () => ({
 });
 
 describe("CollectionPipeline", () => {
+  it.each(["pending", "running"] as const)("blocks all reruns when another source is %s outside the PJe cycle", (status) => {
+    const value = pipeline(false);
+    value.steps.push({ code: "djen", group: "DJEN", label: "Publicações nacionais", status, run_id: 99, error: "", message: "" });
+    const callbacks = handlers();
+    render(<CollectionPipeline pipeline={value} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
+    screen.getAllByRole("button", { name: /Reexecutar somente/ }).forEach((button) => {
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+    });
+    expect(callbacks.onRerun).not.toHaveBeenCalled();
+  });
+
+  it("blocks all sources while the start request is in flight", () => {
+    render(<CollectionPipeline pipeline={pipeline(false)} refreshing={false} starting={true} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
+    screen.getAllByRole("button", { name: /Reexecutar somente/ }).forEach((button) => expect(button).toBeDisabled());
+  });
   it("renders groups and steps in API order with labelled states", () => {
     render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
     const region = screen.getByTestId("pipeline-scroll-region");
