@@ -302,6 +302,7 @@ def discard_today_collection(request):
             Processo.objects.filter(
                 pk__in=new_process_ids,
                 expedientes__isnull=True,
+                djen_communications__isnull=True,
             ).delete()
         cleared_runs = today_runs.update(descartada_em=timezone.now())
 

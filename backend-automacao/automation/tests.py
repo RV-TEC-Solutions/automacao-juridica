@@ -17,7 +17,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from expedientes.models import Expediente, ExpedienteEvent, Processo
 
-from .models import AutomationRun, AutomationSource, Notice, NoticeSource, UserProfile
+from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, NoticeSource, UserProfile
 from .queue import enqueue_due_runs, enqueue_run, recover_interrupted_runs
 from .services.pje.browser import (
     abrir_pje,
@@ -615,6 +615,31 @@ class CollectionAuditApiTests(TestCase):
         response = self.client.post("/api/automation/collections/today/discard/")
 
         self.assertEqual(response.status_code, 409)
+
+    def test_discard_keeps_process_referenced_by_previous_djen_collection(self):
+        expediente = self.expediente(5)
+        process_id = expediente.processo_id
+        publication = DjenCommunication.objects.create(
+            source=AutomationSource.objects.get(code="djen"),
+            run=self.previous_run,
+            processo=expediente.processo,
+            numero_comunicacao=12345,
+            data_disponibilizacao=timezone.localdate(),
+            tribunal="TJRN",
+        )
+        ExpedienteEvent.objects.create(
+            expediente=expediente, run=self.run, kind=ExpedienteEvent.Kind.NEW,
+        )
+
+        response = self.client.post("/api/automation/collections/today/discard/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["deleted_expedientes"], 1)
+        self.assertFalse(Expediente.objects.filter(pk=expediente.pk).exists())
+        self.assertTrue(Processo.objects.filter(pk=process_id).exists())
+        self.assertTrue(DjenCommunication.objects.filter(pk=publication.pk).exists())
+        self.run.refresh_from_db()
+        self.assertIsNotNone(self.run.descartada_em)
 
     def test_discard_cancels_pending_sources_after_a_failed_collection(self):
         self.run.status = AutomationRun.Status.FAILED
