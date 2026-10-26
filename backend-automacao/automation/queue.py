@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from .models import AutomationRun, AutomationSource, UserProfile
 from .services.pje.sources import PJE_SOURCE_ORDER
+from .collectors import collector_order, get_collector
 
 
 LOCAL_TZ = ZoneInfo("America/Fortaleza")
@@ -32,7 +33,9 @@ def first_enabled_source(start_code=None):
 
 
 @transaction.atomic
-def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id=None):
+def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id=None, collector=None):
+    collector = collector or collector_order()[0]
+    get_collector(collector)
     if not source.enabled:
         raise ValueError("A fonte está desativada.")
     # Shared lock across sources: two requests must not both pass the idle check.
@@ -48,6 +51,7 @@ def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id
         values = {
             "source": source, "trigger": trigger, "requested_by": requested_by,
             "scheduled_for": scheduled_for, "status": AutomationRun.Status.PENDING,
+            "collector": collector,
         }
         if cycle_id is not None:
             values["cycle_id"] = cycle_id

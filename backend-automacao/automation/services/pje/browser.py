@@ -50,7 +50,7 @@ def texto_diagnostico_seguro(texto):
     texto = re.sub(r'onclick="[^"]*"', 'onclick="[omitido]"', str(texto))
     texto = re.sub(r'\b(state|token|session_code|nonce|codigoSeguranca)=\S+', r'\1=[omitido]', texto)
     texto = re.sub(r'https?://[^\s<>\"\x27]+', lambda m: url_segura(m[0]), str(texto))
-    for name in ("PJE_CERT_PIN", "PJE_TOTP_SECRET"):
+    for name in (key for key in os.environ if key.startswith("PJE_") and key.endswith(("CERT_PIN", "TOTP_SECRET"))):
         secret = os.environ.get(name)
         if secret:
             texto = texto.replace(secret, "[omitido]")

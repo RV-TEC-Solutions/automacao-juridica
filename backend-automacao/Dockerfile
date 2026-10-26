@@ -61,6 +61,13 @@ RUN playwright install --with-deps chromium
 # Keep the Django version already running before the Python 3.12 base change.
 RUN pip install --no-cache-dir "Django==5.2.18"
 
+COPY docker/vendor/safenet.deb /tmp/safenet.deb
+# Somente as bibliotecas PKCS#11; o pcscd continua sendo o serviço do host.
+RUN echo "85e93a543e3dda2123aa56c60fe94767e4e0a43aa255160355613efc5de3c043  /tmp/safenet.deb" | sha256sum -c - \
+    && dpkg-deb -x /tmp/safenet.deb /tmp/safenet \
+    && cp -a /tmp/safenet/usr/lib/. /usr/lib/ \
+    && rm -rf /tmp/safenet /tmp/safenet.deb
+
 # Copy entrypoint script and source code
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

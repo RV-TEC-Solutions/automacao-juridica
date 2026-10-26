@@ -53,6 +53,8 @@ export type Expediente = {
 export type PipelineStepStatus = "pending" | "running" | "success" | "failed" | "cancelled" | "disabled" | "skipped";
 
 export type PipelineStep = {
+  collector?: string;
+  collector_label?: string;
   code: string;
   group: string;
   label: string;
@@ -63,6 +65,7 @@ export type PipelineStep = {
 };
 
 export type CollectionPipeline = {
+  current_collector?: string | null;
   cycle_id: string | null;
   status: "idle" | "running" | "success" | "failed" | "cancelled";
   active: boolean;

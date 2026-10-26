@@ -199,6 +199,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_rerun_does_not_enqueue_the_next_source(self):
@@ -240,6 +241,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_failure_persists_safe_message_and_logs_traceback_with_run_context(self):
@@ -278,6 +280,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_chain_continues_from_tre_rn_first_to_second_degree(self):
@@ -297,6 +300,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_chain_continues_from_tre_rn_second_degree_to_tse(self):
@@ -316,6 +320,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_chain_continues_from_tse_to_trt21(self):
@@ -335,6 +340,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_chain_skips_disabled_sources(self):
@@ -353,6 +359,7 @@ class PJePipelineTests(TestCase):
             requested_by=None,
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
     def test_empty_trt21_collection_is_successful_and_informative(self):
@@ -377,6 +384,7 @@ class PJePipelineTests(TestCase):
 
             scheduled_for=None,
             cycle_id=run.cycle_id,
+            collector="murilo",
         )
 
 

@@ -1,9 +1,12 @@
 import logging
+import os
 
 from django.utils import timezone
 
 from automation.models import AutomationRun, AutomationSource
 from automation.queue import enqueue_run
+from automation.collectors import collector_order, collector_credentials
+from automation.services.pjeoffice.identity import prepare_identity
 
 from .browser import LegacyCollection, abrir_pje
 from .parser import extrair_expedientes_arquivo
@@ -29,10 +32,22 @@ def _enqueue_next_source(execucao):
     except ValueError:
         return
 
-    for next_code in PJE_SOURCE_ORDER[current_index + 1:]:
+    collector = execucao.collector
+    next_codes = PJE_SOURCE_ORDER[current_index + 1:]
+    if not any(AutomationSource.objects.filter(code=code, enabled=True).exists() for code in next_codes):
+        order = collector_order()
+        if collector not in order or order.index(collector) + 1 == len(order):
+            return
+        collector = order[order.index(collector) + 1]
+        next_codes = PJE_SOURCE_ORDER
+    for next_code in next_codes:
         next_source = AutomationSource.objects.get(code=next_code)
         if not next_source.enabled:
             continue
+        if AutomationRun.objects.filter(
+            cycle_id=execucao.cycle_id, source=next_source, collector=collector,
+        ).exists():
+            return
         try:
             enqueue_run(
                 next_source,
@@ -40,6 +55,7 @@ def _enqueue_next_source(execucao):
                 requested_by=execucao.requested_by,
                 scheduled_for=execucao.scheduled_for,
                 cycle_id=execucao.cycle_id,
+                collector=collector,
             )
         except ValueError:
             logger.warning(
@@ -84,7 +100,14 @@ def executar_coleta(execucao=None):
             _enqueue_next_source(execucao)
             return resultado
 
-        capture = abrir_pje(source.code, source=source)
+        # O navegador já abre um contexto novo por fonte. No worker, o assinador
+        # também fica restrito ao módulo e ao token do titular desta execução.
+        if os.environ.get("PJE_OFFICE_MANAGED") == "true" or len(collector_order()) > 1 or execucao.collector != "murilo":
+            with collector_credentials(execucao.collector):
+                prepare_identity(execucao.collector)
+                capture = abrir_pje(source.code, source=source)
+        else:
+            capture = abrir_pje(source.code, source=source)
         if _was_cancelled(execucao):
             return None
         profile = get_source_profile(source.code)

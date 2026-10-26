@@ -64,6 +64,9 @@ class Processo(models.Model):
 
 class Expediente(models.Model):
 
+    # Presença em cada caixa. Um expediente compartilhado continua canônico.
+    collection_accounts = models.JSONField(default=dict, blank=True)
+
     class TipoPendencia(models.TextChoices):
         CIENCIA = "ciencia", "Pendente de ciência"
         RESPOSTA = "resposta", "Pendente de resposta"

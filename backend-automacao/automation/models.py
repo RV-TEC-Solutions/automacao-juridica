@@ -160,6 +160,8 @@ class UserProfile(models.Model):
 # faz a coleta do exped.
 class AutomationRun(models.Model):
 
+    collector = models.CharField(max_length=30, default="murilo")
+
     class Status(models.TextChoices):
         PENDING = "pending", "Pendente"
         RUNNING = "running", "Executando"

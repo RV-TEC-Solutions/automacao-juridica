@@ -205,3 +205,6 @@ LOGGING = {
 # Consulta pública do DJEN. Podem ser sobrescritos no ambiente local.
 DJEN_OAB_NUMBER = os.environ.get("DJEN_OAB_NUMBER", "5691")
 DJEN_OAB_STATE = os.environ.get("DJEN_OAB_STATE", "RN")
+
+# Habilite o segundo titular depois de configurar suas credenciais próprias.
+PJE_COLLECTORS = tuple(code.strip() for code in os.environ.get("PJE_COLLECTORS", "murilo").split(",") if code.strip())

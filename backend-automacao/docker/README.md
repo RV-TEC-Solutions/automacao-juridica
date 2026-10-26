@@ -11,6 +11,10 @@ Antes do build, coloque os instaladores em `docker/vendor/` (ignorado pelo git):
   (SHA-256 validado pelo Dockerfile).
 - `safesign.deb`: SafeSign IC Standard Linux 4.7.0.0 para Ubuntu 24.04 x86_64,
   fornecido pelo fabricante do token. Nesta máquina o instalador está em Downloads.
+- `safenet.deb`: SafeNet Authentication Client 10.9.4723, variante Ubuntu-2204,
+  disponível na [distribuição oficial DigiCert](https://knowledge.digicert.com/general-information/how-to-download-safenet-authentication-client).
+  SHA-256: `85e93a543e3dda2123aa56c60fe94767e4e0a43aa255160355613efc5de3c043`.
+  A imagem extrai somente as bibliotecas; o serviço PC/SC continua no host.
 
 Execute `docker compose build backend worker` e
 `docker compose up -d --no-deps backend worker` na raiz do projeto.

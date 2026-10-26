@@ -4,6 +4,7 @@ from django.db.models import Max, Min
 
 from .models import AutomationRun, AutomationSource
 from .services.pje.sources import PJE_SOURCE_ORDER, get_source_profile
+from .collectors import collector_order, get_collector
 
 
 GROUPS = {
@@ -70,14 +71,36 @@ def _steps_for_cycle(sources, cycle_runs):
     return steps
 
 
+def _all_collector_steps(sources, cycle_runs):
+    order = collector_order()
+    if len(order) == 1 and all(run.collector == order[0] for run in cycle_runs):
+        steps = _steps_for_cycle(sources, cycle_runs)
+        for step in steps:
+            step.update(collector=order[0], collector_label=get_collector(order[0]).label)
+        return steps
+    active = any(run.status in ("pending", "running") for run in cycle_runs)
+    steps = []
+    codes = list(dict.fromkeys([*order, *(run.collector for run in cycle_runs)]))
+    for code in codes:
+        runs = [run for run in cycle_runs if run.collector == code]
+        for step in _steps_for_cycle(sources, runs):
+            if not runs and cycle_runs and not active and step["status"] != "disabled":
+                step["status"] = "skipped"
+            label = get_collector(code).label
+            step.update(collector=code, collector_label=label,
+                        group=f"{label} · {step['group']}", label=f"{label} · {step['label']}")
+            steps.append(step)
+    return steps
+
+
 def _replace_step_with_run(steps_by_code, run, sources):
     if (
         run.source is None
-        or run.source.code not in steps_by_code
+        or (run.collector, run.source.code) not in steps_by_code
         or not sources.get(run.source.code, run.source).enabled
     ):
         return
-    steps_by_code[run.source.code].update({
+    steps_by_code[(run.collector, run.source.code)].update({
         "status": run.status,
         "run_id": run.id,
         "error": run.mensagem_erro,
@@ -122,18 +145,18 @@ def collection_pipeline_payload():
             .filter(criada_em__lt=latest.criada_em)
             .first()
         )
-        steps = _steps_for_cycle(sources, _runs_for_cycle(previous_cycle))
+        steps = _all_collector_steps(sources, _runs_for_cycle(previous_cycle))
         reruns = AutomationRun.objects.select_related("source").filter(
             trigger=AutomationRun.Trigger.RERUN,
             descartada_em__isnull=True,
         )
         if previous_cycle:
             reruns = reruns.filter(criada_em__gt=previous_cycle.criada_em)
-        steps_by_code = {step["code"]: step for step in steps}
+        steps_by_code = {(step.get("collector", collector_order()[0]), step["code"]): step for step in steps}
         for rerun in reruns.order_by("criada_em", "id"):
             _replace_step_with_run(steps_by_code, rerun, sources)
     else:
-        steps = _steps_for_cycle(sources, cycle_runs)
+        steps = _all_collector_steps(sources, cycle_runs)
 
     djen_step = _djen_step()
     all_steps = steps + [djen_step]
@@ -156,6 +179,7 @@ def collection_pipeline_payload():
         )
         current_code = current["code"] if current else None
     return {
+        "current_collector": next((run.collector for run in cycle_runs if run.status in ("running", "pending")), None),
         "cycle_id": str(latest.cycle_id) if latest else None,
         "status": _cycle_status(cycle_runs, active), "active": active,
         "completed": completed, "total": relevant,

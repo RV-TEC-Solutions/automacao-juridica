@@ -37,6 +37,8 @@ if [ "${PJE_OFFICE_ENABLED:-false}" = "true" ] && command -v pjeoffice-pro >/dev
     echo "Iniciando PJeOffice Pro..."
     pjeoffice-pro > /tmp/pjeoffice-startup.log 2>&1 &
     pjeoffice_pid=$!
+    printf '%s\n' "$pjeoffice_pid" > /tmp/pjeoffice-managed.pid
+    export PJE_OFFICE_MANAGED=true
     sleep 2
     if ! kill -0 "$pjeoffice_pid" 2>/dev/null; then
         cat /tmp/pjeoffice-startup.log >&2

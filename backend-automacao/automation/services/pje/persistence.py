@@ -53,6 +53,11 @@ def _registrar_mudanca(changes, prefixo, campo, anterior, atual):
     return False
 
 
+def _account_states(expediente):
+    # Registros anteriores à coleta por titular pertencem à caixa de MURILO.
+    return dict(expediente.collection_accounts or {"murilo": expediente.ativo})
+
+
 @transaction.atomic
 def salvar_expediente(dado, *, source, run=None, seen_at=None):
     seen_at = seen_at or timezone.now()
@@ -103,6 +108,12 @@ def salvar_expediente(dado, *, source, run=None, seen_at=None):
 
     if not created and not expediente.ativo:
         _registrar_mudanca(changes, "", "ativo", False, True)
+    accounts = {} if created else _account_states(expediente)
+    previous_accounts = dict(accounts)
+    accounts[getattr(run, "collector", "murilo")] = True
+    if not created:
+        _registrar_mudanca(changes, "", "collection_accounts", previous_accounts, accounts)
+    expediente.collection_accounts = accounts
     expediente.ativo = True
     expediente.arquivado_em = None
     expediente.visto_na_ultima_coleta_em = seen_at
@@ -139,15 +150,25 @@ def salvar_expedientes(dados, *, source, run=None, reconcile_missing=True):
             if identificadores:
                 ausentes = ausentes.exclude(identificador_pje__in=identificadores)
             for expediente in ausentes.select_for_update():
-                expediente.ativo = False
-                expediente.arquivado_em = seen_at
-                expediente.save(update_fields=("ativo", "arquivado_em", "atualizado_em"))
+                collector = getattr(run, "collector", "murilo")
+                accounts = _account_states(expediente)
+                if not accounts.get(collector):
+                    continue
+                previous_accounts = dict(accounts)
+                accounts[collector] = False
+                expediente.collection_accounts = accounts
+                expediente.ativo = any(accounts.values())
+                expediente.arquivado_em = None if expediente.ativo else seen_at
+                expediente.save(update_fields=("collection_accounts", "ativo", "arquivado_em", "atualizado_em"))
+                changes = {"collection_accounts": {"before": previous_accounts, "after": accounts}}
+                if not expediente.ativo:
+                    changes["ativo"] = {"before": True, "after": False}
                 ExpedienteEvent.objects.create(
                     expediente=expediente, run=run,
-                    kind=ExpedienteEvent.Kind.RESOLVED,
-                    changes={"ativo": {"before": True, "after": False}},
+                    kind=ExpedienteEvent.Kind.UPDATED if expediente.ativo else ExpedienteEvent.Kind.RESOLVED,
+                    changes=changes,
                 )
-                resolvidos += 1
+                resolvidos += int(not expediente.ativo)
 
     return {
         "criados": criados, "atualizados": atualizados,

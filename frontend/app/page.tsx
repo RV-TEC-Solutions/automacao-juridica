@@ -126,7 +126,7 @@ export default function Home() {
     return () => window.clearInterval(interval);
   }, [loadTokenStatus]);
 
-  const run = async (source = "pje-tjrn", rerun = false) => {
+  const run = async (source = "pje-tjrn", rerun = false, collector?: string) => {
     if (runRequest.current) return;
     const currentPipeline = data?.collection_pipeline;
     if (rerun && (currentPipeline?.active || currentPipeline?.steps.some((step) =>
@@ -140,7 +140,7 @@ export default function Home() {
       }
       const started = await api<{ id: number; status: string }>("automation/runs/", {
         method: "POST",
-        body: JSON.stringify({ source, ...(rerun ? { rerun: true } : {}) }),
+        body: JSON.stringify({ source, ...(rerun ? { rerun: true } : {}), ...(collector ? { collector } : {}) }),
       });
       if (source === "djen") previousDjenRun.current = { id: started.id, status: started.status };
       await load();
@@ -270,7 +270,7 @@ export default function Home() {
               discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void Promise.all([load(), todayTab === "publicacoes" ? loadPublications() : loadExpedientes()]).finally(() => setRefreshing(false)); }}
               tokenAvailable={tokenStatus?.available}
-              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source) => { void run(source, true); }} />
+              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source, collector) => { void run(source, true, collector); }} />
           </div>
         )}
       </div>

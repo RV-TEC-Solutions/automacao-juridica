@@ -20,10 +20,10 @@ const statusMeta: Record<PipelineStepStatus, { label: string; className: string;
   skipped: { label: "Ignorada", className: "border-border bg-muted text-muted-foreground opacity-70", Icon: MinusCircle },
 };
 
-function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boolean; onRerun: (code: string) => void }) {
+function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boolean; onRerun: (code: string, collector?: string) => void }) {
   const meta = statusMeta[step.status];
   const Icon = meta.Icon;
-  const errorId = step.error ? `pipeline-error-${step.code}` : undefined;
+  const errorId = step.error ? `pipeline-error-${step.collector ?? ""}-${step.code}` : undefined;
   return (
     <li className="group/step">
       <div className={cn("relative flex min-h-10 items-center gap-2 rounded-lg border px-2 py-2", meta.className, step.status === "failed" && "hover:border-destructive focus-within:ring-2 focus-within:ring-ring")}>
@@ -53,7 +53,7 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
           aria-describedby={errorId}
           title={canRerun ? `Reexecutar somente ${step.label}` : "Disponível após o fim da coleta"}
           disabled={!canRerun}
-          onClick={() => onRerun(step.code)}
+          onClick={() => step.collector ? onRerun(step.code, step.collector) : onRerun(step.code)}
         >
           <ArrowClockwise size={14} weight="bold" />
         </Button>
@@ -79,13 +79,14 @@ export function CollectionPipeline({
   onRun: () => void;
   onCancel: () => void;
   onDiscard: (trigger: HTMLButtonElement) => void;
-  onRerun: (code: string) => void;
+  onRerun: (code: string, collector?: string) => void;
 }) {
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
   const busy = pipeline.active || pipeline.steps.some((step) =>
     step.run_id !== null && (step.status === "running" || step.status === "pending"));
   const canStart = tokenAvailable && !starting && !busy;
-  const current = pipeline.steps.find((step) => step.code === pipeline.current_step);
+  const current = pipeline.steps.find((step) => step.code === pipeline.current_step &&
+    (!pipeline.current_collector || step.collector === pipeline.current_collector));
   const statusDescription = pipeline.active
     ? current ? `${current.label}: ${statusMeta[current.status].label}.` : "Coleta em andamento."
     : pipeline.finished_at ? "Coleta concluída." : "Nenhuma coleta executada ainda.";
@@ -133,7 +134,7 @@ export function CollectionPipeline({
                 <h4 id={`pipeline-group-${index}`} className="mb-2 text-xs font-extrabold uppercase tracking-wide text-foreground">{group}</h4>
                 <ol className="space-y-2">
                   {pipeline.steps.filter((step) => step.group === group).map((step) => (
-                  <Step key={step.code} step={step} canRerun={!busy && !starting && !discarding && !cancelling && step.status !== "disabled"} onRerun={onRerun} />
+                  <Step key={`${step.collector ?? ""}:${step.code}`} step={step} canRerun={!busy && !starting && !discarding && !cancelling && step.status !== "disabled"} onRerun={onRerun} />
                   ))}
                 </ol>
               </section>

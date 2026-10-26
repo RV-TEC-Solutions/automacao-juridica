@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, UserProfile
 from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
+from .collectors import collector_order, get_collector
 from .services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
 from expedientes.models import Cliente, Expediente, ExpedienteEvent, Processo
 
@@ -153,6 +154,7 @@ def source_detail(request, code):
 
 def _run_payload(run):
     return {
+        "collector": run.collector, "collector_label": get_collector(run.collector).label,
         "id": run.id, "cycle_id": str(run.cycle_id),
         "status": run.status, "trigger": run.trigger,
         "created_at": run.criada_em, "started_at": run.iniciada_em,
@@ -342,6 +344,7 @@ def collection_history(request):
             if run.iniciada_em and run.finalizada_em else None
         )
         grouped.setdefault(local_day, []).append({
+            "collector": run.collector, "collector_label": get_collector(run.collector).label,
             "id": run.id,
             "cycle_id": str(run.cycle_id),
             "status": run.status,
@@ -410,7 +413,10 @@ def runs(request):
                 if rerun
                 else AutomationRun.Trigger.MANUAL
             )
-            run = enqueue_run(source, trigger, requested_by=request.user)
+            collector = request.data.get("collector") or collector_order()[0]
+            if collector not in collector_order():
+                raise ValueError("O titular solicitado não está habilitado para coleta.")
+            run = enqueue_run(source, trigger, requested_by=request.user, collector=collector)
         except ValueError as error:
             return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
         return Response(_run_payload(run), status=status.HTTP_202_ACCEPTED)

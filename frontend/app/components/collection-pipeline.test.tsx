@@ -27,6 +27,38 @@ const handlers = () => ({
 });
 
 describe("CollectionPipeline", () => {
+  it("reruns the selected owner and keeps error descriptions distinct", () => {
+    const value = pipeline(false);
+    value.steps = ["murilo", "cristiano"].map((collector) => ({
+      code: "pje-tjrn", collector, group: `${collector} · TJRN`,
+      label: `${collector} · 1º Grau`, status: "failed", run_id: 1,
+      error: `Falha de ${collector}`, message: "",
+    }));
+    const callbacks = handlers();
+    render(<CollectionPipeline pipeline={value} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
+
+    const first = screen.getByRole("button", { name: "Reexecutar somente murilo · 1º Grau" });
+    const second = screen.getByRole("button", { name: "Reexecutar somente cristiano · 1º Grau" });
+    expect(first).toHaveAccessibleDescription("Falha de murilo");
+    expect(second).toHaveAccessibleDescription("Falha de cristiano");
+    fireEvent.click(second);
+    expect(callbacks.onRerun).toHaveBeenCalledWith("pje-tjrn", "cristiano");
+  });
+
+  it("announces the running owner when source codes repeat", () => {
+    const value = pipeline();
+    value.current_step = "pje-tjrn";
+    value.current_collector = "cristiano";
+    value.steps = ["murilo", "cristiano"].map((collector) => ({
+      code: "pje-tjrn", collector, group: `${collector} · TJRN`,
+      label: `${collector} · 1º Grau`, status: collector === "murilo" ? "success" : "running",
+      run_id: 1, error: "", message: "",
+    }));
+    render(<CollectionPipeline pipeline={value} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("cristiano · 1º Grau: Em execução.");
+  });
+
   it.each(["pending", "running"] as const)("blocks all reruns when another source is %s outside the PJe cycle", (status) => {
     const value = pipeline(false);
     value.steps.push({ code: "djen", group: "DJEN", label: "Publicações nacionais", status, run_id: 99, error: "", message: "" });
