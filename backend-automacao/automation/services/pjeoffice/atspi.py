@@ -4,8 +4,8 @@ import time
 
 import pyatspi
 
-NOMES_APLICACAO = ("pjeoffice pro - 2.5.16u",)
-NOME_JANELA_PIN = ("informe a senha")
+NOMES_APLICACAO = ("pjeoffice",)
+NOME_JANELA_PIN = "informe a senha"
 NOMES_BOTAO_CONFIRMAR = ("ok", "confirmar", "prosseguir", "entrar")
 KEYSYM_RETURN = 0xFF0D
 
@@ -46,23 +46,31 @@ def localizar_aplicacao():
     )
 
 def localizar_janela(aplicacao):
-    janelas = [
+    visiveis = [
         no
         for no in percorrer(aplicacao)
-        if no.getRole() == pyatspi.ROLE_DIALOG
-        and (no.name or "").strip().lower() == NOME_JANELA_PIN
+        if no.getRole() in (
+            pyatspi.ROLE_DIALOG, pyatspi.ROLE_FRAME, pyatspi.ROLE_WINDOW
+        )
         and no.getState().contains(pyatspi.STATE_SHOWING)
         and no.getState().contains(pyatspi.STATE_VISIBLE)
+    ]
+    janelas = [
+        no for no in visiveis
+        if (no.name or "").strip().lower() == NOME_JANELA_PIN
     ]
 
     if len(janelas) != 1:
         detalhes = [
             f"{janela.getRoleName()}: {janela.name!r}"
-            for janela in janelas
+            for janela in visiveis
         ]
 
         raise RuntimeError(
-            f"Janela do PIN ausente: {detalhes}"
+            "Janela do PIN ambígua ou ausente. "
+            f"Janelas visíveis do PJeOffice: {detalhes}. "
+            "Verifique se há autorização do site ou seleção do certificado pendente; "
+            "nenhuma dessas etapas é confirmada automaticamente."
         )
 
     return janelas[0]
@@ -176,7 +184,13 @@ def preencher_pin():
 
 if __name__ == "__main__":
     try:
-        preencher_pin()
+        if sys.argv[1:] == ["--diagnostico"]:
+            aplicacao = localizar_aplicacao()
+            janela = localizar_janela(aplicacao)
+            localizar_campo_pin(janela)
+            print("Janela e campo do PIN acessíveis; nenhum PIN enviado.")
+        else:
+            preencher_pin()
     except Exception as erro:
         print(f"erro: {erro}", file=sys.stderr)
         raise SystemExit(2)
