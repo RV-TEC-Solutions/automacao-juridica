@@ -46,6 +46,10 @@ export function SourceBadge({ source }: { source: NonNullable<Expediente["source
   return <span data-source={source.code} className={`source-badge ${sourceClass}`}><span aria-hidden="true" className="source-badge-dot" /><span className="whitespace-nowrap">{source.system} · {source.tribunal}</span></span>;
 }
 
+export function AttorneyBadges({ attorneys }: { attorneys: string[] }) {
+  return <>{attorneys.map((attorney) => <Badge key={attorney}>{attorney === "cristiano" ? "Dr. Cristiano" : "Dr. Murilo"}</Badge>)}</>;
+}
+
 export function EventBadges({ item }: { item: Expediente }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -62,6 +66,7 @@ export function EventBadges({ item }: { item: Expediente }) {
         </span>
       )}
       {item.source && <SourceBadge source={item.source} />}
+      <AttorneyBadges attorneys={["cristiano", "murilo"].filter((name) => Object.hasOwn(item.collection_accounts ?? {}, name))} />
     </div>
   );
 }

@@ -36,6 +36,7 @@ export type Expediente = {
   atualizado_em: string;
   ativo: boolean;
   arquivado_em: string | null;
+  collection_accounts: Record<string, boolean>;
   unread: boolean;
   latest_event: Event | null;
   source: { code: string; system: string; tribunal: string } | null;

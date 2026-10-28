@@ -34,7 +34,7 @@ class ExpedienteSerializer(serializers.ModelSerializer):
             "destinatario", "tipo_documento", "meio_comunicacao", "data_expedicao",
             "prazo_texto", "status_prazo_fatal", "status_prazo_fatal_label",
             "prazo_fatal", "ciencia_texto", "capturado_em", "atualizado_em",
-            "ativo", "arquivado_em", "latest_event", "unread",
+            "ativo", "arquivado_em", "collection_accounts", "latest_event", "unread",
         )
 
     def get_source(self, obj):

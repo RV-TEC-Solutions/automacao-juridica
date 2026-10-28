@@ -161,6 +161,14 @@ def mark_read(request, pk):
     return Response({"read_at": read_at, "events_marked": count})
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_all_read(request):
+    read_at = timezone.now()
+    count = ExpedienteEvent.objects.filter(read_at__isnull=True).update(read_at=read_at)
+    return Response({"read_at": read_at, "events_marked": count})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def history(request):

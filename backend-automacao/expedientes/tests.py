@@ -92,6 +92,26 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(expediente.events.filter(read_at__isnull=True).exists())
 
+    def test_mark_all_read_covers_all_expedientes_and_preserves_existing_reads(self):
+        first = Expediente.objects.get()
+        old_read = timezone.now() - timedelta(days=1)
+        first.events.update(read_at=old_read)
+        salvar_expedientes([payload(identifier="200")], source=self.source, reconcile_missing=False)
+        second = Expediente.objects.get(identificador_pje="200")
+        second.ativo = False
+        second.save(update_fields=("ativo",))
+        response = self.client.post("/api/expedientes/read-all/?read=read&page=1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["events_marked"], 1)
+        self.assertEqual(first.events.get().read_at, old_read)
+        self.assertFalse(ExpedienteEvent.objects.filter(read_at__isnull=True).exists())
+        self.assertEqual(self.client.post("/api/expedientes/read-all/").data["events_marked"], 0)
+
+    def test_mark_all_read_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+        self.assertIn(self.client.post("/api/expedientes/read-all/").status_code, (401, 403))
+        self.assertTrue(ExpedienteEvent.objects.filter(read_at__isnull=True).exists())
+
     def test_dashboard_allows_discarding_a_failed_run_without_events(self):
         ExpedienteEvent.objects.all().delete()
         AutomationRun.objects.create(

@@ -15,6 +15,13 @@ describe("EventBadges", () => {
     expect(screen.getByText("resposta")).toBeInTheDocument();
   });
 
+  it("shows all accounts that collected an expediente, including resolved accounts", () => {
+    const item = { unread: false, ativo: false, collection_accounts: { cristiano: true, murilo: false } } as unknown as Expediente;
+    render(<EventBadges item={item} />);
+    expect(screen.getByText("Dr. Cristiano")).toBeInTheDocument();
+    expect(screen.getByText("Dr. Murilo")).toBeInTheDocument();
+  });
+
   it("clarifies what is not identified in an expediente card", () => {
     const item = {
       unread: false, ativo: true, tipo_pendencia: "nao_identificada", tipo_pendencia_label: "Não identificada",

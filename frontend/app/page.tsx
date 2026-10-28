@@ -13,6 +13,8 @@ import { DjenDrawer } from "./components/djen-drawer";
 import { DjenList } from "./components/djen-list";
 import { PdfExportButton } from "./components/pdf-export-button";
 import { EmptyState, ListLoading, LoadingRows, MetricCard, PageTitle, Pagination } from "./components/ui";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNotifications } from "./components/notifications";
 import { useLiveList } from "./hooks/use-live-list";
@@ -64,6 +66,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [readAllOpen, setReadAllOpen] = useState(false);
+  const [readingAll, setReadingAll] = useState(false);
   const [discardTrigger, setDiscardTrigger] = useState<HTMLButtonElement | null>(null);
 
   const [activeMetric, setActiveMetric] = useState<MetricKey>("new");
@@ -189,6 +193,23 @@ export default function Home() {
     }
   };
 
+  const markAllRead = async () => {
+    if (readingAll) return;
+    setReadingAll(true);
+    try {
+      await api("expedientes/read-all/", { method: "POST" });
+      setReadAllOpen(false);
+      setListPage(1);
+      setSelected((item) => item ? { ...item, unread: false } : item);
+      notify({ tone: "success", message: "Expedientes não lidos marcados como lidos." });
+      await Promise.all([load(), loadExpedientes()]);
+    } catch (exception) {
+      notify({ message: exception instanceof Error ? exception.message : "Não foi possível marcar os expedientes como lidos." });
+    } finally {
+      setReadingAll(false);
+    }
+  };
+
   const pipeline = data?.collection_pipeline;
   const djenStep = pipeline?.steps.find((step) => step.code === "djen");
   useEffect(() => {
@@ -295,6 +316,19 @@ export default function Home() {
 
         <TabsContent value="expedientes">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <Dialog open={readAllOpen} onOpenChange={(open) => { if (!readingAll) setReadAllOpen(open); }}>
+              <DialogTrigger render={<Button variant="outline" />}>Marcar todos como lidos</DialogTrigger>
+              <DialogContent role="alertdialog" showCloseButton={!readingAll}>
+                <DialogHeader>
+                  <DialogTitle>Marcar todos os expedientes como lidos?</DialogTitle>
+                  <DialogDescription>Todos os expedientes não lidos serão marcados como lidos, independentemente da data, da página ou do filtro selecionado.</DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button autoFocus variant="outline" disabled={readingAll} onClick={() => setReadAllOpen(false)}>Cancelar</Button>
+                  <Button disabled={readingAll} onClick={() => { void markAllRead(); }}>{readingAll ? "Marcando…" : "Marcar todos como lidos"}</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <PdfExportButton path={`expedientes/export.pdf/?scope=overview&metric=${activeMetric}`} analytical
               label="Exportar expedientes em PDF" count={expedientes?.count}
               summary={`Expedientes · ${metricFilters[activeMetric].title}. ${activeMetric === "new" || activeMetric === "updated" ? "Eventos coletados hoje." : "Este filtro representa o estado atual e pode incluir expedientes coletados antes de hoje. O PDF mostrará apenas alterações registradas hoje."}`} />

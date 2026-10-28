@@ -1,5 +1,5 @@
 import type { DjenCommunication } from "../lib/types";
-import { Badge, SourceBadge } from "./badge";
+import { AttorneyBadges, Badge, SourceBadge } from "./badge";
 import { ProcessList } from "./process-list";
 
 const date = (value: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -13,6 +13,10 @@ export function DjenList({ items, onSelect }: { items: DjenCommunication[]; onSe
     badges: <div className="flex flex-wrap items-center gap-2">
       {item.unread && <Badge tone="unread">Não lido</Badge>}
       <SourceBadge source={{ code: sourceCodes[item.tribunal.toUpperCase()] ?? "djen", system: "DJEN", tribunal: item.tribunal }} />
+      <AttorneyBadges attorneys={["cristiano", "murilo"].filter((name) => item.attorneys.some((attorney) => {
+        const normalized = attorney.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        return name === "cristiano" ? /^cristiano\s+luiz\b/.test(normalized) : /^murilo\s+mariz\b/.test(normalized);
+      }))} />
     </div>,
     title: item.tipo_comunicacao || item.tipo_documento || "Comunicação",
     detail: item.orgao || item.recipients.map((recipient) => recipient.name).join(", ") || "—",
