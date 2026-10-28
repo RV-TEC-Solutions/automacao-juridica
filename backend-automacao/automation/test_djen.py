@@ -59,12 +59,34 @@ class DjenPersistenceTests(TestCase):
         self.assertIsNotNone(communication.read_at)
         self.assertEqual(communication.texto, "Corrigido")
 
+    @override_settings(DJEN_CRISTIANO_OAB_NUMBER="")
     @patch("automation.services.djen.runner.fetch_communications")
     def test_collects_seven_days_before_saving(self, fetch):
         fetch.return_value = []
         collect_djen(source=self.source, run=self.run)
         self.assertEqual(fetch.call_count, 7)
         self.assertEqual((fetch.call_args_list[-1].args[0] - fetch.call_args_list[0].args[0]).days, 6)
+
+
+    @override_settings(DJEN_OAB_NUMBER="5691", DJEN_OAB_STATE="RN", DJEN_CRISTIANO_OAB_NUMBER="5695", DJEN_CRISTIANO_OAB_STATE="RN")
+    @patch("automation.services.djen.runner.fetch_communications")
+    def test_collects_both_oabs_and_deduplicates_shared_publications(self, fetch):
+        fetch.return_value = [record()]
+        result, _ = collect_djen(source=self.source, run=self.run)
+        self.assertEqual(fetch.call_count, 14)
+        self.assertEqual({call.kwargs["oab_number"] for call in fetch.call_args_list}, {"5691", "5695"})
+        self.assertTrue(all(call.kwargs["oab_state"] == "RN" for call in fetch.call_args_list))
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["criados"], 1)
+        self.assertEqual(DjenCommunication.objects.count(), 1)
+
+    @override_settings(DJEN_OAB_NUMBER="5691", DJEN_OAB_STATE="RN", DJEN_CRISTIANO_OAB_NUMBER="5695", DJEN_CRISTIANO_OAB_STATE="RN")
+    @patch("automation.services.djen.runner.fetch_communications")
+    def test_failure_on_second_oab_does_not_save_partial_results(self, fetch):
+        fetch.side_effect = [[record()]] * 7 + [DjenAPIError("falha")]
+        with self.assertRaises(DjenAPIError):
+            collect_djen(source=self.source, run=self.run)
+        self.assertEqual(DjenCommunication.objects.count(), 0)
 
 
 @override_settings(DJEN_OAB_NUMBER="5691", DJEN_OAB_STATE="RN")

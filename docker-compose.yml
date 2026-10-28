@@ -35,6 +35,8 @@ services:
       PJE_CREDENTIALS_FILE: /run/pje-automacao/project.env
       DJEN_OAB_NUMBER: ${DJEN_OAB_NUMBER:-5691}
       DJEN_OAB_STATE: ${DJEN_OAB_STATE:-RN}
+      DJEN_CRISTIANO_OAB_NUMBER: ${DJEN_CRISTIANO_OAB_NUMBER:-}
+      DJEN_CRISTIANO_OAB_STATE: ${DJEN_CRISTIANO_OAB_STATE:-RN}
     ports:
       - "8007:8007"
     volumes:
@@ -72,6 +74,8 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
       DJEN_OAB_NUMBER: ${DJEN_OAB_NUMBER:-5691}
       DJEN_OAB_STATE: ${DJEN_OAB_STATE:-RN}
+      DJEN_CRISTIANO_OAB_NUMBER: ${DJEN_CRISTIANO_OAB_NUMBER:-}
+      DJEN_CRISTIANO_OAB_STATE: ${DJEN_CRISTIANO_OAB_STATE:-RN}
     volumes:
       - pjeoffice_worker_data:/root/.pjeoffice-pro
       - /run/pcscd/pcscd.comm:/run/pcscd/pcscd.comm

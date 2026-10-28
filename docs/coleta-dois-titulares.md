@@ -92,8 +92,7 @@ Formato consultado: [esquema de exportação usado pelo Aegis](https://github.co
 e [codificação Protobuf](https://protobuf.dev/programming-guides/encoding/).
 
 O padrão continua sendo `PJE_COLLECTORS=murilo` até a configuração das duas
-credenciais. O DJEN continua independente, usando a OAB já configurada;
-a consulta à OAB de CRISTIANO depende de configuração específica futura.
+credenciais. O DJEN continua independente e consulta as OABs configuradas de Murilo e Cristiano.
 
 Prepare o instalador `docker/vendor/safenet.deb` conforme
 [o guia Docker](../backend-automacao/docker/README.md). Nesta máquina há uma

@@ -329,6 +329,8 @@ POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5433
 DJEN_OAB_NUMBER=5691
 DJEN_OAB_STATE=RN
+DJEN_CRISTIANO_OAB_NUMBER=5695
+DJEN_CRISTIANO_OAB_STATE=RN
 ALLOWED_HOSTS=*
 CORS_ALLOW_ALL_ORIGINS=True
 CSRF_TRUSTED_ORIGINS=http://localhost:3002,http://127.0.0.1:3002,http://192.168.10.77:3002
@@ -527,7 +529,13 @@ docker compose logs --tail 40 worker
 Não execute os dois workers simultaneamente no mesmo banco/token. O normal
 agenda a coleta diária, por padrão às **06:00**, e processa a fila. Ao iniciar
 após o horário pode agendar recuperação do dia e percorrer as fontes habilitadas.
-O DJEN usa OAB/UF configuradas, consulta sete dias e independe do token físico.
+O DJEN usa as OABs/UFs configuradas de Murilo e Cristiano, consulta sete dias e independe do token físico.
+
+Fontes que falham no ciclo diário são tentadas novamente, individualmente, após
+duas horas, até o próximo horário diário. A fila aguarda qualquer coleta em
+andamento e preserva os resultados já obtidos. No PJe, o retry considera cada
+titular separadamente; falhas de credencial suspendem as tentativas automáticas
+desse titular no ciclo. O histórico identifica cada retry automático.
 
 ## 8. Iniciar o frontend no modo já testado
 

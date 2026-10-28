@@ -37,10 +37,10 @@ def _request(params, *, attempts=3):
     raise DjenAPIError(f"Não foi possível consultar o DJEN: {last_error}") from last_error
 
 
-def fetch_communications(day: date):
+def fetch_communications(day: date, *, oab_number=None, oab_state=None):
     base = {
-        "numeroOab": settings.DJEN_OAB_NUMBER,
-        "ufOab": settings.DJEN_OAB_STATE,
+        "numeroOab": oab_number or settings.DJEN_OAB_NUMBER,
+        "ufOab": oab_state or settings.DJEN_OAB_STATE,
         "meio": "D",
         "dataDisponibilizacaoInicio": day.isoformat(),
         "dataDisponibilizacaoFim": day.isoformat(),
