@@ -62,13 +62,24 @@ def _stop_managed_office():
         raise RuntimeError("PJeOffice anterior não encerrou; nenhuma autenticação foi iniciada.")
 
 
+def release_identity(code):
+    """Libera a RAM do assinador de Murilo após concluir a assinatura do login."""
+    global _current_identity
+    if code == "murilo" and _current_identity == code and os.environ.get("PJE_OFFICE_MANAGED") == "true":
+        _stop_managed_office()
+        _current_identity = None
+
+
 def prepare_identity(code):
     global _current_identity
     collector = get_collector(code)
     if os.environ.get("PJE_OFFICE_MANAGED") != "true":
         raise RuntimeError("A coleta com dois titulares exige o PJeOffice gerenciado no worker Docker.")
     module = verify_token(collector)
-    if _current_identity == code and PID_FILE.exists() and _alive(int(PID_FILE.read_text().strip())):
+    # O SafeSign de Murilo pode manter o diálogo de uma requisição cujo
+    # navegador já fechou. Não reutilize esse processo na fonte seguinte:
+    # preencher aquele diálogo cancela o lote antigo e deixa o novo sem PIN.
+    if code != "murilo" and _current_identity == code and PID_FILE.exists() and _alive(int(PID_FILE.read_text().strip())):
         return
 
     base = Path.home() / ".pjeoffice-pro"
@@ -85,6 +96,10 @@ def prepare_identity(code):
     _current_identity = None
     config.write_text("\n".join([f"list.a3={module}", "list.a1=", *trusted]) + "\n")
     env = {**os.environ, "PJE_OFFICE_USER_HOME": str(home)}
+    if code == "murilo":
+        # O launcher admite 1 GiB de heap, acima dos 512 MiB do worker inteiro.
+        # _JAVA_OPTIONS é aplicado após os argumentos do launcher Java 8.
+        env["_JAVA_OPTIONS"] = (env.get("_JAVA_OPTIONS", "") + " -Xmx256m").strip()
     with (base / f"startup-{code}.log").open("ab") as log:
         process = subprocess.Popen(
             ["/usr/local/bin/pjeoffice-pro"], env=env,

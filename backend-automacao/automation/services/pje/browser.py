@@ -6,6 +6,7 @@ import subprocess
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from django.db import connections
 
 import pyotp
 from automation.collectors import CredentialError, get_collector
+from automation.services.pjeoffice.identity import release_identity
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
@@ -905,27 +907,55 @@ def autenticar_pje(pagina, source_code):
             else pagina.get_by_text("CERTIFICADO DIGITAL", exact=True)
         )
         preparar_login_certificado(pagina, botao)
+    murilo = os.environ.get("PJE_CURRENT_COLLECTOR") == "murilo"
+    resposta = pagina.expect_request_finished(
+        lambda request: requisicao_pjeoffice(request) and request.method != "OPTIONS",
+        timeout=60000,
+    ) if murilo else nullcontext()
     try:
-        with pagina.expect_request(requisicao_pjeoffice, timeout=10000):
-            clicar_certificado(pagina, source_code)
+        with resposta as pendente:
+            try:
+                with pagina.expect_request(requisicao_pjeoffice, timeout=10000):
+                    clicar_certificado(pagina, source_code)
+            except PlaywrightTimeoutError as error:
+                raise PJeAutomationError(
+                    "Comunicação com o PJeOffice",
+                    "o botão de certificado não iniciou a chamada ao assinador em 10 segundos. "
+                    "Verifique o carregamento da página e a permissão de acesso à rede local. "
+                    "O PIN ainda não foi solicitado.",
+                ) from error
+            logger.info("Chamada de autenticação ao PJeOffice iniciada pela página. fonte=%s", source_code)
+            try:
+                preencher_pin_pjeoffice_atspi()
+            except CredentialError:
+                raise
+            except (RuntimeError, subprocess.TimeoutExpired) as error:
+                raise PJeAutomationError(
+                    "Autenticação no PJeOffice",
+                    "a página iniciou a chamada ao assinador, mas o preenchimento do PIN não foi concluído. "
+                    + texto_diagnostico_seguro(error),
+                ) from error
     except PlaywrightTimeoutError as error:
         raise PJeAutomationError(
-            "Comunicação com o PJeOffice",
-            "o botão de certificado não iniciou a chamada ao assinador em 10 segundos. "
-            "Verifique o carregamento da página e a permissão de acesso à rede local. "
-            "O PIN ainda não foi solicitado.",
-        ) from error
-    logger.info("Chamada de autenticação ao PJeOffice iniciada pela página. fonte=%s", source_code)
-    try:
-        preencher_pin_pjeoffice_atspi()
-    except CredentialError:
-        raise
-    except (RuntimeError, subprocess.TimeoutExpired) as error:
-        raise PJeAutomationError(
             "Autenticação no PJeOffice",
-            "a página iniciou a chamada ao assinador, mas o preenchimento do PIN não foi concluído. "
-            + texto_diagnostico_seguro(error),
+            "o PIN foi enviado, mas o assinador não respondeu à requisição da página em 60 segundos. "
+            "A autenticação por certificado não foi concluída; o código de duas etapas ainda não foi solicitado.",
         ) from error
+    if murilo:
+        response = pendente.value.response()
+        if response is None:
+            raise PJeAutomationError(
+                "Autenticação no PJeOffice", "a requisição ao assinador terminou sem uma resposta HTTP verificável.",
+            )
+        if response.status >= 400:
+            raise PJeAutomationError(
+                "Autenticação no PJeOffice",
+                f"o assinador retornou HTTP {response.status}; a autenticação por certificado não foi concluída.",
+            )
+        # O assinador não participa do TOTP nem da leitura dos expedientes.
+        # RequestFinished confirma a resposta inteira mesmo após a navegação
+        # para o TOTP, quando o Chromium já pode ter descartado seu corpo.
+        release_identity("murilo")
 
     campo_otp = pagina.get_by_label(
         "Entre no seu aplicativo de autenticação e digite abaixo o código apresentado:",
@@ -964,10 +994,22 @@ def verificar_identidade_autenticada(pagina):
 
 def abrir_pje(source_code, source=None):
     pje_url = obter_url_pje(source_code)
+    murilo = os.environ.get("PJE_CURRENT_COLLECTOR") == "murilo"
+    acessos_diretos = {
+        "tse-3g": "https://pje.tse.jus.br/pje/login.seam",
+        "tre-rn-1g": "https://pje1g-rn.tse.jus.br/pje",
+        "tre-rn-2g": "https://pje.tre-rn.jus.br/pje",
+    }
+    acesso_direto = murilo and source_code in acessos_diretos
+    if acesso_direto:
+        # Destinos publicados nos portais oficiais. Evita carregar as páginas
+        # institucionais no worker de 512 MiB.
+        pje_url = acessos_diretos[source_code]
     with sync_playwright() as playwright:
-        navegador = playwright.chromium.launch(
-            headless=False
-        )
+        opcoes_navegador = {"headless": False}
+        if murilo:
+            opcoes_navegador["args"] = ["--disable-gpu", "--renderer-process-limit=2"]
+        navegador = playwright.chromium.launch(**opcoes_navegador)
 
         contexto = navegador.new_context()
 
@@ -1011,7 +1053,9 @@ def abrir_pje(source_code, source=None):
 
             profile = get_source_profile(source_code)
             etapa = "Navegação pelo portal"
-            if profile.portal_flow == "trf5":
+            if acesso_direto:
+                pass
+            elif profile.portal_flow == "trf5":
                 abrir_link_trf5_pje(pagina, profile)
             elif profile.portal_flow == "tre-rn-1g":
                 abrir_link_tre_rn_1g_pje(pagina, profile)
@@ -1075,7 +1119,11 @@ def abrir_pje(source_code, source=None):
                 raise CredentialError(f"Fonte {source_code} — {motivo}") from None
             raise PJeAutomationError(etapa, f"Fonte {source_code} — {motivo}") from None
         finally:
-            navegador.close()
+            try:
+                if murilo:
+                    release_identity("murilo")
+            finally:
+                navegador.close()
 
 if __name__ == "__main__":
     arquivos = abrir_pje("pje-tjrn")

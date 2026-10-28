@@ -106,6 +106,48 @@ class CredentialIsolationTests(SimpleTestCase):
                 self.assertEqual((home / "office.pid").read_text(), "12345")
                 stop.assert_called_once()
 
+    def test_only_the_current_managed_murilo_signer_is_released(self):
+        for code, current, managed in (
+            ("murilo", "murilo", "true"),
+            ("murilo", "cristiano", "true"),
+            ("cristiano", "cristiano", "true"),
+            ("murilo", "murilo", "false"),
+        ):
+            with (
+                self.subTest(code=code, current=current, managed=managed),
+                patch.dict(os.environ, {"PJE_OFFICE_MANAGED": managed}),
+                patch.object(identity, "_current_identity", current),
+                patch.object(identity, "_stop_managed_office") as stop,
+            ):
+                identity.release_identity(code)
+                expected = code == current == "murilo" and managed == "true"
+                self.assertEqual(stop.call_count, int(expected))
+                self.assertEqual(identity._current_identity, None if expected else current)
+
+    def test_murilo_restarts_a_live_signer_but_cristiano_keeps_reusing_it(self):
+        for code in ("murilo", "cristiano"):
+            with self.subTest(collector=code), TemporaryDirectory() as directory:
+                home = Path(directory)
+                pid = home / "office.pid"
+                pid.write_text("12345")
+                process = SimpleNamespace(pid=12346, poll=lambda: None)
+                with (
+                    patch.dict(os.environ, {"PJE_OFFICE_MANAGED": "true"}),
+                    patch.object(identity.Path, "home", return_value=home),
+                    patch.object(identity, "PID_FILE", pid),
+                    patch.object(identity, "_current_identity", code),
+                    patch.object(identity, "_alive", return_value=True),
+                    patch.object(identity, "verify_token", return_value=home / "driver.so"),
+                    patch.object(identity, "_stop_managed_office") as stop,
+                    patch.object(identity.subprocess, "Popen", return_value=process) as launch,
+                    patch.object(identity.socket, "create_connection"),
+                ):
+                    prepare_identity(code)
+                self.assertEqual(stop.call_count, int(code == "murilo"))
+                self.assertEqual(launch.call_count, int(code == "murilo"))
+                if code == "murilo":
+                    self.assertTrue(launch.call_args.kwargs["env"]["_JAVA_OPTIONS"].endswith("-Xmx256m"))
+
 
 @override_settings(PJE_COLLECTORS=("murilo", "cristiano"))
 class CollectorApiTests(TestCase):

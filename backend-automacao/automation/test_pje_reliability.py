@@ -101,6 +101,110 @@ class PJeReliabilityTests(SimpleTestCase):
             self.assertFalse(browser.requisicao_pjeoffice(Mock(url=url)))
         self.assertTrue(browser.requisicao_pjeoffice(Mock(url="http://localhost:8800/pjeOffice/requisicao/?r=secret")))
 
+    @patch.dict("os.environ", {"PJE_CURRENT_COLLECTOR": "murilo", "PJE_TOTP_SECRET": "configured"})
+    def test_murilo_waits_for_signer_response_before_generating_totp(self):
+        page = MagicMock()
+        request = page.expect_request_finished.return_value.__enter__.return_value.value
+        request.response.return_value.status = 200
+        with (
+            patch.object(browser, "preparar_login_certificado"),
+            patch.object(browser, "clicar_certificado"),
+            patch.object(browser, "preencher_pin_pjeoffice_atspi"),
+            patch.object(browser, "release_identity") as release,
+            patch.object(browser, "gerar_codigo_totp", return_value="123456") as totp,
+        ):
+            order = Mock()
+            order.attach_mock(request.response, "response")
+            order.attach_mock(release, "release")
+            order.attach_mock(totp, "totp")
+            browser.autenticar_pje(page, "pje-tjrn")
+        self.assertEqual(order.mock_calls, [call.response(), call.release("murilo"), call.totp("configured")])
+        totp.assert_called_once_with("configured")
+        predicate = page.expect_request_finished.call_args.args[0]
+        local_url = "http://localhost:8800/pjeOffice/requisicao/?r=secret"
+        self.assertFalse(predicate(Mock(url=local_url, method="OPTIONS")))
+        self.assertTrue(predicate(Mock(url=local_url, method="GET")))
+        request.response.return_value.body.assert_not_called()
+        request.response.return_value.finished.assert_not_called()
+
+    @patch.dict("os.environ", {"PJE_CURRENT_COLLECTOR": "murilo", "PJE_TOTP_SECRET": "configured"})
+    def test_unfinished_or_failed_signer_is_not_reported_as_missing_otp(self):
+        for status in (500, None):
+            with self.subTest(status=status):
+                page = MagicMock()
+                page.expect_request_finished.return_value.__enter__.return_value.value.response.return_value.status = status
+                if status is None:
+                    page.expect_request_finished.return_value.__exit__.side_effect = PlaywrightTimeoutError("sem resposta")
+                with (
+                    patch.object(browser, "preparar_login_certificado"),
+                    patch.object(browser, "clicar_certificado"),
+                    patch.object(browser, "preencher_pin_pjeoffice_atspi"),
+                    patch.object(browser, "gerar_codigo_totp") as totp,
+                    self.assertRaises(browser.PJeAutomationError) as raised,
+                ):
+                    browser.autenticar_pje(page, "pje-tjrn")
+                self.assertEqual(raised.exception.etapa, "Autenticação no PJeOffice")
+                page.get_by_label.assert_not_called()
+                totp.assert_not_called()
+
+    @patch.dict("os.environ", {"PJE_CURRENT_COLLECTOR": "murilo", "PJE_TOTP_SECRET": "configured"})
+    def test_signer_completion_without_http_response_never_starts_totp(self):
+        page = MagicMock()
+        page.expect_request_finished.return_value.__enter__.return_value.value.response.return_value = None
+        with (
+            patch.object(browser, "preparar_login_certificado"),
+            patch.object(browser, "clicar_certificado"),
+            patch.object(browser, "preencher_pin_pjeoffice_atspi"),
+            patch.object(browser, "release_identity") as release,
+            patch.object(browser, "gerar_codigo_totp") as totp,
+            self.assertRaisesMessage(browser.PJeAutomationError, "HTTP verificável"),
+        ):
+            browser.autenticar_pje(page, "pje-tjrn")
+        release.assert_not_called()
+        totp.assert_not_called()
+
+    @patch.dict("os.environ", {"PJE_TOTP_SECRET": "configured", "PJE_CURRENT_COLLECTOR": "cristiano"})
+    def test_cristiano_authentication_keeps_the_existing_flow(self):
+        page = MagicMock()
+        with (
+            patch.object(browser, "preparar_login_certificado"),
+            patch.object(browser, "clicar_certificado"),
+            patch.object(browser, "preencher_pin_pjeoffice_atspi"),
+            patch.object(browser, "gerar_codigo_totp", return_value="123456"),
+        ):
+            browser.autenticar_pje(page, "pje-tjrn")
+        page.expect_response.assert_not_called()
+        page.expect_request_finished.assert_not_called()
+
+    def test_only_murilo_limits_browser_memory_and_uses_direct_official_access(self):
+        for collector in ("murilo", "cristiano"):
+            for code, direct in (
+                ("tse-3g", "https://pje.tse.jus.br/pje/login.seam"),
+                ("tre-rn-1g", "https://pje1g-rn.tse.jus.br/pje"),
+                ("tre-rn-2g", "https://pje.tre-rn.jus.br/pje"),
+            ):
+                page = Mock()
+                page.goto.side_effect = RuntimeError("fim do teste antes do login")
+                playwright = MagicMock()
+                playwright.chromium.launch.return_value.new_context.return_value.new_page.return_value = page
+                with (
+                    self.subTest(collector=collector, source=code),
+                    patch.dict("os.environ", {"PJE_CURRENT_COLLECTOR": collector}),
+                    patch.object(browser, "sync_playwright") as sync,
+                    patch.object(browser, "release_identity"),
+                    patch.object(browser, "salvar_diagnostico_pje", return_value={"html": None, "screenshot": None}),
+                    self.assertLogs("automation", "ERROR"),
+                    self.assertRaises(browser.PJeAutomationError),
+                ):
+                    sync.return_value.__enter__.return_value = playwright
+                    browser.abrir_pje(code)
+                expected_options = {"headless": False}
+                if collector == "murilo":
+                    expected_options["args"] = ["--disable-gpu", "--renderer-process-limit=2"]
+                playwright.chromium.launch.assert_called_once_with(**expected_options)
+                expected = direct if collector == "murilo" else browser.obter_url_pje(code)
+                page.goto.assert_called_once_with(expected, wait_until="domcontentloaded")
+
     def test_ajax_response_is_correlated_with_the_clicked_tab(self):
         page = MagicMock()
         tab = Mock()

@@ -26,8 +26,8 @@ class Collector:
 
 
 COLLECTORS = {
-    "murilo": Collector("murilo", "MURILO", "2108950019F94896", "/usr/lib/libaetpkss.so.3"),
-    "cristiano": Collector("cristiano", "CRISTIANO", "027ef6e7", "/usr/lib/libeToken.so"),
+    "murilo": Collector("murilo", "DR. MURILO", "2108950019F94896", "/usr/lib/libaetpkss.so.3"),
+    "cristiano": Collector("cristiano", "DR. CRISTIANO", "027ef6e7", "/usr/lib/libeToken.so"),
 }
 
 
@@ -97,7 +97,7 @@ def collector_status_payload():
         if state == "idle" and latest:
             state = "blocked" if latest.credential_failure else latest.status
         result.append({
-            "code": code, "label": f"Dr. {collector.label.title()}",
+            "code": code, "label": collector.label,
             "enabled": code in enabled, "pin_configured": pin, "totp_configured": totp,
             "state": state, "last_success_at": success.finalizada_em if success else None,
             "error": latest.mensagem_erro if latest and latest.status == "failed" else "",
