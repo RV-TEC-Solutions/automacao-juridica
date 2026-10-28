@@ -5,3 +5,7 @@ node_modules
 npm-debug.log
 Dockerfile
 .dockerignore
+.env*
+test-results/
+playwright-report/
+coverage/

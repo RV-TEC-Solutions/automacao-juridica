@@ -346,38 +346,51 @@ Use o IP da interface conectada ao escritório, não os endereços das bridges
 Docker `172.*`. Substitua o IP no `CSRF_TRUSTED_ORIGINS`. Reserve esse endereço
 por DHCP no roteador; cada servidor deve ter seu próprio IP.
 
-Crie o arquivo externo de credenciais:
+Configure as credenciais no mesmo `.env` local da raiz do projeto:
 
 ```bash
-install -d -m 700 "$HOME/.config/pje-automacao"
-touch "$HOME/.config/pje-automacao/.env"
-chmod 600 "$HOME/.config/pje-automacao/.env"
-nano "$HOME/.config/pje-automacao/.env"
+chmod 600 .env
+nano .env
 ```
 
 ```dotenv
 PJE_CERT_PIN=PIN_REAL_DO_TOKEN
 PJE_TOTP_SECRET=SEGREDO_BASE32_DO_AUTENTICADOR
+PJE_CRISTIANO_CERT_PIN=PIN_REAL_DO_TOKEN_DE_CRISTIANO
+PJE_CRISTIANO_TOTP_SECRET=SEGREDO_BASE32_DO_AUTENTICADOR_DE_CRISTIANO
 ```
 
 TOTP é o segredo de configuração do autenticador, não o código temporário de
-seis dígitos. Compose monta essa pasta somente para leitura. Para o modo Docker
-atual, configure **também** `PJE_CERT_PIN` e `PJE_TOTP_SECRET` com os mesmos valores
-no `.env` principal, editando-o com `nano .env`. Foi assim que o teste funcionou:
-os dois valores estavam preenchidos no ambiente do container e no arquivo externo.
-O Compose declara essas variáveis mesmo quando vazias, e `load_dotenv` não
-substitui variáveis existentes vazias; portanto, somente o arquivo externo não
-basta nesta configuração. Não publique segredos em Git, logs ou linha de comando.
+seis dígitos. O único local dos segredos PJe é o `.env` da raiz, ignorado pelo
+Git e montado somente para leitura na API e no worker. Não mantenha cópias no
+antigo arquivo externo nem declare PINs e TOTP no ambiente do Compose.
+A leitura é centralizada por titular;
+Cristiano nunca usa as credenciais de Murilo como alternativa.
+No `.env` principal, habilite `PJE_COLLECTORS=murilo,cristiano`.
+Não publique segredos em Git, logs ou linha de comando.
 
-Confira a presença dos valores no ambiente, sem mostrar seu conteúdo, depois de
+Se você tem uma exportação `otpauth-migration://` do Google Authenticator,
+use o [importador local](docs/coleta-dois-titulares.md#importar-um-qr-de-exportação-do-google-authenticator)
+para extrair a chave Base32, conferir um código do app e atualizar somente o
+segredo do titular no `.env`, sem exibir a chave.
+
+Confira a leitura das credenciais, sem mostrar seu conteúdo, depois de
 subir o backend na etapa 6:
 
 ```bash
-docker compose exec backend python -c 'import os; print({k: bool(os.environ.get(k)) for k in ("PJE_CERT_PIN", "PJE_TOTP_SECRET")})'
+docker compose exec backend python manage.py shell -c 'from automation.collectors import credentials_for; print({c: all(credentials_for(c).values()) for c in ("murilo", "cristiano")})'
 ```
 
-Ambos devem indicar `True`. Alterar o `.env` requer recriar os containers
-consumidores, não apenas reiniciar o processo.
+Ambos devem indicar `True`. A presença das credenciais não comprova login.
+Depois de editar o `.env`, recrie os consumidores fora de uma coleta em
+andamento. Isso atualiza as variáveis de configuração e garante a nova montagem
+do arquivo, inclusive quando o editor salva substituindo o arquivo original:
+
+```bash
+docker compose up -d --force-recreate --no-deps backend worker
+```
+
+Alterar somente credenciais não exige rebuild das imagens.
 
 ```bash
 sudo timedatectl set-timezone America/Fortaleza
@@ -610,6 +623,12 @@ docker compose up -d --force-recreate --no-deps backend
 
 ## 10. Operação e diagnóstico
 
+Na pipeline, escolha **Coletar para → Dr. Murilo**, **Dr. Cristiano** ou
+**Todos os titulares** antes de clicar em **Executar coleta**. Uma coleta
+individual percorre as fontes desse titular e preserva os resultados dos
+demais. Para repetir apenas uma fonte, use **Reexecutar somente…** nela.
+O agendamento diário continua coletando todos os titulares habilitados.
+
 Banco, backend e worker usam `restart: unless-stopped`; Docker inicia no boot.
 O frontend local precisa ser iniciado novamente após reboot; o frontend Docker
 segue a política de reinicialização. Mantenha notebook ligado, rede e token
@@ -632,7 +651,7 @@ docker compose exec worker python manage.py test automation.tests.PJeOfficeTests
 | Detectado no host, ausente no container | Confira montagem/socket; recrie consumidores se o socket foi recriado |
 | PJeOffice ausente no AT-SPI | Java, startup log, Java ATK e sessão D-Bus |
 | Janela PIN ausente no primeiro uso | Autorização SSO da etapa 7; o volume pode ter sido apagado |
-| PIN/TOTP não configurados | Arquivo externo, montagem e precedência das variáveis; não imprima segredos |
+| PIN/TOTP não configurados | `.env` raiz, montagem somente leitura e recriação da API/worker; não imprima segredos |
 | TOTP recusado | Segredo Base32 e sincronização do relógio |
 | WebSocket `/_next/hmr` inválido | `allowedDevOrigins` para IP atual e reinício do Next local |
 | Login/POST com 403 | Autenticação/CSRF; acessar outro IP não compartilha necessariamente sessão de localhost |
@@ -692,7 +711,7 @@ docker compose up -d --no-build postgres backend
 Esse caminho substitui o build da etapa 6. Na etapa 7 use
 `docker compose run --no-build -d --no-deps --name pje-worker-setup worker sleep infinity`
 e inicie o worker definitivo com `docker compose up -d --no-build worker`.
-As imagens não contêm banco ou credenciais externas; repita configuração,
+As imagens não contêm banco ou credenciais do `.env`; repita configuração,
 autorização e teste no destino. Frontend local continua com Node fixo e `npm ci`.
 
 Para arquivar também os pacotes principais do host enquanto disponíveis no APT:

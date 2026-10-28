@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,7 +14,7 @@ from django.conf import settings
 from django.db import connections
 
 import pyotp
-from dotenv import load_dotenv
+from automation.collectors import CredentialError, get_collector
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
@@ -25,8 +26,6 @@ from .notices import mark_confirmed, persist_notices
 
 PYTHON_ATSPI = "/usr/bin/python3"
 
-CREDENCIAIS = Path.home() / ".config/pje-automacao/.env"
-
 PASTA_RESPOSTAS = settings.BASE_DIR / "respostas_expedientes"
 logger = logging.getLogger("automation")
 
@@ -34,8 +33,6 @@ CERTIFICATE_EXPIRY_CLICK_RETRY_TIMEOUT_MS = 10000
 AJAX_TIMEOUT_MS = 30000
 LOGIN_TIMEOUT_MS = 30000
 AJAX_STATUS = '[id="_viewRoot:status.start"]'
-
-load_dotenv(CREDENCIAIS)
 
 
 def url_segura(url):
@@ -564,7 +561,7 @@ def esperar_destino_pos_login(pagina, source):
             return ""
         pagina.wait_for_timeout(500)
     if pagina.get_by_text("Código inválido", exact=True).count():
-        raise RuntimeError(
+        raise CredentialError(
             "O PJe rejeitou o código TOTP. "
             "Verifique o horário do computador e o segredo configurado."
         )
@@ -674,6 +671,8 @@ def preencher_pin_pjeoffice_atspi():
         timeout=40,
     )
 
+    if resultado.returncode == 3:
+        raise CredentialError("PIN rejeitado ou bloqueado pelo token. Confira a credencial antes de reexecutar este titular.")
     if resultado.returncode != 0:
         raise RuntimeError(
             "O helper AT-SPI não concluiu o PIN. "
@@ -919,6 +918,8 @@ def autenticar_pje(pagina, source_code):
     logger.info("Chamada de autenticação ao PJeOffice iniciada pela página. fonte=%s", source_code)
     try:
         preencher_pin_pjeoffice_atspi()
+    except CredentialError:
+        raise
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         raise PJeAutomationError(
             "Autenticação no PJeOffice",
@@ -939,6 +940,26 @@ def autenticar_pje(pagina, source_code):
         ) from error
     campo_otp.fill(gerar_codigo_totp(segredo_totp))
     pagina.get_by_text("Validar", exact=True).click()
+
+
+def verificar_identidade_autenticada(pagina):
+    code = os.environ.get("PJE_CURRENT_COLLECTOR")
+    if not code:
+        return
+    collector = get_collector(code)
+    # Cabeçalho do PJe legado; usa o nome completo do tooltip, sem guardar CPF.
+    identity = pagina.locator('.nome-sobrenome').first
+    try:
+        identity.wait_for(state="visible", timeout=10000)
+    except PlaywrightTimeoutError:
+        raise PJeAutomationError("Conferência de identidade", "O portal não apresentou um nome de usuário verificável; nenhum expediente foi persistido.") from None
+    name = identity.get_attribute("data-original-title") or identity.get_attribute("title") or identity.inner_text()
+    name = name.split('(')[0].split('/')[0].strip()
+    normalized = ''.join(c for c in unicodedata.normalize('NFKD', name) if not unicodedata.combining(c)).upper()
+    expected = {"murilo": "MURILO MARIZ", "cristiano": "CRISTIANO LUIZ"}[code]
+    if expected not in normalized:
+        raise CredentialError(f"Identidade autenticada diverge de {collector.label}. Coleta suspensa antes da persistência.")
+    logger.info("Identidade autenticada conferida. titular=%s", code)
 
 
 def abrir_pje(source_code, source=None):
@@ -1018,6 +1039,7 @@ def abrir_pje(source_code, source=None):
                 from automation.models import AutomationSource
                 source = AutomationSource.objects.get(code=source_code)
             notice_message = esperar_destino_pos_login(pagina, source)
+            verificar_identidade_autenticada(pagina)
             return LegacyCollection(coletar_expedientes(pagina, source_code), notice_message)
         except Exception as error:
             evidencias = salvar_diagnostico_pje(pagina, source_code)
@@ -1049,6 +1071,8 @@ def abrir_pje(source_code, source=None):
                     logger.error("Não foi possível salvar o resumo de diagnóstico. fonte=%s", source_code)
             logger.error("Falha na automação PJe. diagnostico=%s", json.dumps(resumo, ensure_ascii=False))
             # Não propaga URLs com parâmetros/desafios no traceback registrado pelo runner.
+            if isinstance(error, CredentialError):
+                raise CredentialError(f"Fonte {source_code} — {motivo}") from None
             raise PJeAutomationError(etapa, f"Fonte {source_code} — {motivo}") from None
         finally:
             navegador.close()

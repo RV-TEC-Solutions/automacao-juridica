@@ -15,6 +15,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NODE_OPTIONS=--max-old-space-size=512
+ENV NODE_OPTIONS=$NODE_OPTIONS
 ARG BACKEND_URL=http://backend:8007
 ENV BACKEND_URL=$BACKEND_URL
 

@@ -129,8 +129,8 @@ export default function Home() {
   const run = async (source = "pje-tjrn", rerun = false, collector?: string) => {
     if (runRequest.current) return;
     const currentPipeline = data?.collection_pipeline;
-    if (rerun && (currentPipeline?.active || currentPipeline?.steps.some((step) =>
-      step.run_id !== null && (step.status === "pending" || step.status === "running")))) return;
+    if (currentPipeline?.active || currentPipeline?.steps.some((step) =>
+      step.run_id !== null && (step.status === "pending" || step.status === "running"))) return;
     runRequest.current = true;
     setRunning(true);
     try {
@@ -270,7 +270,7 @@ export default function Home() {
               discarding={discarding} canDiscard={canDiscard}
               onRefresh={() => { setRefreshing(true); void Promise.all([load(), todayTab === "publicacoes" ? loadPublications() : loadExpedientes()]).finally(() => setRefreshing(false)); }}
               tokenAvailable={tokenStatus?.available}
-              onRun={() => { void run(); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source, collector) => { void run(source, true, collector); }} />
+              onRun={(collector) => { void run("pje-tjrn", false, collector); }} onCancel={() => { void cancel(); }} onDiscard={(trigger) => { setDiscardTrigger(trigger); setDiscardDialogOpen(true); }} onRerun={(source, collector) => { void run(source, true, collector); }} />
           </div>
         )}
       </div>

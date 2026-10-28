@@ -27,6 +27,29 @@ const handlers = () => ({
 });
 
 describe("CollectionPipeline", () => {
+  it.each(["murilo", "cristiano", "all"])("requires an explicit choice and starts only the selected scope: %s", (target) => {
+    const value = pipeline(false);
+    value.collectors = ["murilo", "cristiano"].map((code) => ({
+      code, label: `Dr. ${code === "murilo" ? "Murilo" : "Cristiano"}`, enabled: true,
+      pin_configured: true, totp_configured: true, state: "success", last_success_at: null, error: "",
+    }));
+    const callbacks = handlers();
+    render(<CollectionPipeline pipeline={value} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
+    const start = screen.getByRole("button", { name: "Executar coleta" });
+    expect(start).toBeDisabled();
+    fireEvent.click(start);
+    expect(callbacks.onRun).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Coletar para" }), { target: { value: target } });
+    expect(start).toBeEnabled();
+    fireEvent.click(start);
+    expect(callbacks.onRun).toHaveBeenCalledExactlyOnceWith(target === "all" ? undefined : target);
+  });
+
+  it("prevents changing the collection target during an active cycle", () => {
+    render(<CollectionPipeline pipeline={pipeline()} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...handlers()} />);
+    expect(screen.getByRole("combobox", { name: "Coletar para" })).toBeDisabled();
+  });
+
   it("reruns the selected owner and keeps error descriptions distinct", () => {
     const value = pipeline(false);
     value.steps = ["murilo", "cristiano"].map((collector) => ({
@@ -104,6 +127,7 @@ describe("CollectionPipeline", () => {
     expect(screen.getByRole("link", { name: "Ver relatório de coletas" })).toHaveAttribute("href", "/historico?tab=orquestracao");
     fireEvent.click(screen.getByRole("button", { name: "Descartar coleta do dia" }));
     expect(callbacks.onDiscard).toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Coletar para" }), { target: { value: "all" } });
     expect(screen.getByRole("button", { name: "Executar coleta" })).toBeEnabled();
   });
 

@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR.parent / '.env')
+PJE_CREDENTIALS_FILE = Path(os.environ.get('PJE_CREDENTIALS_FILE', BASE_DIR.parent / '.env'))
 
 
 # Quick-start development settings - unsuitable for production
@@ -32,6 +33,9 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1')
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
 # Application definition
+
+# Mesmo tipo de chave primária já declarado nas migrações do projeto.
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 INSTALLED_APPS = [
     'django.contrib.admin',

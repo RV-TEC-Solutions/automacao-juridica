@@ -3,7 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Permite o HMR ao acessar o servidor de desenvolvimento pela rede do escritório.
   allowedDevOrigins: ["192.168.10.77"],
-  experimental: { useTypeScriptCli: false },
+  experimental: {
+    useTypeScriptCli: false,
+    // O notebook de coleta dispõe de cerca de 4 GB de RAM.
+    cpus: 1,
+    webpackMemoryOptimizations: true,
+  },
   output: "standalone",
   // A API Django usa rotas com barra final. Sem isto, o Next remove a barra,
   // Django a recoloca e o navegador entra em loop de redirecionamentos.

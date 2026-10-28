@@ -3,12 +3,13 @@ import {
   SpinnerGap, Stop, XCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatDateTime } from "../lib/api";
 import type { CollectionPipeline as Pipeline, PipelineStep, PipelineStepStatus } from "../lib/types";
 import { Panel } from "./ui";
 import { cn } from "@/lib/utils";
+import { CollectorStatusList } from "./collector-status";
 
 const statusMeta: Record<PipelineStepStatus, { label: string; className: string; Icon: typeof Clock }> = {
   pending: { label: "Aguardando", className: "border-border bg-muted text-muted-foreground", Icon: Clock },
@@ -28,7 +29,7 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
     <li className="group/step">
       <div className={cn("relative flex min-h-10 items-center gap-2 rounded-lg border px-2 py-2", meta.className, step.status === "failed" && "hover:border-destructive focus-within:ring-2 focus-within:ring-ring")}>
         {step.status === "failed" && <Link
-          href={`/historico?${new URLSearchParams({ tab: "orquestracao", failed_source: step.code })}`}
+          href={`/historico?${new URLSearchParams({ tab: "orquestracao", failed_source: step.code, ...(step.collector ? { collector: step.collector } : {}) })}`}
           className="absolute inset-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           aria-label={`Ver falha de ${step.group} · ${step.label} no histórico de coletas`}
           aria-describedby={errorId}
@@ -76,15 +77,20 @@ export function CollectionPipeline({
   tokenAvailable?: boolean;
   canDiscard: boolean;
   onRefresh: () => void;
-  onRun: () => void;
+  onRun: (collector?: string) => void;
   onCancel: () => void;
   onDiscard: (trigger: HTMLButtonElement) => void;
   onRerun: (code: string, collector?: string) => void;
 }) {
+  const [selectedCollector, setSelectedCollector] = useState("");
+  const collectors = pipeline.collectors?.filter((collector) => collector.enabled) ?? [];
+  const selected = collectors.find((collector) => collector.code === selectedCollector);
+  const scope = pipeline.collectors?.find((collector) => collector.code === pipeline.collector_scope);
   const groups = Array.from(new Set(pipeline.steps.map((step) => step.group)));
   const busy = pipeline.active || pipeline.steps.some((step) =>
     step.run_id !== null && (step.status === "running" || step.status === "pending"));
-  const canStart = tokenAvailable && !starting && !busy;
+  const controlsDisabled = starting || busy || discarding || cancelling;
+  const canStart = tokenAvailable && !controlsDisabled && (selectedCollector === "all" || !!selected);
   const current = pipeline.steps.find((step) => step.code === pipeline.current_step &&
     (!pipeline.current_collector || step.collector === pipeline.current_collector));
   const statusDescription = pipeline.active
@@ -101,8 +107,19 @@ export function CollectionPipeline({
             {pipeline.finished_at && <span className="text-xs font-medium text-muted-foreground">Última sincronização: {formatDateTime(pipeline.finished_at)}</span>}
           </div>
           <h3 className="mb-2 text-base font-extrabold tracking-tight text-foreground">{pipeline.completed} de {pipeline.total} fontes concluídas</h3>
+          {scope && <p className="mb-1 text-xs text-muted-foreground">Ciclo individual: {scope.label}.</p>}
           {pipeline.active && <p className="mb-0 truncate text-xs font-medium text-muted-foreground" title={statusDescription}>{statusDescription}</p>}
         </div>
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            <label htmlFor="collection-target" className="text-xs font-medium text-foreground">Coletar para</label>
+            <select id="collection-target" value={selectedCollector} onChange={(event) => setSelectedCollector(event.target.value)} disabled={controlsDisabled}
+              className="h-8 w-40 max-w-full rounded-md border border-border bg-card px-2 text-xs text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50">
+              <option value="" disabled>Selecione o titular</option>
+              {collectors.map((collector) => <option key={collector.code} value={collector.code}>{collector.label}</option>)}
+              <option value="all">Todos os titulares</option>
+            </select>
+          </div>
         <div className="flex shrink-0 gap-1">
           <Link href="/historico?tab=orquestracao" className={buttonVariants({ variant: "outline", size: "icon-sm" })} aria-label="Ver relatório de coletas" title="Ver relatório de coletas">
             <ChartBar size={15} weight="duotone" />
@@ -118,13 +135,19 @@ export function CollectionPipeline({
               <Stop size={15} weight="fill" />
             </Button>
           ) : (
-            <Button type="button" size="icon-sm" onClick={onRun} disabled={!canStart} aria-label="Executar coleta" title={tokenAvailable ? "Executar coleta" : "Conecte o token físico para iniciar a coleta"}>
+            <Button type="button" size="icon-sm" onClick={() => onRun(selectedCollector === "all" ? undefined : selectedCollector)} disabled={!canStart} aria-label="Executar coleta" title={!tokenAvailable ? "Conecte o token físico para iniciar a coleta" : selected ? `Coletar apenas ${selected.label}` : selectedCollector === "all" ? "Coletar todos os titulares" : "Selecione quem coletar"}>
               <Play size={14} weight="fill" />
             </Button>
           )}
         </div>
+        </div>
       </div>
 
+      <p className="mt-2 mb-0 text-xs text-muted-foreground">{selected
+        ? `Serão coletadas todas as fontes de ${selected.label}. Os resultados dos demais titulares serão preservados.`
+        : selectedCollector === "all" ? "Serão coletadas todas as fontes de todos os titulares habilitados, em sequência."
+        : "Escolha quem coletar antes de iniciar."}</p>
+      {pipeline.collectors && <div className="mt-3"><CollectorStatusList collectors={pipeline.collectors} /></div>}
       <div className="mt-3 min-w-0 overflow-x-auto overscroll-x-contain pb-2" data-testid="pipeline-scroll-region">
         <div className="flex min-w-max items-start">
           {groups.map((group, index) => (

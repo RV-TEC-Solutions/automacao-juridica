@@ -1,9 +1,6 @@
-import os
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from dotenv import dotenv_values
 
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.db import transaction
@@ -18,7 +15,7 @@ from rest_framework.response import Response
 from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, UserProfile
 from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
-from .collectors import collector_order, get_collector
+from .collectors import collector_order, get_collector, collector_status_payload
 from .services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
 from expedientes.models import Cliente, Expediente, ExpedienteEvent, Processo
 
@@ -112,16 +109,15 @@ def settings_view(request):
                 return Response({"collection_time": "Horário inválido."}, status=status.HTTP_400_BAD_REQUEST)
         profile.save()
 
-    credential_file = Path.home() / ".config/pje-automacao/.env"
-    credential_values = dotenv_values(credential_file) if credential_file.exists() else {}
+    from django.conf import settings as django_settings
+    credential_file = django_settings.PJE_CREDENTIALS_FILE
     return Response({
         **_user_payload(request.user), "timezone": "America/Fortaleza",
         "credential_status": {
             "credential_file": credential_file.exists(),
-            "pin": bool(os.environ.get("PJE_CERT_PIN") or credential_values.get("PJE_CERT_PIN")),
-            "totp": bool(os.environ.get("PJE_TOTP_SECRET") or credential_values.get("PJE_TOTP_SECRET")),
             "pjeoffice": "Verificado durante a coleta",
         },
+        "collectors": collector_status_payload(),
     })
 
 
@@ -411,6 +407,8 @@ def runs(request):
             trigger = (
                 AutomationRun.Trigger.RERUN
                 if rerun
+                else AutomationRun.Trigger.COLLECTOR
+                if request.data.get("collector") and requested_code != "djen"
                 else AutomationRun.Trigger.MANUAL
             )
             collector = request.data.get("collector") or collector_order()[0]

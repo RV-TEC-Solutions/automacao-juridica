@@ -28,13 +28,14 @@ function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: bo
     <TableRow>
       <TableCell><Badge variant={statusVariant[run.status]}>{run.status_label}</Badge></TableCell>
       <TableCell><strong className="block text-xs">{run.source?.system ?? "Fonte indisponível"}</strong><span className="text-xs text-muted-foreground">{run.source?.tribunal ?? "—"}</span></TableCell>
+      <TableCell>{run.source?.code === "djen" ? "Consulta por OAB" : run.collector_label ? `Dr. ${run.collector_label.toLowerCase().replace(/^./, (letter) => letter.toUpperCase())}` : "—"}</TableCell>
       <TableCell>{run.trigger_label}</TableCell>
       <TableCell>{formatDateTime(run.started_at ?? run.created_at, { timeStyle: "short" })}</TableCell>
       <TableCell>{formatDuration(run.duration_seconds)}</TableCell>
       <TableCell><span>{run.found} encontrados</span><span className="mx-2 text-border">·</span><span className="text-success">+{run.created}</span><span className="mx-2 text-border">·</span><span>{run.updated} alt.</span><span className="mx-2 text-border">·</span><span>{run.resolved} res.</span></TableCell>
       <TableCell className="text-right">{run.error ? <Button variant="outline" size="sm" className="text-destructive" aria-expanded={expanded} aria-controls={errorId} onClick={onToggle}>Ver erro<CaretDown className={expanded ? "rotate-180" : ""} /></Button> : "—"}</TableCell>
     </TableRow>
-    {run.error && expanded && <TableRow id={errorId} className="bg-destructive/10"><TableCell colSpan={7}>
+    {run.error && expanded && <TableRow id={errorId} className="bg-destructive/10"><TableCell colSpan={8}>
       {/* Fill the existing columns without contributing the log's intrinsic width to the table. */}
       <div role="alert" className="flex w-0 min-w-full gap-2 text-xs leading-6 text-destructive">
         <WarningCircle size={16} weight="fill" className="mt-2 shrink-0" aria-hidden="true" />
@@ -54,7 +55,7 @@ export function CollectionHistoryPanel() {
 
     {data?.days.map((day) => <section key={day.date} aria-labelledby={`collection-day-${day.date}`}>
       <HistoryDayHeader date={day.date} label={`${day.runs.length} fonte${day.runs.length === 1 ? "" : "s"}`} icon={<Clock size={18} aria-hidden="true" />} id={`collection-day-${day.date}`} />
-      <div className="overflow-hidden rounded-lg border bg-card"><Table className="min-w-5xl" aria-labelledby={`collection-day-${day.date}`}><TableHeader className="bg-muted/50"><TableRow><TableHead>Status</TableHead><TableHead>Fonte</TableHead><TableHead>Acionamento</TableHead><TableHead>Início</TableHead><TableHead>Duração</TableHead><TableHead>Resultados</TableHead><TableHead className="text-right">Detalhes</TableHead></TableRow></TableHeader><TableBody>{day.runs.map((run) => <RunRows key={run.id} run={run} expanded={expandedRun === run.id} onToggle={() => setExpandedRun((current) => current === run.id ? null : run.id)} />)}</TableBody></Table></div>
+      <div className="overflow-x-auto rounded-lg border bg-card"><Table className="min-w-5xl" aria-labelledby={`collection-day-${day.date}`}><TableHeader className="bg-muted/50"><TableRow><TableHead>Status</TableHead><TableHead>Fonte</TableHead><TableHead>Titular</TableHead><TableHead>Acionamento</TableHead><TableHead>Início</TableHead><TableHead>Duração</TableHead><TableHead>Resultados</TableHead><TableHead className="text-right">Detalhes</TableHead></TableRow></TableHeader><TableBody>{day.runs.map((run) => <RunRows key={run.id} run={run} expanded={expandedRun === run.id} onToggle={() => setExpandedRun((current) => current === run.id ? null : run.id)} />)}</TableBody></Table></div>
     </section>)}
     {data && data.days.length === 0 && <EmptyState icon={<Clock size={26} weight="duotone" />} title="Nenhuma coleta encontrada" description="A consulta diária pode não ter coletas para os filtros atuais." />}
   </div>;

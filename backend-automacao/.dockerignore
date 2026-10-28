@@ -7,3 +7,4 @@ db.sqlite3
 respostas_expedientes/
 .git
 .gitignore
+.env*

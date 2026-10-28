@@ -161,6 +161,7 @@ class UserProfile(models.Model):
 class AutomationRun(models.Model):
 
     collector = models.CharField(max_length=30, default="murilo")
+    credential_failure = models.BooleanField(default=False)
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pendente"
@@ -172,6 +173,7 @@ class AutomationRun(models.Model):
     class Trigger(models.TextChoices):
         SCHEDULED = "scheduled", "Agendada"
         MANUAL = "manual", "Manual"
+        COLLECTOR = "collector", "Coleta de titular"
         RERUN = "rerun", "Reexecução de fonte"
         CATCH_UP = "catch_up", "Recuperação"
 

@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import unicodedata
 
 import pyatspi
 
@@ -8,6 +9,30 @@ NOMES_APLICACAO = ("pjeoffice",)
 NOME_JANELA_PIN = "informe a senha"
 NOMES_BOTAO_CONFIRMAR = ("ok", "confirmar", "prosseguir", "entrar")
 KEYSYM_RETURN = 0xFF0D
+
+
+class PinRejectedError(RuntimeError):
+    pass
+
+
+def verificar_rejeicao_pin():
+    """Lê rótulos de erro, nunca conteúdo de campos de senha."""
+    try:
+        aplicacao = localizar_aplicacao()
+    except RuntimeError:
+        return
+    for no in percorrer(aplicacao):
+        if no.getRole() == pyatspi.ROLE_PASSWORD_TEXT:
+            continue
+        if not no.getState().contains(pyatspi.STATE_SHOWING):
+            continue
+        texto = ''.join(c for c in unicodedata.normalize('NFKD', no.name or '') if not unicodedata.combining(c)).lower()
+        if any(term in texto for term in (
+            'ckr_pin_incorrect', 'ckr_pin_locked', 'senha incorreta', 'senha invalida',
+            'pin incorreto', 'pin invalido', 'pin bloqueado', 'senha bloqueada',
+            'incorrect pin', 'pin is locked', 'password incorrect',
+        )):
+            raise PinRejectedError("PIN rejeitado ou bloqueado pelo token. Nenhuma nova tentativa será feita para este titular no ciclo.")
 
 def percorrer(no):
     yield no
@@ -156,6 +181,7 @@ def preencher_pin():
 
     while time.monotonic() < limite:
         try:
+            verificar_rejeicao_pin()
             aplicacao = localizar_aplicacao()
             janela = localizar_janela(aplicacao)
             campo_pin = localizar_campo_pin(janela)
@@ -166,21 +192,28 @@ def preencher_pin():
                     "AT-SPI recusou o preenchimento do PIN."
                 )
 
-            try:
-                botao = localizar_botao_confirmar(janela)
-            except RuntimeError:
-                confirmar_com_enter(campo_pin)
-            else:
-                acionar(botao)
-            return
+            break
+        except PinRejectedError:
+            raise
         except RuntimeError as erro:
             ultimo_erro = erro
             time.sleep(0.5)
 
-    raise RuntimeError(
-        "Não foi possível concluir o PIN em 30 segundos. "
-        f"Último diagnóstico: {ultimo_erro}"
-    )
+    else:
+        raise RuntimeError(
+            "Não foi possível concluir o PIN em 30 segundos. "
+            f"Último diagnóstico: {ultimo_erro}"
+        )
+    # Uma confirmação no máximo. Falha na ação não volta ao laço de envio.
+    try:
+        botao = localizar_botao_confirmar(janela)
+    except RuntimeError:
+        confirmar_com_enter(campo_pin)
+    else:
+        acionar(botao)
+    for _ in range(20):
+        verificar_rejeicao_pin()
+        time.sleep(.25)
 
 if __name__ == "__main__":
     try:
@@ -191,6 +224,9 @@ if __name__ == "__main__":
             print("Janela e campo do PIN acessíveis; nenhum PIN enviado.")
         else:
             preencher_pin()
+    except PinRejectedError as erro:
+        print(f"erro: {erro}", file=sys.stderr)
+        raise SystemExit(3)
     except Exception as erro:
         print(f"erro: {erro}", file=sys.stderr)
         raise SystemExit(2)

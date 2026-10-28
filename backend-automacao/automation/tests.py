@@ -165,6 +165,9 @@ class QueueTests(TestCase):
 
 class PJePipelineTests(TestCase):
     def setUp(self):
+        credentials = patch("automation.services.pje.runner.collector_credentials")
+        credentials.start()
+        self.addCleanup(credentials.stop)
         self.first_degree = AutomationSource.objects.get(code="pje-tjrn")
         self.second_degree = AutomationSource.objects.get(code="pje2g-tjrn")
 

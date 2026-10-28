@@ -43,10 +43,11 @@ def enqueue_run(source, trigger, requested_by=None, scheduled_for=None, cycle_id
     active_runs = AutomationRun.objects.filter(
         status__in=(AutomationRun.Status.PENDING, AutomationRun.Status.RUNNING),
     )
-    if (trigger == AutomationRun.Trigger.RERUN and active_runs.exists()) or active_runs.filter(
-        trigger=AutomationRun.Trigger.RERUN,
+    isolated_triggers = (AutomationRun.Trigger.RERUN, AutomationRun.Trigger.COLLECTOR)
+    if (trigger in isolated_triggers and active_runs.exists()) or active_runs.filter(
+        trigger__in=isolated_triggers,
     ).exists():
-        raise ValueError("Aguarde a pipeline e a reexecução em andamento terminarem. Reexecute uma fonte por vez.")
+        raise ValueError("Aguarde a coleta em andamento terminar antes de iniciar outro titular. Reexecute uma fonte por vez.")
     try:
         values = {
             "source": source, "trigger": trigger, "requested_by": requested_by,

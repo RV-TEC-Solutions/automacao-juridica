@@ -13,6 +13,8 @@ import { Panel, PageTitle } from "../components/ui";
 import { useNotifications } from "../components/notifications";
 import { api } from "../lib/api";
 import { useAuth } from "../providers";
+import { CollectorStatusList } from "../components/collector-status";
+import type { CollectorStatus } from "../lib/types";
 
 type Settings = {
   display_name: string;
@@ -20,6 +22,7 @@ type Settings = {
   collection_time: string;
   timezone: string;
   credential_status: Record<string, boolean | string>;
+  collectors?: CollectorStatus[];
 };
 
 type Source = {
@@ -256,12 +259,10 @@ export default function SettingsPage() {
 
             <RecordList>
               <Check ok={Boolean(data.credential_status.credential_file)} label="Arquivo de credenciais" />
-              <Check ok={Boolean(data.credential_status.pin)} label="PIN do certificado digital A1/A3" />
-              <Check ok={Boolean(data.credential_status.totp)} label="Segredo TOTP de dois fatores" />
-              <Check ok label="PJeOffice Integrado" note="Verificado e autenticado a cada coleta" />
             </RecordList>
+            {data.collectors && <div className="mt-4"><CollectorStatusList collectors={data.collectors} detailed /></div>}
             <code className="mt-2 block rounded-xl border border-border bg-muted/60 p-2 text-xs font-mono text-muted-foreground">
-              ~/.config/pje-automacao/.env
+              .env (raiz do projeto)
             </code>
           </Panel>
         )}

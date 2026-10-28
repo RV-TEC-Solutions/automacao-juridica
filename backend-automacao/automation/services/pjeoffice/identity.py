@@ -12,7 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from automation.collectors import get_collector
+from automation.collectors import CredentialError, get_collector
 
 
 PID_FILE = Path("/tmp/pjeoffice-managed.pid")
@@ -41,7 +41,7 @@ def verify_token(collector):
             f"({collector.serial}). Confira os tokens conectados antes de tentar o PIN."
         )
     if "PIN locked" in result.stdout or "pin locked" in result.stdout:
-        raise RuntimeError(f"O PIN do token de {collector.label} está bloqueado.")
+        raise CredentialError(f"O PIN do token de {collector.label} está bloqueado.")
     return module.resolve()
 
 

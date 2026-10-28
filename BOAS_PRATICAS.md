@@ -6,11 +6,11 @@ Este documento reúne os padrões de engenharia, arquitetura, segurança e desig
 
 ## 1. 🛡️ Segurança & Gestão de Credenciais (Regra de Ouro)
 
-1. **Credenciais Fora do Repositório**:
-   - `PJE_CERT_PIN` e `PJE_TOTP_SECRET` residem obrigatoriamente no arquivo local `~/.config/pje-automacao/.env`.
-   - Permissões estritas: `chmod 600 ~/.config/pje-automacao/.env`.
+1. **Credenciais Locais Fora do Versionamento**:
+   - Por definição do responsável pelo projeto, PINs e segredos TOTP PJe residem no `.env` local da raiz do projeto, ignorado pelo Git.
+   - Permissões estritas: `chmod 600 .env`. API e worker recebem esse arquivo por montagem somente para leitura; ele não é incluído nas imagens Docker.
    - **É terminantemente proibido**:
-     - Hardcodear senhas, tokens ou certificados em qualquer arquivo do projeto;
+     - Hardcodear senhas, tokens ou certificados no código ou em arquivos versionados;
      - Retornar PINs ou segredos em endpoints da API;
      - Registrar credenciais em logs do sistema ou em mensagens de erro.
 2. **Autenticação de Usuários**:

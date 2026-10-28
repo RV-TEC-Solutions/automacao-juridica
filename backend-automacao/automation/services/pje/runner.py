@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from automation.models import AutomationRun, AutomationSource
 from automation.queue import enqueue_run
-from automation.collectors import collector_order, collector_credentials
+from automation.collectors import CredentialError, collector_order, collector_credentials
 from automation.services.pjeoffice.identity import prepare_identity
 
 from .browser import LegacyCollection, abrir_pje
@@ -22,7 +22,7 @@ def _was_cancelled(execucao):
     return execucao.status == AutomationRun.Status.CANCELLED
 
 
-def _enqueue_next_source(execucao):
+def _enqueue_next_source(execucao, *, skip_collector=False):
     """Agenda a próxima fonte habilitada sem mascarar a coleta atual."""
     if execucao.trigger == AutomationRun.Trigger.RERUN:
         return
@@ -33,8 +33,10 @@ def _enqueue_next_source(execucao):
         return
 
     collector = execucao.collector
-    next_codes = PJE_SOURCE_ORDER[current_index + 1:]
+    next_codes = () if skip_collector else PJE_SOURCE_ORDER[current_index + 1:]
     if not any(AutomationSource.objects.filter(code=code, enabled=True).exists() for code in next_codes):
+        if execucao.trigger == AutomationRun.Trigger.COLLECTOR:
+            return
         order = collector_order()
         if collector not in order or order.index(collector) + 1 == len(order):
             return
@@ -102,11 +104,11 @@ def executar_coleta(execucao=None):
 
         # O navegador já abre um contexto novo por fonte. No worker, o assinador
         # também fica restrito ao módulo e ao token do titular desta execução.
-        if os.environ.get("PJE_OFFICE_MANAGED") == "true" or len(collector_order()) > 1 or execucao.collector != "murilo":
-            with collector_credentials(execucao.collector):
+        if AutomationRun.objects.filter(cycle_id=execucao.cycle_id, collector=execucao.collector, credential_failure=True).exclude(pk=execucao.pk).exists():
+            raise CredentialError("Credencial suspensa neste ciclo após falha de autenticação. Confira-a antes de reexecutar.")
+        with collector_credentials(execucao.collector):
+            if os.environ.get("PJE_OFFICE_MANAGED") == "true" or len(collector_order()) > 1 or execucao.collector != "murilo":
                 prepare_identity(execucao.collector)
-                capture = abrir_pje(source.code, source=source)
-        else:
             capture = abrir_pje(source.code, source=source)
         if _was_cancelled(execucao):
             return None
@@ -169,6 +171,7 @@ def executar_coleta(execucao=None):
             AutomationRun.Status.FAILED
         )
 
+        execucao.credential_failure = isinstance(erro, CredentialError)
         execucao.mensagem_erro = str(erro)
         execucao.finalizada_em = (
             timezone.now()
@@ -176,7 +179,7 @@ def executar_coleta(execucao=None):
 
         execucao.save()
 
-        _enqueue_next_source(execucao)
+        _enqueue_next_source(execucao, skip_collector=execucao.credential_failure)
 
         logger.exception(
             "Coleta #%s falhou. fonte=%s erro=%s: %s",

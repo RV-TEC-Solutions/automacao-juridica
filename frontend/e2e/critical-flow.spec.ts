@@ -92,7 +92,7 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
         finished_at: cycleStatus === "success" && collectionRequests ? "2026-08-25T08:01:00Z" : null,
         current_step: cycleStatus === "pending" ? "pje-tjrn" : null,
         steps: pipelineSources.map(([code, group, label], index) => ({
-          code, group, label, run_id: index === 0 ? 1 : null, error: "", message: "",
+          code, group, label, run_id: collectionRequests > 0 && index === 0 ? 1 : null, error: "", message: "",
           status: collectionRequests === 0 ? "pending" : cycleStatus === "pending" ? (index === 0 ? "pending" : "pending") : "success",
         })),
       };
@@ -108,6 +108,7 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
         },
       });
     }
+    if (path.endsWith("expedientes/clientes/")) return route.fulfill({ json: [] });
     if (path.endsWith("expedientes/")) {
       return route.fulfill({ json: { count: 1, next: null, previous: null, results: [item] } });
     }
@@ -150,6 +151,8 @@ test("login, dashboard and reading a new expediente", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expect(page.getByTestId("pipeline-scroll-region")).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("combobox", { name: "Coletar para" }).selectOption("all");
+  await expect(page.getByRole("button", { name: "Executar coleta" })).toBeEnabled();
   await page.getByRole("button", { name: "Executar coleta" }).click();
   await expect.poll(() => collectionRequests).toBe(1);
   await expect(page.getByText("12 de 12 fontes concluídas", { exact: false }).first()).toBeVisible();

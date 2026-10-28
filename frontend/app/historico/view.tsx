@@ -40,11 +40,12 @@ export function HistoricoClient() {
     const site = getCollectionSite(source);
     if (site) notify({
       tone: "warning",
-      message: `A coleta de ${site.name} falhou. Você pode consultar os expedientes manualmente, diretamente no site.`,
+      message: `A coleta de ${site.name}${search.get("collector") === "murilo" ? " de Dr. Murilo" : search.get("collector") === "cristiano" ? " de Dr. Cristiano" : ""} falhou. Você pode consultar os expedientes manualmente, diretamente no site.`,
       link: { href: site.href, label: `Clique aqui para acessar ${site.name}` },
     });
     const params = new URLSearchParams(search);
     params.delete("failed_source");
+    params.delete("collector");
     router.replace(`/historico?${params}`, { scroll: false });
   }, [user, tab, search, router, notify]);
   const historyParams = new URLSearchParams({ page: String(page), date_from: appliedFrom, date_to: appliedTo });

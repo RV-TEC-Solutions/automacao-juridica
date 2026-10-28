@@ -4,7 +4,7 @@ from django.db.models import Max, Min
 
 from .models import AutomationRun, AutomationSource
 from .services.pje.sources import PJE_SOURCE_ORDER, get_source_profile
-from .collectors import collector_order, get_collector
+from .collectors import collector_order, get_collector, collector_status_payload
 
 
 GROUPS = {
@@ -120,6 +120,51 @@ def _cycle_status(cycle_runs, active):
     return "success"
 
 
+def _display_steps(sources, latest):
+    """Preserva o último ciclo de cada titular e suas reexecuções de fonte."""
+    if latest is None:
+        return _all_collector_steps(sources, [])
+
+    runs = AutomationRun.objects.select_related("source").filter(
+        descartada_em__isnull=True, source__code__in=PJE_SOURCE_ORDER,
+    )
+    full_cycle = runs.exclude(trigger__in=(
+        AutomationRun.Trigger.RERUN, AutomationRun.Trigger.COLLECTOR,
+    )).first()
+    full_runs = _runs_for_cycle(full_cycle)
+    steps = _all_collector_steps(sources, full_runs)
+    if not full_runs:
+        for step in steps:
+            if step["status"] == "pending":
+                step["status"] = "skipped"
+    thresholds = {
+        code: full_runs[0].criada_em if full_runs else None
+        for code in collector_order()
+    }
+    for code in collector_order():
+        own_cycle = runs.filter(trigger=AutomationRun.Trigger.COLLECTOR, collector=code).first()
+        if not own_cycle or (full_cycle and own_cycle.criada_em <= full_cycle.criada_em):
+            continue
+        own_runs = _runs_for_cycle(own_cycle)
+        own_steps = {
+            step["code"]: step
+            for step in _all_collector_steps(sources, own_runs)
+            if step["collector"] == code
+        }
+        steps = [own_steps[step["code"]] if step["collector"] == code else step for step in steps]
+        thresholds[code] = own_runs[0].criada_em
+
+    steps_by_code = {(step["collector"], step["code"]): step for step in steps}
+    reruns = runs.filter(trigger=AutomationRun.Trigger.RERUN)
+    if all(thresholds.values()):
+        reruns = reruns.filter(criada_em__gt=min(thresholds.values()))
+    for rerun in reruns.order_by("criada_em", "id"):
+        threshold = thresholds.get(rerun.collector)
+        if threshold is None or rerun.criada_em > threshold:
+            _replace_step_with_run(steps_by_code, rerun, sources)
+    return steps
+
+
 def collection_pipeline_payload():
     latest_record = AutomationRun.objects.select_related("source").exclude(source__code="djen").first()
     latest = (
@@ -137,26 +182,7 @@ def collection_pipeline_payload():
         for run in cycle_runs
     )
 
-    if latest and latest.trigger == AutomationRun.Trigger.RERUN:
-        previous_cycle = (
-            AutomationRun.objects.select_related("source")
-            .filter(descartada_em__isnull=True)
-            .exclude(trigger=AutomationRun.Trigger.RERUN)
-            .filter(criada_em__lt=latest.criada_em)
-            .first()
-        )
-        steps = _all_collector_steps(sources, _runs_for_cycle(previous_cycle))
-        reruns = AutomationRun.objects.select_related("source").filter(
-            trigger=AutomationRun.Trigger.RERUN,
-            descartada_em__isnull=True,
-        )
-        if previous_cycle:
-            reruns = reruns.filter(criada_em__gt=previous_cycle.criada_em)
-        steps_by_code = {(step.get("collector", collector_order()[0]), step["code"]): step for step in steps}
-        for rerun in reruns.order_by("criada_em", "id"):
-            _replace_step_with_run(steps_by_code, rerun, sources)
-    else:
-        steps = _all_collector_steps(sources, cycle_runs)
+    steps = _display_steps(sources, latest)
 
     djen_step = _djen_step()
     all_steps = steps + [djen_step]
@@ -168,17 +194,13 @@ def collection_pipeline_payload():
     ).aggregate(
         started_at=Min("iniciada_em"), finished_at=Max("finalizada_em")
     ) if latest else {"started_at": None, "finished_at": None}
-    if latest and latest.trigger == AutomationRun.Trigger.RERUN:
-        active_run = next(
-            (run for run in cycle_runs if run.status in ("running", "pending")), None
-        )
-        current_code = active_run.source.code if active_run and active_run.source else None
-    else:
-        current = next(
-            (step for step in steps if step["status"] in ("running", "pending")), None
-        )
-        current_code = current["code"] if current else None
+    active_run = next(
+        (run for run in cycle_runs if run.status in ("running", "pending")), None
+    )
+    current_code = active_run.source.code if active_run and active_run.source else None
     return {
+        "collectors": collector_status_payload(),
+        "collector_scope": latest.collector if latest and latest.trigger == AutomationRun.Trigger.COLLECTOR else None,
         "current_collector": next((run.collector for run in cycle_runs if run.status in ("running", "pending")), None),
         "cycle_id": str(latest.cycle_id) if latest else None,
         "status": _cycle_status(cycle_runs, active), "active": active,

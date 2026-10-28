@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.test import APIClient
 
-from automation.collectors import collector_credentials, credentials_for, get_collector
+from automation.collectors import CredentialError, collector_credentials, credentials_for, get_collector
 from automation.models import AutomationRun, AutomationSource
 from automation.pipeline import collection_pipeline_payload
 from automation.queue import claim_next_run, enqueue_run
@@ -24,6 +24,11 @@ from expedientes.tests import payload
 
 
 class CredentialIsolationTests(SimpleTestCase):
+    def setUp(self):
+        reader = patch("automation.collectors.credential_values", side_effect=lambda: dict(os.environ))
+        reader.start()
+        self.addCleanup(reader.stop)
+
     def test_diagnostics_redact_credentials_for_both_owners(self):
         values = {
             "PJE_MURILO_CERT_PIN": "first-pin", "PJE_MURILO_TOTP_SECRET": "first-otp",
@@ -129,6 +134,30 @@ class CollectorApiTests(TestCase):
 
 @override_settings(PJE_COLLECTORS=("murilo", "cristiano"))
 class CollectorPipelineTests(TestCase):
+    def setUp(self):
+        reader = patch("automation.collectors.credential_values", side_effect=lambda: dict(os.environ))
+        reader.start()
+        self.addCleanup(reader.stop)
+
+    def test_rejected_pin_skips_owner_and_continues_next_owner(self):
+        run = enqueue_run(AutomationSource.objects.get(code="pje-tjrn"), "manual", collector="murilo")
+        with patch.dict(os.environ, {"PJE_CERT_PIN": "test", "PJE_TOTP_SECRET": "test"}), patch(
+            "automation.services.pje.runner.prepare_identity"
+        ), patch("automation.services.pje.runner.abrir_pje", side_effect=CredentialError("PIN rejeitado")) as browser:
+            with self.assertRaises(CredentialError):
+                executar_coleta(run)
+        run.refresh_from_db()
+        self.assertTrue(run.credential_failure)
+        self.assertEqual(browser.call_count, 1)
+        following = AutomationRun.objects.get(status="pending")
+        self.assertEqual((following.collector, following.source.code), ("cristiano", "pje-tjrn"))
+        # Mesmo um trabalho já existente no ciclo não pode reenviar o PIN.
+        blocked = AutomationRun.objects.create(source=AutomationSource.objects.get(code="pje2g-tjrn"), collector="murilo", cycle_id=run.cycle_id)
+        with patch("automation.services.pje.runner.abrir_pje") as browser:
+            with self.assertRaises(CredentialError):
+                executar_coleta(blocked)
+        browser.assert_not_called()
+
     @override_settings(PJE_COLLECTORS=("murilo",))
     def test_single_owner_steps_identify_the_current_collector(self):
         run = enqueue_run(AutomationSource.objects.get(code="pje-tjrn"), "manual")

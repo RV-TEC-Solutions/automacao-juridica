@@ -66,3 +66,25 @@ class PJeOfficeAtspiTests(TestCase):
         password = self.node("", self.api.ROLE_PASSWORD_TEXT)
         dialog = self.node("Informe a senha", self.api.ROLE_DIALOG, [ordinary, password])
         self.assertIs(self.helper.localizar_campo_pin(dialog), password)
+
+    def test_rejection_is_detected_without_reading_password_contents(self):
+        password = self.node('senha incorreta', self.api.ROLE_PASSWORD_TEXT)
+        error = self.node('Senha incorreta', 99)
+        app = self.node('PJeOffice', 0, [password, error])
+        self.api.Registry.getDesktop.return_value = [app]
+        with self.assertRaises(self.helper.PinRejectedError):
+            self.helper.verificar_rejeicao_pin()
+        password.queryText.assert_not_called()
+
+    def test_confirm_failure_never_resubmits_pin(self):
+        with patch.dict('os.environ', {'PJE_CERT_PIN': 'test-pin'}), patch.object(
+            self.helper, 'verificar_rejeicao_pin'
+        ), patch.object(self.helper, 'localizar_aplicacao'), patch.object(
+            self.helper, 'localizar_janela'
+        ), patch.object(self.helper, 'localizar_campo_pin') as field, patch.object(
+            self.helper, 'localizar_botao_confirmar'
+        ), patch.object(self.helper, 'acionar', side_effect=RuntimeError('action failed')) as submit:
+            with self.assertRaisesRegex(RuntimeError, 'action failed'):
+                self.helper.preencher_pin()
+        self.assertEqual(submit.call_count, 1)
+        self.assertEqual(field.return_value.queryEditableText.return_value.setTextContents.call_count, 1)

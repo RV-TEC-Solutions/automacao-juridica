@@ -65,6 +65,8 @@ export type PipelineStep = {
 };
 
 export type CollectionPipeline = {
+  collectors?: CollectorStatus[];
+  collector_scope?: string | null;
   current_collector?: string | null;
   cycle_id: string | null;
   status: "idle" | "running" | "success" | "failed" | "cancelled";
@@ -205,6 +207,8 @@ export type DjenHistory = {
 };
 
 export type CollectionRun = {
+  collector?: string;
+  collector_label?: string;
   id: number;
   cycle_id: string;
   status: PipelineStepStatus;
@@ -222,6 +226,17 @@ export type CollectionRun = {
   error: string;
   message: string;
   source: { code: string; system: string; tribunal: string } | null;
+};
+
+export type CollectorStatus = {
+  code: string;
+  label: string;
+  enabled: boolean;
+  pin_configured: boolean;
+  totp_configured: boolean;
+  state: "disabled" | "unconfigured" | "idle" | "pending" | "running" | "blocked" | "failed" | "success" | "cancelled";
+  last_success_at: string | null;
+  error: string;
 };
 
 export type CollectionHistory = {
