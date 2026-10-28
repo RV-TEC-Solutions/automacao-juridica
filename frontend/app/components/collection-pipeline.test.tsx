@@ -30,7 +30,7 @@ describe("CollectionPipeline", () => {
   it.each(["murilo", "cristiano", "all"])("requires an explicit choice and starts only the selected scope: %s", (target) => {
     const value = pipeline(false);
     value.collectors = ["murilo", "cristiano"].map((code) => ({
-      code, label: `Dr. ${code === "murilo" ? "Murilo" : "Cristiano"}`, enabled: true,
+      code, label: `DR. ${code.toUpperCase()}`, enabled: true,
       pin_configured: true, totp_configured: true, state: "success", last_success_at: null, error: "",
     }));
     const callbacks = handlers();

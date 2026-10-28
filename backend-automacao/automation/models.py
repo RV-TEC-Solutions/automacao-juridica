@@ -175,6 +175,7 @@ class AutomationRun(models.Model):
         MANUAL = "manual", "Manual"
         COLLECTOR = "collector", "Coleta de titular"
         RERUN = "rerun", "Reexecução de fonte"
+        RETRY = "retry", "Retry automático"
         CATCH_UP = "catch_up", "Recuperação"
 
     source = models.ForeignKey(

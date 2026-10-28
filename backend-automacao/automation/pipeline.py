@@ -113,9 +113,10 @@ def _cycle_status(cycle_runs, active):
         return "idle"
     if active:
         return "running"
-    if any(run.status == AutomationRun.Status.CANCELLED for run in cycle_runs):
+    latest = {(run.collector, run.source_id): run for run in cycle_runs}
+    if any(run.status == AutomationRun.Status.CANCELLED for run in latest.values()):
         return "cancelled"
-    if any(run.status == AutomationRun.Status.FAILED for run in cycle_runs):
+    if any(run.status == AutomationRun.Status.FAILED for run in latest.values()):
         return "failed"
     return "success"
 
@@ -129,7 +130,7 @@ def _display_steps(sources, latest):
         descartada_em__isnull=True, source__code__in=PJE_SOURCE_ORDER,
     )
     full_cycle = runs.exclude(trigger__in=(
-        AutomationRun.Trigger.RERUN, AutomationRun.Trigger.COLLECTOR,
+        AutomationRun.Trigger.RERUN, AutomationRun.Trigger.RETRY, AutomationRun.Trigger.COLLECTOR,
     )).first()
     full_runs = _runs_for_cycle(full_cycle)
     steps = _all_collector_steps(sources, full_runs)

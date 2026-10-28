@@ -15,7 +15,7 @@ describe("CollectionHistoryPanel", () => {
     api.mockResolvedValueOnce({
       period_start: "2026-08-30", period_end: "2026-09-28",
       days: [{ date: "2026-09-28", runs: [{
-        id: 12, cycle_id: "cycle", status: "failed", status_label: "Erro", collector: "cristiano", collector_label: "CRISTIANO",
+        id: 12, cycle_id: "cycle", status: "failed", status_label: "Erro", collector: "cristiano", collector_label: "DR. CRISTIANO",
         trigger: "rerun", trigger_label: "Reexecução de fonte",
         created_at: "2026-09-28T10:00:00Z", started_at: "2026-09-28T10:00:00Z", finished_at: "2026-09-28T10:01:00Z", duration_seconds: 60,
         found: 3, created: 1, updated: 1, resolved: 0, error: "Falha de autenticação", message: "",
@@ -25,7 +25,7 @@ describe("CollectionHistoryPanel", () => {
     render(<NotificationsProvider><CollectionHistoryPanel /></NotificationsProvider>);
 
     expect(await screen.findByText("PJe 1º Grau")).toBeVisible();
-    expect(screen.getByText("Dr. Cristiano")).toBeVisible();
+    expect(screen.getByText("DR. CRISTIANO")).toBeVisible();
     const details = screen.getByRole("button", { name: "Ver erro" });
     expect(details).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(details);

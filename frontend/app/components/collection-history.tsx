@@ -28,7 +28,7 @@ function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: bo
     <TableRow>
       <TableCell><Badge variant={statusVariant[run.status]}>{run.status_label}</Badge></TableCell>
       <TableCell><strong className="block text-xs">{run.source?.system ?? "Fonte indisponível"}</strong><span className="text-xs text-muted-foreground">{run.source?.tribunal ?? "—"}</span></TableCell>
-      <TableCell>{run.source?.code === "djen" ? "Consulta por OAB" : run.collector_label ? `Dr. ${run.collector_label.toLowerCase().replace(/^./, (letter) => letter.toUpperCase())}` : "—"}</TableCell>
+      <TableCell>{run.source?.code === "djen" ? "Consulta por OAB" : run.collector_label || "—"}</TableCell>
       <TableCell>{run.trigger_label}</TableCell>
       <TableCell>{formatDateTime(run.started_at ?? run.created_at, { timeStyle: "short" })}</TableCell>
       <TableCell>{formatDuration(run.duration_seconds)}</TableCell>

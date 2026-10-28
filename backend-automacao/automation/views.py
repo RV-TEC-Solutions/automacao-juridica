@@ -233,6 +233,8 @@ def _restore_event(event, window_start):
 def discard_today_collection(request):
     day, window_start, window_end = _local_day_window()
     with transaction.atomic():
+        # Serializa o descarte com a criação de novas coletas e retries.
+        list(AutomationSource.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
         if AutomationRun.objects.select_for_update().filter(
             status=AutomationRun.Status.RUNNING,
         ).exists():

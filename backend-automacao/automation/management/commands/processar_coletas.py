@@ -2,7 +2,7 @@ import time
 
 from django.core.management.base import BaseCommand
 
-from automation.queue import claim_next_run, enqueue_due_runs, recover_interrupted_runs
+from automation.queue import claim_next_run, enqueue_due_runs, enqueue_due_retry, expire_pending_retries, recover_interrupted_runs
 from automation.services.pjeoffice.physical_token import TokenFisicoError, validar_token_fisico
 from automation.services.pje.runner import executar_coleta
 
@@ -23,7 +23,9 @@ class Command(BaseCommand):
                 )
             )
         while True:
+            expire_pending_retries()
             enqueue_due_runs()
+            enqueue_due_retry()
             run = claim_next_run()
             if run:
                 if run.source.code != "djen":

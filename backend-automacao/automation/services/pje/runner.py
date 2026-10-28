@@ -24,7 +24,7 @@ def _was_cancelled(execucao):
 
 def _enqueue_next_source(execucao, *, skip_collector=False):
     """Agenda a próxima fonte habilitada sem mascarar a coleta atual."""
-    if execucao.trigger == AutomationRun.Trigger.RERUN:
+    if execucao.trigger in (AutomationRun.Trigger.RERUN, AutomationRun.Trigger.RETRY):
         return
 
     try:
