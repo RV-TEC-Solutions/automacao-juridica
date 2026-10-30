@@ -211,7 +211,7 @@ export default function Home() {
   };
 
   const pipeline = data?.collection_pipeline;
-  const djenStep = pipeline?.steps.find((step) => step.code === "djen");
+  const djenStep = pipeline?.steps.find((step) => step.code === "djen" && step.status !== "disabled");
   useEffect(() => {
     if (!djenStep?.run_id) return;
     const previous = previousDjenRun.current;
@@ -316,22 +316,24 @@ export default function Home() {
 
         <TabsContent value="expedientes">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <Dialog open={readAllOpen} onOpenChange={(open) => { if (!readingAll) setReadAllOpen(open); }}>
-              <DialogTrigger render={<Button variant="outline" />}>Marcar todos como lidos</DialogTrigger>
-              <DialogContent role="alertdialog" showCloseButton={!readingAll}>
-                <DialogHeader>
-                  <DialogTitle>Marcar todos os expedientes como lidos?</DialogTitle>
-                  <DialogDescription>Todos os expedientes não lidos serão marcados como lidos, independentemente da data, da página ou do filtro selecionado.</DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button autoFocus variant="outline" disabled={readingAll} onClick={() => setReadAllOpen(false)}>Cancelar</Button>
-                  <Button disabled={readingAll} onClick={() => { void markAllRead(); }}>{readingAll ? "Marcando…" : "Marcar todos como lidos"}</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <PdfExportButton path={`expedientes/export.pdf/?scope=overview&metric=${activeMetric}`} analytical
-              label="Exportar expedientes em PDF" count={expedientes?.count}
-              summary={`Expedientes · ${metricFilters[activeMetric].title}. ${activeMetric === "new" || activeMetric === "updated" ? "Eventos coletados hoje." : "Este filtro representa o estado atual e pode incluir expedientes coletados antes de hoje. O PDF mostrará apenas alterações registradas hoje."}`} />
+            <div className="flex flex-wrap items-center gap-3">
+              <PdfExportButton path={`expedientes/export.pdf/?scope=overview&metric=${activeMetric}`} analytical
+                label="Exportar expedientes em PDF" count={expedientes?.count}
+                summary={`Expedientes · ${metricFilters[activeMetric].title}. ${activeMetric === "new" || activeMetric === "updated" ? "Eventos coletados hoje." : "Este filtro representa o estado atual e pode incluir expedientes coletados antes de hoje. O PDF mostrará apenas alterações registradas hoje."}`} />
+              <Dialog open={readAllOpen} onOpenChange={(open) => { if (!readingAll) setReadAllOpen(open); }}>
+                <DialogTrigger render={<Button variant="outline" />}>Marcar todos como lidos</DialogTrigger>
+                <DialogContent role="alertdialog" showCloseButton={!readingAll}>
+                  <DialogHeader>
+                    <DialogTitle>Marcar todos os expedientes como lidos?</DialogTitle>
+                    <DialogDescription>Todos os expedientes não lidos serão marcados como lidos, independentemente da data, da página ou do filtro selecionado.</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button autoFocus variant="outline" disabled={readingAll} onClick={() => setReadAllOpen(false)}>Cancelar</Button>
+                    <Button disabled={readingAll} onClick={() => { void markAllRead(); }}>{readingAll ? "Marcando…" : "Marcar todos como lidos"}</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
             <Link href="/expedientes" className="group inline-flex items-center gap-2 text-xs font-extrabold text-foreground no-underline transition-colors hover:text-foreground">
               Ver consulta completa
               <ArrowRight size={14} weight="bold" className="transition-transform group-hover:translate-x-2" />

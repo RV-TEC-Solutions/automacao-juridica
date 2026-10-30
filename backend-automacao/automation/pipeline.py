@@ -1,6 +1,7 @@
 """Serialização explícita do ciclo sequencial de coleta do PJe."""
 
 from django.db.models import Max, Min
+from django.conf import settings
 
 from .models import AutomationRun, AutomationSource
 from .services.pje.sources import PJE_SOURCE_ORDER, get_source_profile
@@ -185,8 +186,7 @@ def collection_pipeline_payload():
 
     steps = _display_steps(sources, latest)
 
-    djen_step = _djen_step()
-    all_steps = steps + [djen_step]
+    all_steps = steps + _djen_steps()
     completed = sum(step["status"] == AutomationRun.Status.SUCCESS for step in all_steps)
     relevant = sum(step["status"] != "disabled" for step in all_steps)
     timestamps = AutomationRun.objects.filter(
@@ -223,3 +223,18 @@ def _djen_step():
         "error": run.mensagem_erro if run else "",
         "message": run.mensagem_info if run else "",
     }
+
+
+def _djen_steps():
+    shared = _djen_step()
+    steps = []
+    for code, name, configured in (
+        ("murilo", "Dr. Murilo Mariz", bool(settings.DJEN_OAB_NUMBER and settings.DJEN_OAB_STATE)),
+        ("cristiano", "Dr. Cristiano Barros", bool(settings.DJEN_CRISTIANO_OAB_NUMBER and settings.DJEN_CRISTIANO_OAB_STATE)),
+    ):
+        steps.append({
+            **shared, "collector": code, "collector_label": name,
+            "label": name,
+            **({"status": "disabled", "run_id": None, "error": "", "message": "OAB não configurada."} if not configured else {}),
+        })
+    return steps

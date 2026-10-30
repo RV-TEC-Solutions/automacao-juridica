@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import SynchronousOnlyOperation
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -673,6 +673,31 @@ class CollectionAuditApiTests(TestCase):
         self.assertIsNotNone(pending.finalizada_em)
         self.assertIsNotNone(pending.descartada_em)
         self.assertFalse(Expediente.objects.filter(pk=expediente.pk).exists())
+
+    def test_collection_history_orders_all_attempts_by_time_and_local_day(self):
+        tz = ZoneInfo("America/Fortaleza")
+        day = datetime(2026, 10, 28, tzinfo=tz)
+        source = AutomationSource.objects.get(code="pje-tjrn")
+        failed = AutomationRun.objects.create(source=source, collector="murilo", status="failed", iniciada_em=day.replace(hour=6), mensagem_erro="Falha inicial")
+        retry = AutomationRun.objects.create(source=source, collector="murilo", status="success", trigger="retry", iniciada_em=day.replace(hour=9), expedientes_encontrados=4)
+        rerun = AutomationRun.objects.create(source=source, collector="murilo", status="success", trigger="rerun", iniciada_em=day.replace(hour=9))
+        pending = AutomationRun.objects.create(source=source, collector="murilo", status="pending")
+        AutomationRun.objects.filter(pk=pending.pk).update(criada_em=day.replace(hour=10))
+        previous = AutomationRun.objects.create(source=source, status="success", iniciada_em=day - timedelta(minutes=1))
+        discarded = AutomationRun.objects.create(source=source, status="success", iniciada_em=day.replace(hour=11), descartada_em=day.replace(hour=12))
+
+        with patch("automation.views._local_day_window", return_value=(day.date(), day, day + timedelta(days=1))):
+            response = self.client.get("/api/automation/history/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([d["date"] for d in response.data["days"]], ["2026-10-28", "2026-10-27"])
+        expected_ids = {pending.id, rerun.id, retry.id, failed.id}
+        runs = [run for run in response.data["days"][0]["runs"] if run["id"] in expected_ids]
+        self.assertEqual([run["id"] for run in runs], [pending.id, rerun.id, retry.id, failed.id])
+        self.assertEqual((runs[2]["status"], runs[2]["trigger"], runs[2]["found"]), ("success", "retry", 4))
+        self.assertEqual((runs[3]["status"], runs[3]["error"]), ("failed", "Falha inicial"))
+        self.assertEqual(response.data["days"][1]["runs"][0]["id"], previous.id)
+        self.assertNotIn(discarded.id, [run["id"] for d in response.data["days"] for run in d["runs"]])
 
     def test_collection_history_groups_runs_and_exposes_error_details(self):
         failed = AutomationRun.objects.create(
@@ -1672,6 +1697,7 @@ class CollectionPipelinePayloadTests(TestCase):
         self.first = AutomationSource.objects.get(code="pje-tjrn")
         self.second = AutomationSource.objects.get(code="pje2g-tjrn")
 
+    @override_settings(PJE_COLLECTORS=("murilo",))
     def test_exposes_official_order_and_real_cycle_states(self):
         first_run = AutomationRun.objects.create(
             source=self.first, status=AutomationRun.Status.SUCCESS,
@@ -1685,7 +1711,7 @@ class CollectionPipelinePayloadTests(TestCase):
 
         payload = collection_pipeline_payload()
 
-        self.assertEqual([step["code"] for step in payload["steps"]], [*PJE_SOURCE_ORDER, "djen"])
+        self.assertEqual([step["code"] for step in payload["steps"]], [*PJE_SOURCE_ORDER, "djen", "djen"])
         self.assertEqual(payload["cycle_id"], str(first_run.cycle_id))
         self.assertEqual(payload["status"], "running")
         self.assertEqual(payload["current_step"], "pje2g-tjrn")
@@ -1694,6 +1720,7 @@ class CollectionPipelinePayloadTests(TestCase):
         self.assertEqual(payload["steps"][2]["status"], "pending")
         self.assertEqual(payload["steps"][4]["status"], "disabled")
 
+    @override_settings(DJEN_OAB_NUMBER="5691", DJEN_OAB_STATE="RN", DJEN_CRISTIANO_OAB_NUMBER="5695", DJEN_CRISTIANO_OAB_STATE="RN")
     def test_djen_completion_updates_card_and_completed_count(self):
         source = AutomationSource.objects.get(code="djen")
         run = AutomationRun.objects.create(source=source, status=AutomationRun.Status.RUNNING)
@@ -1709,7 +1736,14 @@ class CollectionPipelinePayloadTests(TestCase):
         completed = collection_pipeline_payload()
         self.assertEqual(completed["steps"][-1]["status"], "success")
         self.assertEqual(completed["steps"][-1]["run_id"], run.id)
-        self.assertEqual(completed["completed"], 1)
+        self.assertEqual(completed["completed"], 2)
+        self.assertEqual([(step["collector"], step["run_id"], step["status"]) for step in completed["steps"][-2:]], [("murilo", run.id, "success"), ("cristiano", run.id, "success")])
+
+    @override_settings(DJEN_CRISTIANO_OAB_NUMBER="")
+    def test_unconfigured_djen_attorney_is_not_reported_as_success(self):
+        AutomationRun.objects.create(source=AutomationSource.objects.get(code="djen"), status="success")
+        step = collection_pipeline_payload()["steps"][-1]
+        self.assertEqual((step["collector"], step["status"], step["run_id"], step["message"]), ("cristiano", "disabled", None, "OAB não configurada."))
 
     def test_marks_unreached_steps_skipped_after_cancellation(self):
         AutomationRun.objects.create(

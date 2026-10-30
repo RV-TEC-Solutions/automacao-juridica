@@ -142,6 +142,19 @@ describe("CollectionPipeline", () => {
     expect(callbacks.onRerun).toHaveBeenCalledWith("djen");
   });
 
+  it("shows both DJEN cards and reruns the shared collection", () => {
+    const callbacks = handlers();
+    const value = pipeline(false);
+    value.steps = ["murilo", "cristiano"].map((collector) => ({
+      code: "djen", collector, group: "DJEN", label: collector === "murilo" ? "Dr. Murilo Mariz" : "Dr. Cristiano Barros",
+      status: "success", run_id: 99, error: "", message: "",
+    }));
+    render(<CollectionPipeline pipeline={value} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);
+    expect(screen.getAllByText("Coleta conjunta")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Reexecutar coleta conjunta DJEN (Dr. Cristiano Barros)" }));
+    expect(callbacks.onRerun).toHaveBeenCalledWith("djen");
+  });
+
   it("links only failed steps to orchestration without making rerun a nested control", () => {
     const callbacks = handlers();
     render(<CollectionPipeline pipeline={pipeline(false)} refreshing={false} starting={false} cancelling={false} discarding={false} canDiscard={false} {...callbacks} />);

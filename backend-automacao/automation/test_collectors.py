@@ -228,6 +228,7 @@ class CollectorPipelineTests(TestCase):
         self.assertEqual(steps["cristiano"]["status"], "pending")
         self.assertEqual(dashboard["current_collector"], "cristiano")
 
+    @override_settings(DJEN_OAB_NUMBER="5691", DJEN_OAB_STATE="RN", DJEN_CRISTIANO_OAB_NUMBER="5695", DJEN_CRISTIANO_OAB_STATE="RN")
     def test_runs_all_sources_for_murilo_then_restarts_for_cristiano(self):
         AutomationSource.objects.filter(code__in=PJE_SOURCE_ORDER).update(enabled=True)
         first = enqueue_run(AutomationSource.objects.get(code=PJE_SOURCE_ORDER[0]), "manual")
@@ -255,7 +256,7 @@ class CollectorPipelineTests(TestCase):
         self.assertEqual(AutomationRun.objects.filter(cycle_id=first.cycle_id, status="success").count(), 24)
         dashboard = collection_pipeline_payload()
         self.assertEqual(dashboard["completed"], 24)
-        self.assertEqual(dashboard["total"], 25)  # DJEN continua independente.
+        self.assertEqual(dashboard["total"], 26)  # Dois cards para a coleta DJEN conjunta.
         self.assertEqual(dashboard["steps"][12]["collector"], "cristiano")
 
     def test_failed_source_continues_with_the_same_owner(self):

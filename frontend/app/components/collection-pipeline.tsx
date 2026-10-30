@@ -24,12 +24,13 @@ const statusMeta: Record<PipelineStepStatus, { label: string; className: string;
 function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boolean; onRerun: (code: string, collector?: string) => void }) {
   const meta = statusMeta[step.status];
   const Icon = meta.Icon;
+  const sharedDjen = step.code === "djen" && !!step.collector;
   const errorId = step.error ? `pipeline-error-${step.collector ?? ""}-${step.code}` : undefined;
   return (
     <li className="group/step">
       <div className={cn("relative flex min-h-10 items-center gap-2 rounded-lg border px-2 py-2", meta.className, step.status === "failed" && "hover:border-destructive focus-within:ring-2 focus-within:ring-ring")}>
         {step.status === "failed" && <Link
-          href={`/historico?${new URLSearchParams({ tab: "orquestracao", failed_source: step.code, ...(step.collector ? { collector: step.collector } : {}) })}`}
+          href={`/historico?${new URLSearchParams({ tab: "orquestracao", failed_source: step.code, ...(step.collector && !sharedDjen ? { collector: step.collector } : {}) })}`}
           className="absolute inset-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           aria-label={`Ver falha de ${step.group} · ${step.label} no histórico de coletas`}
           aria-describedby={errorId}
@@ -44,17 +45,18 @@ function Step({ step, canRerun, onRerun }: { step: PipelineStep; canRerun: boole
         <span className="min-w-0 flex-1">
           <span className="block truncate text-xs font-bold text-foreground" title={step.label}>{step.label}</span>
           <span className="block text-xs font-semibold uppercase tracking-wide">{meta.label}</span>
+          {sharedDjen && <span className="block text-xs">{step.message === "OAB não configurada." ? step.message : "Coleta conjunta"}</span>}
         </span>
         <Button
           type="button"
           variant="outline"
           size="icon-sm"
           className="relative z-10"
-          aria-label={`Reexecutar somente ${step.label}`}
+          aria-label={sharedDjen ? `Reexecutar coleta conjunta DJEN (${step.label})` : `Reexecutar somente ${step.label}`}
           aria-describedby={errorId}
-          title={canRerun ? `Reexecutar somente ${step.label}` : "Disponível após o fim da coleta"}
+          title={canRerun ? sharedDjen ? "Reexecutar a coleta conjunta das OABs configuradas" : `Reexecutar somente ${step.label}` : "Disponível após o fim da coleta"}
           disabled={!canRerun}
-          onClick={() => step.collector ? onRerun(step.code, step.collector) : onRerun(step.code)}
+          onClick={() => step.collector && !sharedDjen ? onRerun(step.code, step.collector) : onRerun(step.code)}
         >
           <ArrowClockwise size={14} weight="bold" />
         </Button>
