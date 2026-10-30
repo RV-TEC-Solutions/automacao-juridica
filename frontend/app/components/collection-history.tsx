@@ -45,16 +45,17 @@ function RunRows({ run, expanded, onToggle }: { run: CollectionRun; expanded: bo
   </Fragment>;
 }
 
-export function CollectionHistoryPanel() {
+export function CollectionHistoryPanel({ attorney = "" }: { attorney?: string }) {
   const [expandedRun, setExpandedRun] = useState<number | null>(null);
-  const { data, loading, error } = useLiveList<CollectionHistory>("automation/history/");
+  const { data, loading, error } = useLiveList<CollectionHistory>(`automation/history/${attorney ? `?${new URLSearchParams({ attorney })}` : ""}`);
   if (!data && !error) return <LoadingRows />;
 
   return <div className="space-y-8">
+    {attorney && <p className="text-sm text-muted-foreground">As coletas DJEN consultam as OABs em conjunto e não são atribuídas a um único advogado nesta aba.</p>}
     <ListLoading loading={loading} error={error} />
 
     {data?.days.map((day) => <section key={day.date} aria-labelledby={`collection-day-${day.date}`}>
-      <HistoryDayHeader date={day.date} label={`${day.runs.length} fonte${day.runs.length === 1 ? "" : "s"}`} icon={<Clock size={18} aria-hidden="true" />} id={`collection-day-${day.date}`} />
+      <HistoryDayHeader date={day.date} label={`${day.runs.length} ${day.runs.length === 1 ? "execução" : "execuções"}`} icon={<Clock size={18} aria-hidden="true" />} id={`collection-day-${day.date}`} />
       <div className="overflow-x-auto rounded-lg border bg-card"><Table className="min-w-5xl" aria-labelledby={`collection-day-${day.date}`}><TableHeader className="bg-muted/50"><TableRow><TableHead>Status</TableHead><TableHead>Fonte</TableHead><TableHead>Titular</TableHead><TableHead>Acionamento</TableHead><TableHead>Início</TableHead><TableHead>Duração</TableHead><TableHead>Resultados</TableHead><TableHead className="text-right">Detalhes</TableHead></TableRow></TableHeader><TableBody>{day.runs.map((run) => <RunRows key={run.id} run={run} expanded={expandedRun === run.id} onToggle={() => setExpandedRun((current) => current === run.id ? null : run.id)} />)}</TableBody></Table></div>
     </section>)}
     {data && data.days.length === 0 && <EmptyState icon={<Clock size={26} weight="duotone" />} title="Nenhuma coleta encontrada" description="A consulta diária pode não ter coletas para os filtros atuais." />}

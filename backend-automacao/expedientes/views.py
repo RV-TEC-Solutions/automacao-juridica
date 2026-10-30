@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from automation.models import AutomationRun, Notice, UserProfile
+from automation.attorney_filter import attorney_param
 from automation.pipeline import collection_pipeline_payload
 from automation.time_saved import time_saved_summary
 from automation.serializers import NoticeSerializer
@@ -56,6 +57,8 @@ def expediente_queryset(params):
         has_unread=Exists(ExpedienteEvent.objects.filter(expediente=OuterRef("pk"), read_at__isnull=True)),
         latest_event_at=Max("events__created_at"),
     )
+    if attorney := attorney_param(params):
+        queryset = queryset.filter(collection_accounts__has_key=attorney)
     query = params.get("q", "").strip()
     if query:
         queryset = queryset.filter(
@@ -184,6 +187,8 @@ def history(request):
         .prefetch_related("expediente__events")
         .order_by("-created_at", "-id")
     )
+    if attorney := attorney_param(request.query_params):
+        events = events.filter(expediente__collection_accounts__has_key=attorney)
     try:
         page = max(1, int(request.query_params.get("page", 1)))
     except (TypeError, ValueError):

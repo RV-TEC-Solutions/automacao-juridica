@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppShell } from "../components/app-shell";
+import { AttorneySelect } from "../components/attorney-select";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
 import { DjenList } from "../components/djen-list";
@@ -33,6 +34,7 @@ export function HistoricoClient() {
   const appliedFrom = search.get("date_from") || localCollectionDate(-29);
   const appliedTo = search.get("date_to") || localCollectionDate();
   const tab = search.get("tab") === "orquestracao" ? "orquestracao" : search.get("tab") === "publicacoes" ? "publicacoes" : "expedientes";
+  const attorney = search.get("attorney") ?? "";
   const page = Math.max(1, Number(search.get("page") ?? 1) || 1);
   useEffect(() => {
     const source = search.get("failed_source");
@@ -50,6 +52,9 @@ export function HistoricoClient() {
   }, [user, tab, search, router, notify]);
   const historyParams = new URLSearchParams({ page: String(page), date_from: appliedFrom, date_to: appliedTo });
   const publicationParams = new URLSearchParams({ page: String(page), collected_from: appliedFrom, collected_to: appliedTo });
+  if (attorney) { historyParams.set("attorney", attorney); publicationParams.set("attorney", attorney); }
+  const historyExportParams = new URLSearchParams({ scope: "history", date_from: appliedFrom, date_to: appliedTo, ...(attorney ? { attorney } : {}) });
+  const publicationExportParams = new URLSearchParams({ scope: "history", collected_from: appliedFrom, collected_to: appliedTo, ...(attorney ? { attorney } : {}) });
   const { data, setData, reload: reloadHistory, loading: historyLoading, error: historyError } = useLiveList<History>(`history/?${historyParams}`, tab === "expedientes");
   const { data: publications, setData: setPublications, reload: reloadPublications, loading: publicationsLoading, error: publicationsError } = useLiveList<DjenHistory>(`djen/history/?${publicationParams}`, tab === "publicacoes");
 
@@ -104,14 +109,20 @@ export function HistoricoClient() {
     <PageTitle title="Histórico" description="Consulte expedientes, publicações processuais e coletas dos últimos 30 dias." />
     <Tabs value={tab} onValueChange={(value) => selectTab(value as "expedientes" | "publicacoes" | "orquestracao")}>
       <TabsList aria-label="Tipo de histórico"><TabsTrigger value="expedientes">Expedientes</TabsTrigger><TabsTrigger value="publicacoes">Publicações Processuais</TabsTrigger><TabsTrigger value="orquestracao">Orquestração de coletas</TabsTrigger></TabsList>
+      <label className="mt-5 block max-w-xs space-y-1 text-xs font-semibold">Por advogado<AttorneySelect value={attorney} onChange={(event) => {
+        const params = new URLSearchParams(search);
+        if (event.target.value) params.set("attorney", event.target.value); else params.delete("attorney");
+        params.delete("page");
+        router.replace(`/historico?${params}`, { scroll: false });
+      }} /></label>
       {tab !== "orquestracao" && <form onSubmit={applyDates} className="my-5 flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
         <label className="space-y-1 text-xs font-semibold">Coletas de<Input type="date" value={dateFrom} min={localCollectionDate(-29)} max={localCollectionDate()} onChange={(event) => setDateFrom(event.target.value)} required /></label>
         <label className="space-y-1 text-xs font-semibold">Até<Input type="date" value={dateTo} min={localCollectionDate(-29)} max={localCollectionDate()} onChange={(event) => setDateTo(event.target.value)} required /></label>
         <Button type="submit" variant="outline">Aplicar período</Button>
       </form>}
-      <TabsContent value="orquestracao"><CollectionHistoryPanel /></TabsContent>
+      <TabsContent value="orquestracao"><CollectionHistoryPanel attorney={attorney} /></TabsContent>
       <TabsContent value="publicacoes">
-        <div className="mb-4 flex justify-start"><PdfExportButton path={`djen/communications/export.pdf/?${new URLSearchParams({ scope: "history", collected_from: appliedFrom, collected_to: appliedTo })}`} count={publications?.count} disabled={dateFrom !== appliedFrom || dateTo !== appliedTo} label="Exportar histórico de publicações em PDF" /></div>
+        <div className="mb-4 flex justify-start"><PdfExportButton path={`djen/communications/export.pdf/?${publicationExportParams}`} count={publications?.count} disabled={dateFrom !== appliedFrom || dateTo !== appliedTo} label="Exportar histórico de publicações em PDF" /></div>
         <ListLoading loading={publicationsLoading} error={publicationsError} />
         {!publications && !publicationsError && <LoadingRows />}
         {publications && <div className="space-y-8">
@@ -129,7 +140,7 @@ export function HistoricoClient() {
       </TabsContent>
       <TabsContent value="expedientes">
 
-    <div className="mb-4 flex justify-start"><PdfExportButton path={`expedientes/export.pdf/?${new URLSearchParams({ scope: "history", date_from: appliedFrom, date_to: appliedTo })}`} count={data?.count} disabled={dateFrom !== appliedFrom || dateTo !== appliedTo} label="Exportar histórico de expedientes em PDF" analytical /></div>
+    <div className="mb-4 flex justify-start"><PdfExportButton path={`expedientes/export.pdf/?${historyExportParams}`} count={data?.count} disabled={dateFrom !== appliedFrom || dateTo !== appliedTo} label="Exportar histórico de expedientes em PDF" analytical /></div>
 
     <ListLoading loading={historyLoading} error={historyError} />
     {!data && !historyError && <LoadingRows />}

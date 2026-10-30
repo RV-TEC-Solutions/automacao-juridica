@@ -10,6 +10,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { getCollectionSourceOptions } from "../lib/collection-sites";
 import { Select } from "@/components/ui/select";
 import { AppShell } from "../components/app-shell";
+import { AttorneySelect } from "../components/attorney-select";
 import { ClientFilter } from "../components/client-filter";
 import { ExpedienteDrawer } from "../components/expediente-drawer";
 import { ExpedienteList } from "../components/expediente-list";
@@ -74,6 +75,7 @@ export function ExpedientesClient() {
         <div className="grid gap-4 border-t p-6 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2"><MultiSelect name="source" label="Fontes" options={getCollectionSourceOptions()} initialSelection={search.getAll("source")} onDirty={() => setFiltersDirty(true)} placeholder="Todas as fontes" searchLabel="Buscar fonte ou tribunal" emptyMessage="Nenhuma fonte disponível." /></div>
           <div className="sm:col-span-2"><ClientFilter initialSelection={search.getAll("client")} onDirty={() => setFiltersDirty(true)} /></div>
+          <FilterField label="Por advogado"><AttorneySelect defaultValue={search.get("attorney") ?? ""} onChange={() => setFiltersDirty(true)} /></FilterField>
           <FilterField label="Pendência"><Select name="pending_type" defaultValue={search.get("pending_type") ?? ""} aria-label="Pendência"><option value="">Todas as pendências</option><option value="ciencia">Ciência</option><option value="resposta">Resposta</option><option value="nao_identificada">Não identificada</option></Select></FilterField>
           <FilterField label="Prazo"><Select name="deadline" defaultValue={search.get("deadline") ?? ""} aria-label="Prazo"><option value="">Todos os prazos</option><option value="urgent">Urgentes</option><option value="overdue">Vencidos</option><option value="future">Futuros</option><option value="next_week">Até o fim da próxima semana</option><option value="calculating">Em cálculo</option><option value="none">Sem prazo</option><option value="resolved">Resolvidos</option></Select></FilterField>
           <FilterField label="Situação de leitura"><Select name="read" defaultValue={search.get("read") ?? ""} aria-label="Leitura"><option value="">Lidos e não lidos</option><option value="unread">Não lidos</option><option value="read">Lidos</option></Select></FilterField>

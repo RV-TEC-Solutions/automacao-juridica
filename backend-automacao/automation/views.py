@@ -13,6 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import AutomationRun, AutomationSource, DjenCommunication, Notice, UserProfile
+from .attorney_filter import attorney_param, filter_djen_attorney
 from .serializers import DjenCommunicationSerializer, NoticeSerializer
 from .queue import enqueue_run, first_enabled_source
 from .collectors import collector_order, get_collector, collector_status_payload
@@ -325,14 +326,15 @@ def collection_history(request):
         datetime.min.time(),
         tzinfo=LOCAL_TZ,
     )
-    runs = list(
-        AutomationRun.objects.select_related("source").filter(
+    queryset = AutomationRun.objects.select_related("source").filter(
             descartada_em__isnull=True,
         ).filter(
             Q(iniciada_em__gte=window_start, iniciada_em__lt=window_end)
             | Q(iniciada_em__isnull=True, criada_em__gte=window_start, criada_em__lt=window_end)
         )
-    )
+    if attorney := attorney_param(request.query_params):
+        queryset = queryset.filter(collector=attorney).exclude(source__code="djen")
+    runs = list(queryset)
     grouped = {}
     for run in runs:
         occurred_at = run.iniciada_em or run.criada_em
@@ -367,7 +369,7 @@ def collection_history(request):
         })
     days = []
     for date, day_runs in sorted(grouped.items(), reverse=True):
-        day_runs.sort(key=lambda item: (item["started_at"] or item["created_at"], item["id"]))
+        day_runs.sort(key=lambda item: (item["started_at"] or item["created_at"], item["id"]), reverse=True)
         days.append({"date": date.isoformat(), "runs": day_runs})
     return Response({
         "period_start": window_start.date().isoformat(),
@@ -505,7 +507,7 @@ def _djen_values(params, key):
 
 
 def filtered_djen_queryset(params):
-    queryset = _djen_queryset()
+    queryset = filter_djen_attorney(_djen_queryset(), attorney_param(params))
     for first_key, last_key, field, is_datetime in (
         ("date_from", "date_to", "data_disponibilizacao", False),
         ("collected_from", "collected_to", "collected_at", True),
@@ -602,7 +604,7 @@ def djen_history(request):
                                            from_key="collected_from", to_key="collected_to")
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    queryset = _djen_queryset().filter(collected_at__gte=start, collected_at__lt=end).order_by("-collected_at", "-id")
+    queryset = filter_djen_attorney(_djen_queryset(), attorney_param(request.query_params)).filter(collected_at__gte=start, collected_at__lt=end).order_by("-collected_at", "-id").distinct()
     try:
         page = max(1, int(request.query_params.get("page", 1)))
     except (TypeError, ValueError):

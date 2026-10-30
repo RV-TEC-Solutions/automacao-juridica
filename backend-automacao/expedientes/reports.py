@@ -93,7 +93,7 @@ def export_expedientes(request):
         if scope == "history":
             start, end, start_at, end_at = collection_range(request.query_params, history=True)
             event_ids = ExpedienteEvent.objects.filter(kind="new", created_at__gte=start_at, created_at__lt=end_at).values("expediente_id")
-            queryset = expediente_queryset({}).filter(pk__in=event_ids)
+            queryset = expediente_queryset({"attorney": request.query_params.get("attorney", "")}).filter(pk__in=event_ids)
             description = f"Histórico de novos expedientes · {start:%d/%m/%Y} a {end:%d/%m/%Y}"
             file_suffix = f"historico-{start:%Y%m%d}-{end:%Y%m%d}"
         elif scope == "overview":

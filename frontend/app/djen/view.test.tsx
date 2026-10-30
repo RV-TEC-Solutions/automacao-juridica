@@ -51,6 +51,15 @@ it("marks changes dirty, validates dates and clears every filter", () => {
   expect(replace).toHaveBeenLastCalledWith("/djen?collected_from=&collected_to=");
 });
 
+it("applies the attorney filter to the publication query", () => {
+  const { container } = render(<DjenClient />);
+  fireEvent.click(screen.getByText("Filtros avançados", { exact: false }));
+  fireEvent.change(screen.getByLabelText("Por advogado"), { target: { value: "murilo" } });
+  expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+  fireEvent.submit(container.querySelector("form")!);
+  expect(new URL(replace.mock.lastCall![0], "http://localhost").searchParams.get("attorney")).toBe("murilo");
+});
+
 it("shows initial loading and an indeterminate progress bar until publications arrive", () => {
   state.loading = true;
   state.hasData = false;

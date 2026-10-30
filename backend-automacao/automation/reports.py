@@ -45,7 +45,7 @@ def export_publications(request):
                 from_key="collected_from", to_key="collected_to",
             )
             start, end = first.isoformat(), last.isoformat()
-            params = {"collected_from": start, "collected_to": end}
+            params = {"collected_from": start, "collected_to": end, "attorney": request.query_params.get("attorney", "")}
             queryset = filtered_djen_queryset(params)
     except (ValueError, OverflowError) as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

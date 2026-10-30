@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Select } from "@/components/ui/select";
 import { AppShell } from "../components/app-shell";
+import { AttorneySelect } from "../components/attorney-select";
 import { DjenDrawer } from "../components/djen-drawer";
 import { DjenList } from "../components/djen-list";
 import { PdfExportButton } from "../components/pdf-export-button";
@@ -83,6 +84,7 @@ export function DjenClient() {
           {optionsLoading && !options && <p role="status" className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-4">Carregando filtros…</p>}
           <div className="sm:col-span-2"><MultiSelect name="tribunal" label="Tribunais" options={(options?.tribunais ?? []).map((value) => ({ value, label: value }))} initialSelection={search.getAll("tribunal")} onDirty={() => setDirty(true)} placeholder="Todos os tribunais" searchLabel="Buscar tribunal" emptyMessage="Nenhum tribunal coletado até o momento." /></div>
           <div className="sm:col-span-2"><MultiSelect name="client" label="Clientes" options={(options?.clientes ?? []).map((client) => ({ value: String(client.id), label: client.nome }))} initialSelection={search.getAll("client")} onDirty={() => setDirty(true)} placeholder="Todos os clientes" searchLabel="Buscar cliente pelo nome" emptyMessage="Nenhum destinatário coletado até o momento." /></div>
+          <Field label="Por advogado"><AttorneySelect defaultValue={search.get("attorney") ?? ""} onChange={() => setDirty(true)} /></Field>
           <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-4">No DJEN, o filtro de clientes considera os destinatários informados na publicação. Ao selecionar vários, inclui publicações de qualquer um deles.</p>
           <div className="sm:col-span-2"><MultiSelect name="uf" label="Unidade federativa (UF)" options={UFS.map((value) => ({ value, label: value }))} initialSelection={search.getAll("uf")} onDirty={() => setDirty(true)} placeholder="Todas as UFs" searchLabel="Buscar UF" emptyMessage="Nenhuma UF encontrada." /></div>
           <p className="text-xs text-muted-foreground sm:col-span-2">Filtra pela UF do tribunal ou pela origem do processo. Tribunais regionais com vários estados exigem origem identificável; publicações sem UF identificável ficam fora desse filtro.</p>

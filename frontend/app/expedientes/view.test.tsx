@@ -31,6 +31,15 @@ it("preserves clients for pagination and PDF and resets the page on submit", () 
   expect(submitted.searchParams.has("page")).toBe(false);
 });
 
+it("applies the attorney filter and includes it in the submitted query", () => {
+  const { container } = render(<ExpedientesClient />);
+  fireEvent.click(screen.getByText("Filtros avançados", { exact: false }));
+  fireEvent.change(screen.getByLabelText("Por advogado"), { target: { value: "cristiano" } });
+  expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+  fireEvent.submit(container.querySelector("form")!);
+  expect(new URL(replace.mock.lastCall![0], "http://localhost").searchParams.get("attorney")).toBe("cristiano");
+});
+
 it("clears unapplied selections when the current URL has no filters", () => {
   state.query = "";
   render(<ExpedientesClient />);
